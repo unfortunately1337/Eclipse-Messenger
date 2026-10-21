@@ -9,7 +9,7 @@ const secrets = ["SESSION_SECRET", "CSRF_SECRET", "EMAIL_CODE_SECRET", "TOTP_ENC
 for (const key of secrets) example = example.replace(new RegExp(`^${key}=.*$`, "m"), `${key}="${randomBytes(32).toString("hex")}"`);
 try {
   fs.writeFileSync(target, example, { flag: "wx", mode: 0o600 });
-  console.log("Created local .env with independent random secrets. Configure SMTP, Pusher and your MinIO bucket before using the app.");
+  console.log("Created local .env with independent random secrets. Configure PostgreSQL, Redis, SMTP, Pusher and S3 storage before using the app.");
 } catch (error) {
   if (error.code !== "EEXIST") throw error;
   console.error(".env already exists; nothing was overwritten.");

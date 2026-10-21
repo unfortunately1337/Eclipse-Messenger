@@ -49,28 +49,28 @@ lifecycle. Encryption and recovery properties differ by mode; read the
 
 ## Run locally
 
-You need **Node.js 22.13+**, npm and Docker Compose, or your own PostgreSQL, Redis
-and S3-compatible services. Use a supported Node LTS release.
+You need **Node.js 22.13+**, npm and access to PostgreSQL, Redis and S3-compatible
+storage. Install these services yourself or use hosted providers. Use a supported
+Node LTS release.
 
 ```sh
 git clone https://github.com/unfortunately1337/Eclipse-Messenger.git
 cd Eclipse-Messenger
 npm ci
 npm run setup:local
-docker compose up -d
 ```
 
 `setup:local` creates a gitignored `.env` and generates an independent random value
-for each application secret. It refuses to overwrite an existing `.env`. Its
-service credentials are for the local Compose stack only.
+for each application secret. It refuses to overwrite an existing `.env`. Replace
+the example connection settings with those for your own services.
 
 Before signing in or sending media:
 
 | Service | Configuration |
 | --- | --- |
-| PostgreSQL | Compose starts `app` on `127.0.0.1:5432` |
-| Redis | Compose starts Redis on `127.0.0.1:6379` |
-| Media storage | Open MinIO at `http://localhost:9001`, use the local Compose credentials and create the `eclipse-media` bucket |
+| PostgreSQL | Create a database and user, then set `DATABASE_URL` |
+| Redis | Start your own Redis instance or use a provider, then set `REDIS_URL` |
+| Media storage | Create a private bucket and configure the `S3_*` endpoint, region and credentials |
 | Email | Configure working `SMTP_*` values in `.env`; registration and login codes need delivery |
 | Realtime | Set your own Pusher Channels credentials and matching `NEXT_PUBLIC_PUSHER_*` values |
 | Push notifications | Optionally configure your own Pusher Beams credentials |
@@ -92,19 +92,12 @@ npm start
 
 `npm start` applies pending Prisma migrations before starting the server. Use your
 own production configuration, HTTPS, private media storage and restricted database/
-Redis access. Never deploy local Compose credentials. Back up database, media and
+Redis access. Replace all example credentials. Back up database, media and
 long-lived encryption keys together; changing encryption keys requires a migration.
 
 If a reverse proxy replaces `Host`, set `ALLOWED_ORIGINS` to your trusted external
 HTTPS origins. Preserve the intended host and protocol information. Changes to
 `NEXT_PUBLIC_*` values require rebuilding the frontend.
-
-A [Dockerfile](Dockerfile) is included: `docker build -t eclipse .`. Supply your own
-runtime environment. Public frontend configuration must also be provided at build
-time with `--build-arg NEXT_PUBLIC_PUSHER_KEY=...`,
-`--build-arg NEXT_PUBLIC_PUSHER_CLUSTER=...` and, if needed,
-`--build-arg NEXT_PUBLIC_PUSHER_BEAMS_INSTANCE_ID=...`. Never pass private secrets
-as build arguments. The default image contains no Pusher credentials.
 
 ## For developers
 

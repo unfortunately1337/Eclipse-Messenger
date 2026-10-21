@@ -31,7 +31,7 @@ deployment configuration against your threat model.
 
 - Generate independent values for every secret in `.env.example`.
 - Use HTTPS, trusted reverse-proxy headers, restricted database/Redis access and
-  private object storage. Local Compose passwords are development examples only.
+  private object storage. Replace example credentials with your own values.
 - Back up database, media and long-lived encryption keys together. Rotating an
   encryption key without migrating existing data can make it unreadable.
 - Keep `.env`, database exports, key material, sessions and user uploads out of Git.

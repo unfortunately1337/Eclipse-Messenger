@@ -47,7 +47,6 @@ next-env.d.ts
 .data/
 .cache/
 scratch/
-/.nixpacks/
 /components/icon-subsets/*.mjs
 *.log
 *.pid
