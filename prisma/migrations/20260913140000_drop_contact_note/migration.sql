@@ -1,0 +1,4 @@
+-- AlterTable
+ALTER TABLE "Contact" DROP COLUMN IF EXISTS "note";
+ALTER TABLE "Contact" DROP COLUMN IF EXISTS "tag";
+ALTER TABLE "Contact" DROP COLUMN IF EXISTS "tagVariant";

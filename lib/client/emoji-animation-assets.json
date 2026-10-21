@@ -1,0 +1,1292 @@
+{
+  "100.gif": {
+    "preview": "/emoji-picker/100.webp",
+    "durationMs": 3000,
+    "reactionScale": 1.14
+  },
+  "exclamation.gif": {
+    "preview": "/emoji-picker/exclamation.webp",
+    "durationMs": 3000,
+    "reactionScale": 1.23
+  },
+  "white-exclamation.gif": {
+    "preview": "/emoji-picker/white-exclamation.webp",
+    "durationMs": 3000,
+    "reactionScale": 1.23
+  },
+  "question.gif": {
+    "preview": "/emoji-picker/question.webp",
+    "durationMs": 3000,
+    "reactionScale": 1.37
+  },
+  "white-question.gif": {
+    "preview": "/emoji-picker/white-question.webp",
+    "durationMs": 3000,
+    "reactionScale": 1.37
+  },
+  "x.gif": {
+    "preview": "/emoji-picker/x.webp",
+    "durationMs": 3000,
+    "reactionScale": 1.23
+  },
+  "flag.gif": {
+    "preview": "/emoji-picker/flag.webp",
+    "durationMs": 2340,
+    "reactionScale": 1.16
+  },
+  "chat-bubble.gif": {
+    "preview": "/emoji-picker/chat-bubble.webp",
+    "durationMs": 3000,
+    "reactionScale": 1.14
+  },
+  "think-bubble.gif": {
+    "preview": "/emoji-picker/think-bubble.webp",
+    "durationMs": 3000,
+    "reactionScale": 1.06
+  },
+  "boom.gif": {
+    "preview": "/emoji-picker/boom.webp",
+    "durationMs": 3000,
+    "reactionScale": 1.02
+  },
+  "fire.gif": {
+    "preview": "/emoji-picker/fire.webp",
+    "durationMs": 3000,
+    "reactionScale": 1.16
+  },
+  "lock-key.gif": {
+    "preview": "/emoji-picker/lock-key.webp",
+    "durationMs": 3000,
+    "reactionScale": 1.18
+  },
+  "thunder.gif": {
+    "preview": "/emoji-picker/thunder.webp",
+    "durationMs": 3000,
+    "reactionScale": 1.06
+  },
+  "star.gif": {
+    "preview": "/emoji-picker/star.webp",
+    "durationMs": 3000,
+    "reactionScale": 1.07
+  },
+  "star-twinkl.gif": {
+    "preview": "/emoji-picker/star-twinkl.webp",
+    "durationMs": 3000,
+    "reactionScale": 1.18
+  },
+  "beat-up.gif": {
+    "preview": "/emoji-picker/beat-up.webp",
+    "durationMs": 3000,
+    "reactionScale": 1.37
+  },
+  "getting-hot.gif": {
+    "preview": "/emoji-picker/getting-hot.webp",
+    "durationMs": 3000,
+    "reactionScale": 1.16
+  },
+  "sleep-zzz.gif": {
+    "preview": "/emoji-picker/sleep-zzz.webp",
+    "durationMs": 3000,
+    "reactionScale": 1.06
+  },
+  "soap-bubbles.gif": {
+    "preview": "/emoji-picker/soap-bubbles.webp",
+    "durationMs": 2500,
+    "reactionScale": 1.16
+  },
+  "0-moon.gif": {
+    "preview": "/emoji-picker/0-moon.webp",
+    "durationMs": 2000,
+    "reactionScale": 1.2
+  },
+  "1-4-moon.gif": {
+    "preview": "/emoji-picker/1-4-moon.webp",
+    "durationMs": 2000,
+    "reactionScale": 1.2
+  },
+  "1-2-moon.gif": {
+    "preview": "/emoji-picker/1-2-moon.webp",
+    "durationMs": 2000,
+    "reactionScale": 1.2
+  },
+  "3-4-moon.gif": {
+    "preview": "/emoji-picker/3-4-moon.webp",
+    "durationMs": 2000,
+    "reactionScale": 1.2
+  },
+  "full-moon.gif": {
+    "preview": "/emoji-picker/full-moon.webp",
+    "durationMs": 2000,
+    "reactionScale": 1.2
+  },
+  "more-moon.gif": {
+    "preview": "/emoji-picker/more-moon.webp",
+    "durationMs": 2000,
+    "reactionScale": 1.2
+  },
+  "half-moon.gif": {
+    "preview": "/emoji-picker/half-moon.webp",
+    "durationMs": 2000,
+    "reactionScale": 1.2
+  },
+  "1-4-moon-rev.gif": {
+    "preview": "/emoji-picker/1-4-moon-rev.webp",
+    "durationMs": 2000,
+    "reactionScale": 1.2
+  },
+  "black-full-moon-face.gif": {
+    "preview": "/emoji-picker/black-full-moon-face.webp",
+    "durationMs": 2860,
+    "reactionScale": 1.02
+  },
+  "half-moon-face.gif": {
+    "preview": "/emoji-picker/half-moon-face.webp",
+    "durationMs": 3000,
+    "reactionScale": 1.14
+  },
+  "other-halff-moon-face.gif": {
+    "preview": "/emoji-picker/other-halff-moon-face.webp",
+    "durationMs": 3000,
+    "reactionScale": 1.04
+  },
+  "sun-bald.gif": {
+    "preview": "/emoji-picker/sun-bald.webp",
+    "durationMs": 3000,
+    "reactionScale": 1.06
+  },
+  "sun-shine.gif": {
+    "preview": "/emoji-picker/sun-shine.webp",
+    "durationMs": 3000,
+    "reactionScale": 1
+  },
+  "jumping-laugh.gif": {
+    "preview": "/emoji-picker/jumping-laugh.webp",
+    "durationMs": 3000,
+    "reactionScale": 1.16
+  },
+  "big-laugh.gif": {
+    "preview": "/emoji-picker/big-laugh.webp",
+    "durationMs": 3000,
+    "reactionScale": 1.16
+  },
+  "big-smile.gif": {
+    "preview": "/emoji-picker/big-smile.webp",
+    "durationMs": 3000,
+    "reactionScale": 1.18
+  },
+  "bouncing-laugh.gif": {
+    "preview": "/emoji-picker/bouncing-laugh.webp",
+    "durationMs": 3000,
+    "reactionScale": 1.16
+  },
+  "funny-laugh.gif": {
+    "preview": "/emoji-picker/funny-laugh.webp",
+    "durationMs": 3000,
+    "reactionScale": 1.07
+  },
+  "stressed-laugh.gif": {
+    "preview": "/emoji-picker/stressed-laugh.webp",
+    "durationMs": 3000,
+    "reactionScale": 1.09
+  },
+  "tears-with-joy.gif": {
+    "preview": "/emoji-picker/tears-with-joy.webp",
+    "durationMs": 3000,
+    "reactionScale": 1.16
+  },
+  "tears-of-joy-laughter.gif": {
+    "preview": "/emoji-picker/tears-of-joy-laughter.webp",
+    "durationMs": 3000,
+    "reactionScale": 1.2
+  },
+  "tears-with-smile.gif": {
+    "preview": "/emoji-picker/tears-with-smile.webp",
+    "durationMs": 3000,
+    "reactionScale": 1.18
+  },
+  "smiling-nice.gif": {
+    "preview": "/emoji-picker/smiling-nice.webp",
+    "durationMs": 3000,
+    "reactionScale": 1.09
+  },
+  "nice-guy-smile.gif": {
+    "preview": "/emoji-picker/nice-guy-smile.webp",
+    "durationMs": 3000,
+    "reactionScale": 1.11
+  },
+  "angel.gif": {
+    "preview": "/emoji-picker/angel.webp",
+    "durationMs": 3000,
+    "reactionScale": 1.16
+  },
+  "creepy-smile.gif": {
+    "preview": "/emoji-picker/creepy-smile.webp",
+    "durationMs": 3000,
+    "reactionScale": 1
+  },
+  "upside-down-creepy-smile.gif": {
+    "preview": "/emoji-picker/upside-down-creepy-smile.webp",
+    "durationMs": 3000,
+    "reactionScale": 1.14
+  },
+  "wink.gif": {
+    "preview": "/emoji-picker/wink.webp",
+    "durationMs": 3000,
+    "reactionScale": 1.18
+  },
+  "relaxed.gif": {
+    "preview": "/emoji-picker/relaxed.webp",
+    "durationMs": 3000,
+    "reactionScale": 1.14
+  },
+  "heart-eyes.gif": {
+    "preview": "/emoji-picker/heart-eyes.webp",
+    "durationMs": 2420,
+    "reactionScale": 1.16
+  },
+  "feeling-loved.gif": {
+    "preview": "/emoji-picker/feeling-loved.webp",
+    "durationMs": 3000,
+    "reactionScale": 1.11
+  },
+  "kiss.gif": {
+    "preview": "/emoji-picker/kiss.webp",
+    "durationMs": 2000,
+    "reactionScale": 1.18
+  },
+  "kissing.gif": {
+    "preview": "/emoji-picker/kissing.webp",
+    "durationMs": 3000,
+    "reactionScale": 1.11
+  },
+  "cute-tongue-stick-out.gif": {
+    "preview": "/emoji-picker/cute-tongue-stick-out.webp",
+    "durationMs": 3000,
+    "reactionScale": 1.18
+  },
+  "tongue-out.gif": {
+    "preview": "/emoji-picker/tongue-out.webp",
+    "durationMs": 3000,
+    "reactionScale": 1.16
+  },
+  "crazy-tongue-stick-out.gif": {
+    "preview": "/emoji-picker/crazy-tongue-stick-out.webp",
+    "durationMs": 3000,
+    "reactionScale": 1.18
+  },
+  "crazy-eyes-tongue.gif": {
+    "preview": "/emoji-picker/crazy-eyes-tongue.webp",
+    "durationMs": 3000,
+    "reactionScale": 1.14
+  },
+  "eyes-closed-tongue-stick-out.gif": {
+    "preview": "/emoji-picker/eyes-closed-tongue-stick-out.webp",
+    "durationMs": 3000,
+    "reactionScale": 1.16
+  },
+  "money-face.gif": {
+    "preview": "/emoji-picker/money-face.webp",
+    "durationMs": 3000,
+    "reactionScale": 1.09
+  },
+  "hands-nice-guy.gif": {
+    "preview": "/emoji-picker/hands-nice-guy.webp",
+    "durationMs": 3000,
+    "reactionScale": 1.07
+  },
+  "blush.gif": {
+    "preview": "/emoji-picker/blush.webp",
+    "durationMs": 3000,
+    "reactionScale": 1.11
+  },
+  "shushh.gif": {
+    "preview": "/emoji-picker/shushh.webp",
+    "durationMs": 3000,
+    "reactionScale": 1.09
+  },
+  "thinking.gif": {
+    "preview": "/emoji-picker/thinking.webp",
+    "durationMs": 3000,
+    "reactionScale": 1.09
+  },
+  "mouth-shut.gif": {
+    "preview": "/emoji-picker/mouth-shut.webp",
+    "durationMs": 3000,
+    "reactionScale": 1.14
+  },
+  "not-impressed.gif": {
+    "preview": "/emoji-picker/not-impressed.webp",
+    "durationMs": 3000,
+    "reactionScale": 1.04
+  },
+  "very-annoyed.gif": {
+    "preview": "/emoji-picker/very-annoyed.webp",
+    "durationMs": 3000,
+    "reactionScale": 1.14
+  },
+  "speechless.gif": {
+    "preview": "/emoji-picker/speechless.webp",
+    "durationMs": 3000,
+    "reactionScale": 1.04
+  },
+  "smirk.gif": {
+    "preview": "/emoji-picker/smirk.webp",
+    "durationMs": 3000,
+    "reactionScale": 1.2
+  },
+  "annoyed.gif": {
+    "preview": "/emoji-picker/annoyed.webp",
+    "durationMs": 3000,
+    "reactionScale": 1.04
+  },
+  "eye-rolling.gif": {
+    "preview": "/emoji-picker/eye-rolling.webp",
+    "durationMs": 2340,
+    "reactionScale": 1.16
+  },
+  "awkward-smile.gif": {
+    "preview": "/emoji-picker/awkward-smile.webp",
+    "durationMs": 3000,
+    "reactionScale": 1.18
+  },
+  "sad.gif": {
+    "preview": "/emoji-picker/sad.webp",
+    "durationMs": 3000,
+    "reactionScale": 1.18
+  },
+  "tired.gif": {
+    "preview": "/emoji-picker/tired.webp",
+    "durationMs": 3000,
+    "reactionScale": 1.18
+  },
+  "drool.gif": {
+    "preview": "/emoji-picker/drool.webp",
+    "durationMs": 3000,
+    "reactionScale": 1.16
+  },
+  "about-to-sleep.gif": {
+    "preview": "/emoji-picker/about-to-sleep.webp",
+    "durationMs": 3000,
+    "reactionScale": 1.18
+  },
+  "masked.gif": {
+    "preview": "/emoji-picker/masked.webp",
+    "durationMs": 3000,
+    "reactionScale": 1.09
+  },
+  "sick-thermometer.gif": {
+    "preview": "/emoji-picker/sick-thermometer.webp",
+    "durationMs": 3000,
+    "reactionScale": 1.07
+  },
+  "head-bandage.gif": {
+    "preview": "/emoji-picker/head-bandage.webp",
+    "durationMs": 3000,
+    "reactionScale": 1.14
+  },
+  "about-to-puke.gif": {
+    "preview": "/emoji-picker/about-to-puke.webp",
+    "durationMs": 3000,
+    "reactionScale": 1.06
+  },
+  "puking.gif": {
+    "preview": "/emoji-picker/puking.webp",
+    "durationMs": 3000,
+    "reactionScale": 1.02
+  },
+  "mouth-sneeze.gif": {
+    "preview": "/emoji-picker/mouth-sneeze.webp",
+    "durationMs": 3000,
+    "reactionScale": 1.06
+  },
+  "hot.gif": {
+    "preview": "/emoji-picker/hot.webp",
+    "durationMs": 3000,
+    "reactionScale": 1.11
+  },
+  "cold.gif": {
+    "preview": "/emoji-picker/cold.webp",
+    "durationMs": 3000,
+    "reactionScale": 1.16
+  },
+  "drunk.gif": {
+    "preview": "/emoji-picker/drunk.webp",
+    "durationMs": 3000,
+    "reactionScale": 1.07
+  },
+  "mind-blown.gif": {
+    "preview": "/emoji-picker/mind-blown.webp",
+    "durationMs": 3000,
+    "reactionScale": 1.07
+  },
+  "cowboy.gif": {
+    "preview": "/emoji-picker/cowboy.webp",
+    "durationMs": 3000,
+    "reactionScale": 1.16
+  },
+  "party.gif": {
+    "preview": "/emoji-picker/party.webp",
+    "durationMs": 3000,
+    "reactionScale": 1.23
+  },
+  "cool-with-glasses.gif": {
+    "preview": "/emoji-picker/cool-with-glasses.webp",
+    "durationMs": 3000,
+    "reactionScale": 1.18
+  },
+  "nerd.gif": {
+    "preview": "/emoji-picker/nerd.webp",
+    "durationMs": 3000,
+    "reactionScale": 1.2
+  },
+  "finding-eye-glass.gif": {
+    "preview": "/emoji-picker/finding-eye-glass.webp",
+    "durationMs": 3000,
+    "reactionScale": 1.18
+  },
+  "detective-make-up.gif": {
+    "preview": "/emoji-picker/detective-make-up.webp",
+    "durationMs": 3000,
+    "reactionScale": 1.2
+  },
+  "dissapointed.gif": {
+    "preview": "/emoji-picker/dissapointed.webp",
+    "durationMs": 3000,
+    "reactionScale": 1
+  },
+  "very-sad.gif": {
+    "preview": "/emoji-picker/very-sad.webp",
+    "durationMs": 3000,
+    "reactionScale": 1
+  },
+  "slightly-dissapointed.gif": {
+    "preview": "/emoji-picker/slightly-dissapointed.webp",
+    "durationMs": 3000,
+    "reactionScale": 1
+  },
+  "frown.gif": {
+    "preview": "/emoji-picker/frown.webp",
+    "durationMs": 3000,
+    "reactionScale": 1.04
+  },
+  "whoa.gif": {
+    "preview": "/emoji-picker/whoa.webp",
+    "durationMs": 3000,
+    "reactionScale": 1.07
+  },
+  "slightly-shocked.gif": {
+    "preview": "/emoji-picker/slightly-shocked.webp",
+    "durationMs": 3000,
+    "reactionScale": 1.14
+  },
+  "teeth-shocked.gif": {
+    "preview": "/emoji-picker/teeth-shocked.webp",
+    "durationMs": 3000,
+    "reactionScale": 1.18
+  },
+  "shocked.gif": {
+    "preview": "/emoji-picker/shocked.webp",
+    "durationMs": 3000,
+    "reactionScale": 1.09
+  },
+  "simp.gif": {
+    "preview": "/emoji-picker/simp.webp",
+    "durationMs": 3000,
+    "reactionScale": 1.2
+  },
+  "mouth-opening.gif": {
+    "preview": "/emoji-picker/mouth-opening.webp",
+    "durationMs": 3000,
+    "reactionScale": 1.07
+  },
+  "very-shocked.gif": {
+    "preview": "/emoji-picker/very-shocked.webp",
+    "durationMs": 3000,
+    "reactionScale": 1.2
+  },
+  "stress-shocked.gif": {
+    "preview": "/emoji-picker/stress-shocked.webp",
+    "durationMs": 3000,
+    "reactionScale": 1.18
+  },
+  "AnimatedEmojies-512px-250.gif": {
+    "preview": "/emoji-picker/AnimatedEmojies-512px-250.webp",
+    "durationMs": 3000,
+    "reactionScale": 1.14
+  },
+  "tear-drop.gif": {
+    "preview": "/emoji-picker/tear-drop.webp",
+    "durationMs": 3000,
+    "reactionScale": 1.07
+  },
+  "crying.gif": {
+    "preview": "/emoji-picker/crying.webp",
+    "durationMs": 3000,
+    "reactionScale": 1.18
+  },
+  "hands-up-shocked.gif": {
+    "preview": "/emoji-picker/hands-up-shocked.webp",
+    "durationMs": 2500,
+    "reactionScale": 1.09
+  },
+  "sad-broken.gif": {
+    "preview": "/emoji-picker/sad-broken.webp",
+    "durationMs": 3000,
+    "reactionScale": 1.07
+  },
+  "sad-face-down.gif": {
+    "preview": "/emoji-picker/sad-face-down.webp",
+    "durationMs": 3000,
+    "reactionScale": 1.14
+  },
+  "AnimatedEmojies-512px-251.gif": {
+    "preview": "/emoji-picker/AnimatedEmojies-512px-251.webp",
+    "durationMs": 3000,
+    "reactionScale": 1.14
+  },
+  "moan.gif": {
+    "preview": "/emoji-picker/moan.webp",
+    "durationMs": 3000,
+    "reactionScale": 1.04
+  },
+  "bad-moan.gif": {
+    "preview": "/emoji-picker/bad-moan.webp",
+    "durationMs": 3000,
+    "reactionScale": 1.04
+  },
+  "yawn.gif": {
+    "preview": "/emoji-picker/yawn.webp",
+    "durationMs": 3000,
+    "reactionScale": 1.18
+  },
+  "angry-nose-bull.gif": {
+    "preview": "/emoji-picker/angry-nose-bull.webp",
+    "durationMs": 3000,
+    "reactionScale": 1.2
+  },
+  "angry-flames.gif": {
+    "preview": "/emoji-picker/angry-flames.webp",
+    "durationMs": 3000,
+    "reactionScale": 1.11
+  },
+  "swearing.gif": {
+    "preview": "/emoji-picker/swearing.webp",
+    "durationMs": 3000,
+    "reactionScale": 1.11
+  },
+  "devil-smirk.gif": {
+    "preview": "/emoji-picker/devil-smirk.webp",
+    "durationMs": 3000,
+    "reactionScale": 1.11
+  },
+  "devil-angry.gif": {
+    "preview": "/emoji-picker/devil-angry.webp",
+    "durationMs": 3000,
+    "reactionScale": 1.11
+  },
+  "poop.gif": {
+    "preview": "/emoji-picker/poop.webp",
+    "durationMs": 3000,
+    "reactionScale": 1.11
+  },
+  "snapchat.gif": {
+    "preview": "/emoji-picker/snapchat.webp",
+    "durationMs": 2340,
+    "reactionScale": 1
+  },
+  "skull.gif": {
+    "preview": "/emoji-picker/skull.webp",
+    "durationMs": 3000,
+    "reactionScale": 1.14
+  },
+  "dead-skull.gif": {
+    "preview": "/emoji-picker/dead-skull.webp",
+    "durationMs": 3000,
+    "reactionScale": 1
+  },
+  "star-struck.gif": {
+    "preview": "/emoji-picker/star-struck.webp",
+    "durationMs": 3000,
+    "reactionScale": 1.07
+  },
+  "cat-smiling.gif": {
+    "preview": "/emoji-picker/cat-smiling.webp",
+    "durationMs": 3000,
+    "reactionScale": 1.09
+  },
+  "cat-laughing.gif": {
+    "preview": "/emoji-picker/cat-laughing.webp",
+    "durationMs": 2680,
+    "reactionScale": 1.09
+  },
+  "cat-tears-of-laughter.gif": {
+    "preview": "/emoji-picker/cat-tears-of-laughter.webp",
+    "durationMs": 2500,
+    "reactionScale": 1.04
+  },
+  "cat-heart-eyes.gif": {
+    "preview": "/emoji-picker/cat-heart-eyes.webp",
+    "durationMs": 3000,
+    "reactionScale": 1.07
+  },
+  "cat-smirk.gif": {
+    "preview": "/emoji-picker/cat-smirk.webp",
+    "durationMs": 3000,
+    "reactionScale": 1.09
+  },
+  "cat-kissing.gif": {
+    "preview": "/emoji-picker/cat-kissing.webp",
+    "durationMs": 3000,
+    "reactionScale": 1.09
+  },
+  "cat-shocked.gif": {
+    "preview": "/emoji-picker/cat-shocked.webp",
+    "durationMs": 2500,
+    "reactionScale": 1.07
+  },
+  "cat-tear-drop.gif": {
+    "preview": "/emoji-picker/cat-tear-drop.webp",
+    "durationMs": 3000,
+    "reactionScale": 1.09
+  },
+  "cat-angry.gif": {
+    "preview": "/emoji-picker/cat-angry.webp",
+    "durationMs": 2840,
+    "reactionScale": 1.09
+  },
+  "monkey-closed-eyes.gif": {
+    "preview": "/emoji-picker/monkey-closed-eyes.webp",
+    "durationMs": 2340,
+    "reactionScale": 1.06
+  },
+  "monkey-face-hide.gif": {
+    "preview": "/emoji-picker/monkey-face-hide.webp",
+    "durationMs": 3000,
+    "reactionScale": 1.07
+  },
+  "wave.gif": {
+    "preview": "/emoji-picker/wave.webp",
+    "durationMs": 3000,
+    "reactionScale": 1.07
+  },
+  "clap.gif": {
+    "preview": "/emoji-picker/clap.webp",
+    "durationMs": 2000,
+    "reactionScale": 1
+  },
+  "thumbs-up.gif": {
+    "preview": "/emoji-picker/thumbs-up.webp",
+    "durationMs": 1980,
+    "reactionScale": 1.34
+  },
+  "thumbs-down.gif": {
+    "preview": "/emoji-picker/thumbs-down.webp",
+    "durationMs": 2680,
+    "reactionScale": 1.37
+  },
+  "punch.gif": {
+    "preview": "/emoji-picker/punch.webp",
+    "durationMs": 2400,
+    "reactionScale": 1.14
+  },
+  "protest.gif": {
+    "preview": "/emoji-picker/protest.webp",
+    "durationMs": 2500,
+    "reactionScale": 1.18
+  },
+  "left-fist.gif": {
+    "preview": "/emoji-picker/left-fist.webp",
+    "durationMs": 1500,
+    "reactionScale": 1.14
+  },
+  "right-fist.gif": {
+    "preview": "/emoji-picker/right-fist.webp",
+    "durationMs": 1500,
+    "reactionScale": 1.14
+  },
+  "fingers-crossed.gif": {
+    "preview": "/emoji-picker/fingers-crossed.webp",
+    "durationMs": 3000,
+    "reactionScale": 1.11
+  },
+  "rock-on.gif": {
+    "preview": "/emoji-picker/rock-on.webp",
+    "durationMs": 3000,
+    "reactionScale": 1.14
+  },
+  "bang-on.gif": {
+    "preview": "/emoji-picker/bang-on.webp",
+    "durationMs": 2580,
+    "reactionScale": 1.14
+  },
+  "thumb-up-pinkie-down.gif": {
+    "preview": "/emoji-picker/thumb-up-pinkie-down.webp",
+    "durationMs": 3000,
+    "reactionScale": 1.06
+  },
+  "okay-sign.gif": {
+    "preview": "/emoji-picker/okay-sign.webp",
+    "durationMs": 2340,
+    "reactionScale": 1
+  },
+  "loss.gif": {
+    "preview": "/emoji-picker/loss.webp",
+    "durationMs": 3000,
+    "reactionScale": 1.43
+  },
+  "small-pp.gif": {
+    "preview": "/emoji-picker/small-pp.webp",
+    "durationMs": 3000,
+    "reactionScale": 1.2
+  },
+  "point-left.gif": {
+    "preview": "/emoji-picker/point-left.webp",
+    "durationMs": 3000,
+    "reactionScale": 1.06
+  },
+  "pointing-left.gif": {
+    "preview": "/emoji-picker/pointing-left.webp",
+    "durationMs": 3000,
+    "reactionScale": 1.07
+  },
+  "point-up.gif": {
+    "preview": "/emoji-picker/point-up.webp",
+    "durationMs": 3000,
+    "reactionScale": 1.14
+  },
+  "pointing-up.gif": {
+    "preview": "/emoji-picker/pointing-up.webp",
+    "durationMs": 2300,
+    "reactionScale": 1.06
+  },
+  "AnimatedEmojies-512px-220.gif": {
+    "preview": "/emoji-picker/AnimatedEmojies-512px-220.webp",
+    "durationMs": 2180,
+    "reactionScale": 1.07
+  },
+  "right-stop.gif": {
+    "preview": "/emoji-picker/right-stop.webp",
+    "durationMs": 1500,
+    "reactionScale": 1.18
+  },
+  "left-stop.gif": {
+    "preview": "/emoji-picker/left-stop.webp",
+    "durationMs": 1500,
+    "reactionScale": 1.2
+  },
+  "right-palm.gif": {
+    "preview": "/emoji-picker/right-palm.webp",
+    "durationMs": 1940,
+    "reactionScale": 1.18
+  },
+  "hand-dove.gif": {
+    "preview": "/emoji-picker/hand-dove.webp",
+    "durationMs": 3000,
+    "reactionScale": 1
+  },
+  "hifi.gif": {
+    "preview": "/emoji-picker/hifi.webp",
+    "durationMs": 2000,
+    "reactionScale": 1
+  },
+  "hands-together.gif": {
+    "preview": "/emoji-picker/hands-together.webp",
+    "durationMs": 3000,
+    "reactionScale": 1.14
+  },
+  "thanks.gif": {
+    "preview": "/emoji-picker/thanks.webp",
+    "durationMs": 3000,
+    "reactionScale": 1.23
+  },
+  "handshake.gif": {
+    "preview": "/emoji-picker/handshake.webp",
+    "durationMs": 3000,
+    "reactionScale": 1.04
+  },
+  "bicep-flex.gif": {
+    "preview": "/emoji-picker/bicep-flex.webp",
+    "durationMs": 3000,
+    "reactionScale": 1.14
+  },
+  "robo-arm.gif": {
+    "preview": "/emoji-picker/robo-arm.webp",
+    "durationMs": 3000,
+    "reactionScale": 1.11
+  },
+  "starwars.gif": {
+    "preview": "/emoji-picker/starwars.webp",
+    "durationMs": 3000,
+    "reactionScale": 1.06
+  },
+  "writing.gif": {
+    "preview": "/emoji-picker/writing.webp",
+    "durationMs": 3000,
+    "reactionScale": 1.16
+  },
+  "heart.gif": {
+    "preview": "/emoji-picker/heart.webp",
+    "durationMs": 3000,
+    "reactionScale": 1.04
+  },
+  "orange-heart.gif": {
+    "preview": "/emoji-picker/orange-heart.webp",
+    "durationMs": 3000,
+    "reactionScale": 1.04
+  },
+  "yellow-heart.gif": {
+    "preview": "/emoji-picker/yellow-heart.webp",
+    "durationMs": 3000,
+    "reactionScale": 1.04
+  },
+  "green-heart.gif": {
+    "preview": "/emoji-picker/green-heart.webp",
+    "durationMs": 3000,
+    "reactionScale": 1.04
+  },
+  "blue-heart.gif": {
+    "preview": "/emoji-picker/blue-heart.webp",
+    "durationMs": 3000,
+    "reactionScale": 1.04
+  },
+  "purple-heart.gif": {
+    "preview": "/emoji-picker/purple-heart.webp",
+    "durationMs": 3000,
+    "reactionScale": 1.04
+  },
+  "black-heart.gif": {
+    "preview": "/emoji-picker/black-heart.webp",
+    "durationMs": 3000,
+    "reactionScale": 1.04
+  },
+  "silver-heart.gif": {
+    "preview": "/emoji-picker/silver-heart.webp",
+    "durationMs": 3000,
+    "reactionScale": 1.04
+  },
+  "brown-heart.gif": {
+    "preview": "/emoji-picker/brown-heart.webp",
+    "durationMs": 3000,
+    "reactionScale": 1.04
+  },
+  "heart-broken.gif": {
+    "preview": "/emoji-picker/heart-broken.webp",
+    "durationMs": 2000,
+    "reactionScale": 1
+  },
+  "heart-dot.gif": {
+    "preview": "/emoji-picker/heart-dot.webp",
+    "durationMs": 2720,
+    "reactionScale": 1.04
+  },
+  "double-heart.gif": {
+    "preview": "/emoji-picker/double-heart.webp",
+    "durationMs": 2200,
+    "reactionScale": 1.14
+  },
+  "heart-wavering.gif": {
+    "preview": "/emoji-picker/heart-wavering.webp",
+    "durationMs": 2260,
+    "reactionScale": 1
+  },
+  "heart-waves.gif": {
+    "preview": "/emoji-picker/heart-waves.webp",
+    "durationMs": 2620,
+    "reactionScale": 1.06
+  },
+  "heart-twinkle.gif": {
+    "preview": "/emoji-picker/heart-twinkle.webp",
+    "durationMs": 3000,
+    "reactionScale": 1.18
+  },
+  "heart-cupid.gif": {
+    "preview": "/emoji-picker/heart-cupid.webp",
+    "durationMs": 2000,
+    "reactionScale": 1
+  },
+  "heart-gift-wrapped.gif": {
+    "preview": "/emoji-picker/heart-gift-wrapped.webp",
+    "durationMs": 3000,
+    "reactionScale": 1
+  },
+  "purple-border-heart.gif": {
+    "preview": "/emoji-picker/purple-border-heart.webp",
+    "durationMs": 2220,
+    "reactionScale": 1.06
+  },
+  "flyingkiss.gif": {
+    "preview": "/emoji-picker/flyingkiss.webp",
+    "durationMs": 3000,
+    "reactionScale": 1.14
+  },
+  "dancing-girl.gif": {
+    "preview": "/emoji-picker/dancing-girl.webp",
+    "durationMs": 3000,
+    "reactionScale": 1.02
+  },
+  "bowie.gif": {
+    "preview": "/emoji-picker/bowie.webp",
+    "durationMs": 3000,
+    "reactionScale": 1
+  },
+  "grandma.gif": {
+    "preview": "/emoji-picker/grandma.webp",
+    "durationMs": 3000,
+    "reactionScale": 1
+  },
+  "female-cop.gif": {
+    "preview": "/emoji-picker/female-cop.webp",
+    "durationMs": 3000,
+    "reactionScale": 1.06
+  },
+  "female-doctor.gif": {
+    "preview": "/emoji-picker/female-doctor.webp",
+    "durationMs": 3000,
+    "reactionScale": 1
+  },
+  "male-doctor.gif": {
+    "preview": "/emoji-picker/male-doctor.webp",
+    "durationMs": 3000,
+    "reactionScale": 1.04
+  },
+  "girl-with-laptop.gif": {
+    "preview": "/emoji-picker/girl-with-laptop.webp",
+    "durationMs": 3000,
+    "reactionScale": 1.06
+  },
+  "guy-with-laptop-1.gif": {
+    "preview": "/emoji-picker/guy-with-laptop-1.webp",
+    "durationMs": 3000,
+    "reactionScale": 1.07
+  },
+  "guy-with-laptop-2.gif": {
+    "preview": "/emoji-picker/guy-with-laptop-2.webp",
+    "durationMs": 3000,
+    "reactionScale": 1.04
+  },
+  "teacher.gif": {
+    "preview": "/emoji-picker/teacher.webp",
+    "durationMs": 3000,
+    "reactionScale": 1.14
+  },
+  "female-shrug.gif": {
+    "preview": "/emoji-picker/female-shrug.webp",
+    "durationMs": 3000,
+    "reactionScale": 1.06
+  },
+  "male-shrug.gif": {
+    "preview": "/emoji-picker/male-shrug.webp",
+    "durationMs": 3000,
+    "reactionScale": 1.07
+  },
+  "old-vampire.gif": {
+    "preview": "/emoji-picker/old-vampire.webp",
+    "durationMs": 3000,
+    "reactionScale": 1.07
+  },
+  "female-vampire.gif": {
+    "preview": "/emoji-picker/female-vampire.webp",
+    "durationMs": 3000,
+    "reactionScale": 1.11
+  },
+  "young-male-vampire.gif": {
+    "preview": "/emoji-picker/young-male-vampire.webp",
+    "durationMs": 3000,
+    "reactionScale": 1.14
+  },
+  "female-zombie.gif": {
+    "preview": "/emoji-picker/female-zombie.webp",
+    "durationMs": 3000,
+    "reactionScale": 1
+  },
+  "male-zombie.gif": {
+    "preview": "/emoji-picker/male-zombie.webp",
+    "durationMs": 3000,
+    "reactionScale": 1.04
+  },
+  "bat.gif": {
+    "preview": "/emoji-picker/bat.webp",
+    "durationMs": 3000,
+    "reactionScale": 1.23
+  },
+  "chick.gif": {
+    "preview": "/emoji-picker/chick.webp",
+    "durationMs": 3000,
+    "reactionScale": 1
+  },
+  "chicken-hatch.gif": {
+    "preview": "/emoji-picker/chicken-hatch.webp",
+    "durationMs": 3000,
+    "reactionScale": 1.14
+  },
+  "owl.gif": {
+    "preview": "/emoji-picker/owl.webp",
+    "durationMs": 2200,
+    "reactionScale": 1.14
+  },
+  "spider.gif": {
+    "preview": "/emoji-picker/spider.webp",
+    "durationMs": 3000,
+    "reactionScale": 1.02
+  },
+  "spider-web.gif": {
+    "preview": "/emoji-picker/spider-web.webp",
+    "durationMs": 3000,
+    "reactionScale": 1
+  },
+  "cactus.gif": {
+    "preview": "/emoji-picker/cactus.webp",
+    "durationMs": 2980,
+    "reactionScale": 1.06
+  },
+  "christmas-tree.gif": {
+    "preview": "/emoji-picker/christmas-tree.webp",
+    "durationMs": 3000,
+    "reactionScale": 1
+  },
+  "seed-to-tree.gif": {
+    "preview": "/emoji-picker/seed-to-tree.webp",
+    "durationMs": 2800,
+    "reactionScale": 1
+  },
+  "seed-to-fat-tree.gif": {
+    "preview": "/emoji-picker/seed-to-fat-tree.webp",
+    "durationMs": 2980,
+    "reactionScale": 1
+  },
+  "seed-to-sapling.gif": {
+    "preview": "/emoji-picker/seed-to-sapling.webp",
+    "durationMs": 2000,
+    "reactionScale": 1.14
+  },
+  "seed-to-twig.gif": {
+    "preview": "/emoji-picker/seed-to-twig.webp",
+    "durationMs": 3000,
+    "reactionScale": 1
+  },
+  "flower-expanding.gif": {
+    "preview": "/emoji-picker/flower-expanding.webp",
+    "durationMs": 2680,
+    "reactionScale": 1.11
+  },
+  "hibiscus.gif": {
+    "preview": "/emoji-picker/hibiscus.webp",
+    "durationMs": 3000,
+    "reactionScale": 1.14
+  },
+  "palm-tree.gif": {
+    "preview": "/emoji-picker/palm-tree.webp",
+    "durationMs": 2560,
+    "reactionScale": 1.02
+  },
+  "beach.gif": {
+    "preview": "/emoji-picker/beach.webp",
+    "durationMs": 2120,
+    "reactionScale": 1.07
+  },
+  "snowman-waving.gif": {
+    "preview": "/emoji-picker/snowman-waving.webp",
+    "durationMs": 3000,
+    "reactionScale": 1
+  },
+  "snowman.gif": {
+    "preview": "/emoji-picker/snowman.webp",
+    "durationMs": 3000,
+    "reactionScale": 1
+  },
+  "virus.gif": {
+    "preview": "/emoji-picker/virus.webp",
+    "durationMs": 3000,
+    "reactionScale": 1.04
+  },
+  "dick.gif": {
+    "preview": "/emoji-picker/dick.webp",
+    "durationMs": 3000,
+    "reactionScale": 1.18
+  },
+  "ass-tapping.gif": {
+    "preview": "/emoji-picker/ass-tapping.webp",
+    "durationMs": 2000,
+    "reactionScale": 1.06
+  },
+  "birthday-candles.gif": {
+    "preview": "/emoji-picker/birthday-candles.webp",
+    "durationMs": 3000,
+    "reactionScale": 1.06
+  },
+  "baloon.gif": {
+    "preview": "/emoji-picker/baloon.webp",
+    "durationMs": 3000,
+    "reactionScale": 1.04
+  },
+  "party-confetti.gif": {
+    "preview": "/emoji-picker/party-confetti.webp",
+    "durationMs": 3000,
+    "reactionScale": 1.09
+  },
+  "party-bells.gif": {
+    "preview": "/emoji-picker/party-bells.webp",
+    "durationMs": 3000,
+    "reactionScale": 1.06
+  },
+  "abacus.gif": {
+    "preview": "/emoji-picker/abacus.webp",
+    "durationMs": 2800,
+    "reactionScale": 1.02
+  },
+  "ambulance.gif": {
+    "preview": "/emoji-picker/ambulance.webp",
+    "durationMs": 3000,
+    "reactionScale": 1.02
+  },
+  "cop-car.gif": {
+    "preview": "/emoji-picker/cop-car.webp",
+    "durationMs": 3000,
+    "reactionScale": 1.04
+  },
+  "taxi-cab.gif": {
+    "preview": "/emoji-picker/taxi-cab.webp",
+    "durationMs": 3000,
+    "reactionScale": 1.02
+  },
+  "coffin.gif": {
+    "preview": "/emoji-picker/coffin.webp",
+    "durationMs": 3000,
+    "reactionScale": 1.18
+  },
+  "compass.gif": {
+    "preview": "/emoji-picker/compass.webp",
+    "durationMs": 3000,
+    "reactionScale": 1.09
+  },
+  "crown.gif": {
+    "preview": "/emoji-picker/crown.webp",
+    "durationMs": 3000,
+    "reactionScale": 1.11
+  },
+  "currency-conversion.gif": {
+    "preview": "/emoji-picker/currency-conversion.webp",
+    "durationMs": 3000,
+    "reactionScale": 1.04
+  },
+  "diamond.gif": {
+    "preview": "/emoji-picker/diamond.webp",
+    "durationMs": 3000,
+    "reactionScale": 1.2
+  },
+  "folder.gif": {
+    "preview": "/emoji-picker/folder.webp",
+    "durationMs": 2000,
+    "reactionScale": 1.14
+  },
+  "spider-crawl-folder.gif": {
+    "preview": "/emoji-picker/spider-crawl-folder.webp",
+    "durationMs": 3000,
+    "reactionScale": 1.18
+  },
+  "multiple-folders.gif": {
+    "preview": "/emoji-picker/multiple-folders.webp",
+    "durationMs": 3000,
+    "reactionScale": 1
+  },
+  "halloween.gif": {
+    "preview": "/emoji-picker/halloween.webp",
+    "durationMs": 3000,
+    "reactionScale": 1
+  },
+  "hour-glass.gif": {
+    "preview": "/emoji-picker/hour-glass.webp",
+    "durationMs": 3000,
+    "reactionScale": 1
+  },
+  "house.gif": {
+    "preview": "/emoji-picker/house.webp",
+    "durationMs": 3000,
+    "reactionScale": 1.07
+  },
+  "idea.gif": {
+    "preview": "/emoji-picker/idea.webp",
+    "durationMs": 3000,
+    "reactionScale": 1.23
+  },
+  "injection.gif": {
+    "preview": "/emoji-picker/injection.webp",
+    "durationMs": 3000,
+    "reactionScale": 1.14
+  },
+  "joystick.gif": {
+    "preview": "/emoji-picker/joystick.webp",
+    "durationMs": 3000,
+    "reactionScale": 1.09
+  },
+  "keyboard-typing.gif": {
+    "preview": "/emoji-picker/keyboard-typing.webp",
+    "durationMs": 2980,
+    "reactionScale": 1.04
+  },
+  "magnify-left.gif": {
+    "preview": "/emoji-picker/magnify-left.webp",
+    "durationMs": 3000,
+    "reactionScale": 1.18
+  },
+  "magnify-right.gif": {
+    "preview": "/emoji-picker/magnify-right.webp",
+    "durationMs": 3000,
+    "reactionScale": 1.18
+  },
+  "mail-box.gif": {
+    "preview": "/emoji-picker/mail-box.webp",
+    "durationMs": 3000,
+    "reactionScale": 1.16
+  },
+  "mail-love.gif": {
+    "preview": "/emoji-picker/mail-love.webp",
+    "durationMs": 3000,
+    "reactionScale": 1.2
+  },
+  "money-flying.gif": {
+    "preview": "/emoji-picker/money-flying.webp",
+    "durationMs": 3000,
+    "reactionScale": 1.18
+  },
+  "pencil-writing.gif": {
+    "preview": "/emoji-picker/pencil-writing.webp",
+    "durationMs": 3000,
+    "reactionScale": 1.07
+  },
+  "pill.gif": {
+    "preview": "/emoji-picker/pill.webp",
+    "durationMs": 3000,
+    "reactionScale": 1.18
+  },
+  "purse.gif": {
+    "preview": "/emoji-picker/purse.webp",
+    "durationMs": 3000,
+    "reactionScale": 1.14
+  },
+  "sponge-cleaning.gif": {
+    "preview": "/emoji-picker/sponge-cleaning.webp",
+    "durationMs": 3000,
+    "reactionScale": 1.18
+  },
+  "toilet-paper.gif": {
+    "preview": "/emoji-picker/toilet-paper.webp",
+    "durationMs": 2340,
+    "reactionScale": 1.47
+  },
+  "trumpet.gif": {
+    "preview": "/emoji-picker/trumpet.webp",
+    "durationMs": 3000,
+    "reactionScale": 1.14
+  },
+  "wine-glasses.gif": {
+    "preview": "/emoji-picker/wine-glasses.webp",
+    "durationMs": 3000,
+    "reactionScale": 1.07
+  },
+  "i-am-groot.gif": {
+    "preview": "/emoji-picker/i-am-groot.webp",
+    "durationMs": 3000,
+    "reactionScale": 1.02
+  }
+}

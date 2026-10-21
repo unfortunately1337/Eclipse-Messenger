@@ -1,0 +1,104 @@
+# See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
+
+# dependencies
+/node_modules
+/node
+node*.zip
+*.zip
+/.pnp
+.pnp.*
+.yarn/*
+!.yarn/patches
+!.yarn/plugins
+!.yarn/releases
+!.yarn/versions
+
+# testing
+/coverage
+
+# next.js
+/.next/
+/out/
+
+# production
+/build
+
+# misc
+.DS_Store
+*.pem
+
+# debug
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# env files (can opt-in for committing if needed)
+.env*
+!.env.example
+
+# vercel
+.vercel
+
+# typescript
+*.tsbuildinfo
+next-env.d.ts
+
+.data/
+.cache/
+scratch/
+/.nixpacks/
+/components/icon-subsets/*.mjs
+*.log
+*.pid
+*.cpuprofile
+*.heapprofile
+*.bak
+*.orig
+*.rej
+Thumbs.db
+Desktop.ini
+/.idea/
+/.vscode/
+
+# locally generated videos, previews, and other deliverables
+/artifacts/
+
+# superseded local Unicode-status thumbnail experiment
+/public/emoji-status/
+
+# superseded picker renders and removed emoji packs
+/public/custom-emoji/**/*.animated.webp
+/public/custom-emoji/AdaptiveEmojiStatus/
+/public/custom-emoji/EmojiStatus/
+/public/custom-emoji/NeonEmoji/
+/public/custom-emoji/NewsEmoji/042.*
+/public/custom-emoji/HalloweenIcons/
+/public/emoji-picker/*.inline.webp
+/public/emoji-picker/*.still.webp
+/public/emoji-picker/*.inline-v2.webp
+/public/emoji-picker/*.still-v2.webp
+/public/custom-emoji/**/*.picker.webp
+
+# Private credentials and operator data
+*.key
+*.p12
+*.pfx
+*.sqlite
+*.sqlite3
+/*.sql
+/*.sql.gz
+/backups/
+/uploads/
+
+# Optional artwork: redistribute only after a separate rights review.
+# The source edition serves local native-emoji fallbacks for these paths.
+/public/custom-emoji/**
+!/public/custom-emoji/SOURCES.md
+/public/emoji-picker/**
+!/public/emoji-picker/SOURCES.md
+/public/gifs/**
+/public/stickers/**
+/public/tgs/**
+!/public/tgs/telegram-security-animations.SOURCE.md
+/public/spons.tgs

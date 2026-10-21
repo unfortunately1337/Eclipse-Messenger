@@ -1,0 +1,8 @@
+ALTER TABLE "Message"
+ADD COLUMN IF NOT EXISTS "replyToMessageId" TEXT;
+
+ALTER TABLE "GroupMessage"
+ADD COLUMN IF NOT EXISTS "replyToMessageId" TEXT;
+
+ALTER TABLE "ChannelPost"
+ADD COLUMN IF NOT EXISTS "replyToMessageId" TEXT;

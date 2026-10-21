@@ -1,0 +1,679 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           String   @id @default(cuid())
+  musskId      String?  @unique
+  email        String?  @unique
+  verified     Boolean  @default(false)
+  link         String   @unique
+  link2        String?  @unique
+  link3        String?  @unique
+  link4        String?  @unique
+  link5        String?  @unique
+  displayName  String
+  emojiStatusId String?
+  passwordHash String
+  musicUrl     String?
+  musicTitle   String?
+  musicAuthor  String?
+  musicCoverUrl String?
+  publicKey    String?
+  privateKeyBackupEnc String?
+  twoFactorEnabled Boolean @default(false)
+  twoFactorSecretEnc String?
+  description  String?
+  isBot        Boolean  @default(false)
+  managedBot   ManagedBot? @relation("ManagedBotProfile")
+  botsOwned    ManagedBot[] @relation("ManagedBotOwner")
+  botManagementSession BotManagementSession?
+  botManagementRequests BotManagementRequest[]
+  isVerified   Boolean  @default(false)
+  isSystemAccount Boolean @default(false)
+  presenceVisibility String @default("all")
+  avatarUrl    String?
+  backgroundUrl String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  messagesSent Message[] @relation("MessageSender")
+  savedConversationsOwned Conversation[] @relation("SavedConversationOwner")
+  conversationParticipants ConversationParticipant[]
+  contactsOwned Contact[] @relation("ContactOwner")
+  contactsOf    Contact[] @relation("ContactPeer")
+  groupsOwned   Group[]   @relation("GroupOwner")
+  groupMembers  GroupMember[]
+  groupMessagesSent GroupMessage[]
+  channelsOwned Channel[] @relation("ChannelOwner")
+  channelSubscriptions ChannelSubscriber[]
+  channelPosts ChannelPost[] @relation("ChannelAuthor")
+  channelPostViews ChannelPostView[]
+  messageReactions MessageReaction[]
+  groupMessageReactions GroupMessageReaction[]
+  channelPostReactions ChannelPostReaction[]
+  mediaAssets  MediaAsset[]
+  stories     Story[]
+  storyViews  StoryView[]
+  storyLikes  StoryLike[]
+  e2eKeys     UserE2EKey[]
+  groupE2EKeysCreated GroupE2EKey[]
+  groupE2EKeyMembers GroupE2EKeyMember[]
+  channelE2EKeysCreated ChannelE2EKey[]
+  channelE2EKeyMembers ChannelE2EKeyMember[]
+  inviteLinksCreated InviteLink[]
+  hiddenChatMessages HiddenChatMessage[]
+  secretChatParticipants SecretChatParticipant[]
+  secretChatMessages     SecretChatMessage[]
+}
+
+model ManagedBot {
+  id        String @id @default(uuid())
+  profileId String @unique
+  ownerId   String
+  tokenHash String? @unique
+  tokenEnc  String?
+  nextUpdateId Int @default(0)
+  commands Json @default("[]")
+  chatSettings Json @default("{}")
+  webhookUrlEnc String?
+  webhookSecretEnc String?
+  webhookVersion Int @default(0)
+  legacyUpdatesImported Boolean @default(false)
+  updates BotUpdate[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  profile User @relation("ManagedBotProfile", fields: [profileId], references: [id], onDelete: Cascade)
+  owner   User @relation("ManagedBotOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+  @@index([ownerId, createdAt])
+}
+
+model BotUpdate {
+  id String @id @default(uuid())
+  botId String
+  updateId Int
+  dedupKey String
+  payloadEnc String
+  createdAt DateTime @default(now())
+  expiresAt DateTime
+  acknowledgedAt DateTime?
+  attempts Int @default(0)
+  nextAttemptAt DateTime @default(now())
+  lockedUntil DateTime?
+  lastError String?
+  bot ManagedBot @relation(fields: [botId], references: [id], onDelete: Cascade)
+  @@unique([botId, updateId])
+  @@unique([botId, dedupKey])
+  @@index([botId, acknowledgedAt, updateId])
+  @@index([expiresAt])
+}
+
+model BotManagementSession {
+  ownerId String @id
+  step String @default("root")
+  revision Int @default(0)
+  displayName String?
+  username String?
+  selectedBotId String?
+  updatedAt DateTime @updatedAt
+  owner User @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+}
+
+model BotManagementRequest {
+  id String @id
+  ownerId String
+  inputHash String
+  responseEnc String
+  createdAt DateTime @default(now())
+  owner User @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  @@index([ownerId, createdAt])
+}
+
+model UserE2EKey {
+  id                  String   @id @default(cuid())
+  userId              String
+  version             Int      @default(1)
+  status              String   @default("active")
+  algorithm           String   @default("rsa-oaep-2048-sha256+a256gcm")
+  deviceId            String?
+  publicKey           String
+  privateKeyBackupEnc String
+  isActive            Boolean  @default(false)
+  createdAt           DateTime @default(now())
+  rotatedAt           DateTime?
+  revokedAt           DateTime?
+  user                User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, publicKey])
+  @@unique([userId, version])
+  @@index([userId])
+  @@index([userId, status])
+  @@index([createdAt])
+}
+
+model EmailCode {
+  id        String   @id @default(cuid())
+  email     String
+  code      String
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([email])
+  @@index([expiresAt])
+}
+
+model Contact {
+  id         String   @id @default(cuid())
+  ownerId    String
+  peerId     String
+  alias      String
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  owner      User     @relation("ContactOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+  peer       User     @relation("ContactPeer", fields: [peerId], references: [id], onDelete: Cascade)
+
+  @@unique([ownerId, peerId])
+  @@index([ownerId])
+  @@index([peerId])
+}
+
+model Conversation {
+  id           String                    @id @default(cuid())
+  type         String                    @default("direct")
+  ownerUserId  String?
+  title        String?
+  isSystem     Boolean                   @default(false)
+  botChatSettings Json?
+  createdAt    DateTime                  @default(now())
+  updatedAt    DateTime                  @updatedAt
+  owner        User?                     @relation("SavedConversationOwner", fields: [ownerUserId], references: [id], onDelete: Cascade)
+  participants ConversationParticipant[]
+  messages     Message[]
+
+  @@unique([ownerUserId, type])
+  @@index([type])
+  @@index([ownerUserId])
+}
+
+model ConversationParticipant {
+  id             String       @id @default(cuid())
+  conversationId String
+  userId         String
+  lastReadAt     DateTime?
+  wallpaperUrl   String?
+  wallpaperPosY  Float?
+  createdAt      DateTime     @default(now())
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([conversationId, userId])
+  @@index([userId])
+}
+
+model Message {
+  id                      String       @id @default(cuid())
+  conversationId          String
+  senderId                String
+  senderKeyId             String?
+  senderKeyVersion        Int?
+  recipientKeyId          String?
+  recipientKeyVersion     Int?
+  encryptionScheme        String?      @default("rsa-oaep-2048-sha256+a256gcm")
+  cipherText              String?
+  iv                      String?
+  encryptedKeyForSender   String?
+  encryptedKeyForRecipient String?
+  isSystemMessage         Boolean      @default(false)
+  systemPayload           Json?
+  botContentEnc           String?
+  pinnedAt                DateTime?
+  replyToMessageId        String?
+  createdAt               DateTime     @default(now())
+  conversation            Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  sender                  User         @relation("MessageSender", fields: [senderId], references: [id], onDelete: Cascade)
+  reactions               MessageReaction[]
+
+  @@index([conversationId, createdAt])
+  @@index([conversationId, pinnedAt])
+  @@index([senderId])
+}
+
+model HiddenChatMessage {
+  id        String   @id @default(cuid())
+  userId    String
+  chatType  String
+  messageId String
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, chatType, messageId])
+  @@index([userId, chatType, createdAt])
+  @@index([messageId])
+}
+
+model MediaAsset {
+  id         String   @id @default(cuid())
+  ownerId    String
+  kind       String
+  mimeType   String
+  size       Int
+  durationMs Int?
+  width      Int?
+  height     Int?
+  objectKey  String?
+  bucket     String?
+  etag       String?
+  scopeType  String   @default("legacy")
+  scopeId    String?
+  expiresAt  DateTime?
+  clientEncrypted Boolean @default(false)
+  status     String   @default("ready")
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  owner      User     @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  accessGrants MediaAssetAccess[]
+
+  @@index([ownerId])
+  @@index([createdAt])
+  @@index([objectKey])
+  @@unique([bucket, objectKey])
+  @@index([scopeType, scopeId])
+  @@index([expiresAt])
+}
+
+model MediaAssetAccess {
+  mediaAssetId String
+  scopeType String
+  scopeId String
+  mediaAsset MediaAsset @relation(fields: [mediaAssetId], references: [id], onDelete: Cascade)
+
+  @@id([mediaAssetId, scopeType, scopeId])
+  @@index([scopeType, scopeId])
+}
+
+model Group {
+  isVerified Boolean @default(false)
+  id         String        @id @default(cuid())
+  ownerId    String
+  link       String        @unique
+  name       String
+  description String?
+  avatarUrl  String?
+  isPublic   Boolean       @default(false)
+  reactionMode String @default("all")
+  allowedReactions String[] @default([])
+  createdAt  DateTime      @default(now())
+  updatedAt  DateTime      @updatedAt
+  owner      User          @relation("GroupOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+  members    GroupMember[]
+  messages   GroupMessage[]
+  e2eKeys    GroupE2EKey[]
+  inviteLinks InviteLink[]
+
+  @@index([ownerId])
+}
+
+model GroupMember {
+  id        String   @id @default(cuid())
+  groupId   String
+  userId    String
+  role      String   @default("member")
+  roleLabel String?
+  canChangeAvatar          Boolean @default(false)
+  canChangeName            Boolean @default(false)
+  canChangeReactions       Boolean @default(false)
+  canPinMessages       Boolean @default(false)
+  canDeleteForeignMessages Boolean @default(false)
+  canAddMembers            Boolean @default(false)
+  canPostMessages          Boolean @default(true)
+  canGenerateInviteLink    Boolean @default(false)
+  canManageAdmins          Boolean @default(false)
+  createdAt DateTime @default(now())
+  group     Group    @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([groupId, userId])
+  @@index([groupId])
+  @@index([userId])
+}
+
+model GroupMessage {
+  id        String   @id @default(cuid())
+  groupId   String
+  senderId  String
+  text      String?
+  pinnedAt DateTime?
+  cipherText String?
+  iv        String?
+  keyVersion Int?
+  encryptionScheme String? @default("aes-256-gcm+wrapped-group-key")
+  replyToMessageId String?
+  createdAt DateTime @default(now())
+  group     Group    @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  sender    User     @relation(fields: [senderId], references: [id], onDelete: Cascade)
+  reactions GroupMessageReaction[]
+
+  @@index([groupId, createdAt])
+  @@index([groupId, pinnedAt])
+  @@index([senderId])
+}
+
+model GroupE2EKey {
+  id          String   @id @default(cuid())
+  groupId     String
+  version     Int
+  status      String   @default("active")
+  algorithm   String   @default("aes-256-gcm+wrapped-group-key")
+  createdById String
+  createdAt   DateTime @default(now())
+  rotatedAt   DateTime?
+  revokedAt   DateTime?
+  group       Group    @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  createdBy   User     @relation(fields: [createdById], references: [id], onDelete: Cascade)
+  members     GroupE2EKeyMember[]
+
+  @@unique([groupId, version])
+  @@index([groupId])
+  @@index([groupId, status])
+}
+
+model GroupE2EKeyMember {
+  id         String   @id @default(cuid())
+  groupKeyId String
+  userId     String
+  encryptedKey String
+  createdAt  DateTime @default(now())
+  groupKey   GroupE2EKey @relation(fields: [groupKeyId], references: [id], onDelete: Cascade)
+  user       User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([groupKeyId, userId])
+  @@index([groupKeyId])
+  @@index([userId])
+}
+
+model Channel {
+  isVerified Boolean @default(false)
+  id         String              @id @default(cuid())
+  ownerId    String
+  link       String              @unique
+  name       String
+  description String?
+  avatarUrl  String?
+  isPublic   Boolean             @default(true)
+  reactionMode String @default("all")
+  allowedReactions String[] @default([])
+  createdAt  DateTime            @default(now())
+  updatedAt  DateTime            @updatedAt
+  owner      User                @relation("ChannelOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+  subscribers ChannelSubscriber[]
+  posts      ChannelPost[]
+  e2eKeys    ChannelE2EKey[]
+  inviteLinks InviteLink[]
+
+  @@index([ownerId])
+}
+
+model InviteLink {
+  id          String   @id @default(cuid())
+  token       String   @unique
+  type        String
+  groupId     String?
+  channelId   String?
+  createdById String
+  createdAt   DateTime @default(now())
+  revokedAt   DateTime?
+  isPrimary   Boolean  @default(false)
+  name        String?
+  expiresAt   DateTime?
+  usageLimit  Int?
+  usageCount  Int      @default(0)
+
+  group     Group?   @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  channel   Channel? @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  createdBy User     @relation(fields: [createdById], references: [id], onDelete: Cascade)
+
+  @@index([groupId])
+  @@index([channelId])
+  @@index([createdById])
+}
+
+model ChannelSubscriber {
+  id        String   @id @default(cuid())
+  channelId String
+  userId    String
+  role      String   @default("member")
+  roleLabel String?
+  canChangeAvatar          Boolean @default(false)
+  canChangeName            Boolean @default(false)
+  canChangeReactions       Boolean @default(false)
+  canPinMessages       Boolean @default(false)
+  canPostMessages          Boolean @default(false)
+  canEditForeignMessages   Boolean @default(false)
+  canDeleteForeignMessages Boolean @default(false)
+  canAddMembers            Boolean @default(false)
+  canGenerateInviteLink    Boolean @default(false)
+  canManageAdmins          Boolean @default(false)
+  createdAt DateTime @default(now())
+  channel   Channel  @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([channelId, userId])
+  @@index([channelId])
+  @@index([userId])
+}
+
+model ChannelPost {
+  id         String            @id @default(cuid())
+  channelId  String
+  authorId   String
+  text       String?
+  pinnedAt   DateTime?
+  cipherText String?
+  iv         String?
+  keyVersion Int?
+  encryptionScheme String? @default("aes-256-gcm+wrapped-channel-key")
+  replyToMessageId String?
+  viewsCount Int               @default(0)
+  createdAt  DateTime          @default(now())
+  channel    Channel           @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  author     User              @relation("ChannelAuthor", fields: [authorId], references: [id], onDelete: Cascade)
+  views      ChannelPostView[]
+  reactions  ChannelPostReaction[]
+
+  @@index([channelId, createdAt])
+  @@index([channelId, pinnedAt])
+  @@index([authorId])
+}
+
+model ChannelE2EKey {
+  id          String   @id @default(cuid())
+  channelId   String
+  version     Int
+  status      String   @default("active")
+  algorithm   String   @default("aes-256-gcm+wrapped-channel-key")
+  createdById String
+  createdAt   DateTime @default(now())
+  rotatedAt   DateTime?
+  revokedAt   DateTime?
+  channel     Channel  @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  createdBy   User     @relation(fields: [createdById], references: [id], onDelete: Cascade)
+  members     ChannelE2EKeyMember[]
+
+  @@unique([channelId, version])
+  @@index([channelId])
+  @@index([channelId, status])
+}
+
+model ChannelE2EKeyMember {
+  id           String   @id @default(cuid())
+  channelKeyId String
+  userId       String
+  encryptedKey String
+  createdAt    DateTime @default(now())
+  channelKey   ChannelE2EKey @relation(fields: [channelKeyId], references: [id], onDelete: Cascade)
+  user         User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([channelKeyId, userId])
+  @@index([channelKeyId])
+  @@index([userId])
+}
+
+model ChannelPostView {
+  id        String      @id @default(cuid())
+  postId    String
+  userId    String
+  createdAt DateTime    @default(now())
+  post      ChannelPost @relation(fields: [postId], references: [id], onDelete: Cascade)
+  user      User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([postId, userId])
+  @@index([postId])
+  @@index([userId])
+}
+
+model MessageReaction {
+  id        String   @id @default(cuid())
+  messageId String
+  userId    String
+  emoji     String
+  createdAt DateTime @default(now())
+  message   Message  @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([messageId, userId, emoji])
+  @@index([messageId])
+  @@index([userId])
+}
+
+model GroupMessageReaction {
+  id            String       @id @default(cuid())
+  groupMessageId String
+  userId        String
+  emoji         String
+  createdAt     DateTime     @default(now())
+  groupMessage  GroupMessage @relation(fields: [groupMessageId], references: [id], onDelete: Cascade)
+  user          User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([groupMessageId, userId, emoji])
+  @@index([groupMessageId])
+  @@index([userId])
+}
+
+model ChannelPostReaction {
+  id        String      @id @default(cuid())
+  postId    String
+  userId    String
+  emoji     String
+  createdAt DateTime    @default(now())
+  post      ChannelPost @relation(fields: [postId], references: [id], onDelete: Cascade)
+  user      User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([postId, userId, emoji])
+  @@index([postId])
+  @@index([userId])
+}
+
+model Story {
+  id         String      @id @default(cuid())
+  authorId   String
+  mediaUrl   String
+  mediaType  String
+  durationMs Int?
+  caption    String?
+  overlay    String?
+  createdAt  DateTime    @default(now())
+  expiresAt  DateTime
+  author     User        @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  views      StoryView[]
+  likes      StoryLike[]
+
+  @@index([authorId, createdAt])
+  @@index([authorId, expiresAt])
+  @@index([expiresAt])
+}
+
+model StoryView {
+  id         String   @id @default(cuid())
+  storyId    String
+  viewerId   String
+  createdAt  DateTime @default(now())
+  story      Story    @relation(fields: [storyId], references: [id], onDelete: Cascade)
+  viewer     User     @relation(fields: [viewerId], references: [id], onDelete: Cascade)
+
+  @@unique([storyId, viewerId])
+  @@index([viewerId, createdAt])
+}
+
+model StoryLike {
+  id        String   @id @default(cuid())
+  storyId   String
+  userId    String
+  createdAt DateTime @default(now())
+  story     Story    @relation(fields: [storyId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([storyId, userId])
+  @@index([userId, createdAt])
+}
+
+model PollVote {
+  id        String   @id @default(cuid())
+  messageId String
+  userId    String
+  optionIdx Int
+  createdAt DateTime @default(now())
+
+  @@unique([messageId, userId])
+  @@index([messageId])
+  @@index([userId])
+}
+
+model SecretChat {
+  id              String                  @id @default(cuid())
+  title           String?                 @default("Секретный чат")
+  codeword        String?
+  createdAt       DateTime                @default(now())
+  expiresAt       DateTime?
+  lifetimeSeconds Int
+  isApproved      Boolean                 @default(false)
+  cryptoVersion   Int                     @default(1)
+  participants    SecretChatParticipant[]
+  messages        SecretChatMessage[]
+
+  @@index([expiresAt])
+}
+
+model SecretChatParticipant {
+  id                String     @id @default(cuid())
+  secretChatId      String
+  userId            String
+  acceptedSessionId String?
+  deviceKeyId       String?
+  devicePublicKey   String?
+  createdAt         DateTime   @default(now())
+  secretChat        SecretChat @relation(fields: [secretChatId], references: [id], onDelete: Cascade)
+  user              User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([secretChatId, userId])
+  @@index([userId])
+}
+
+model SecretChatMessage {
+  id           String     @id @default(cuid())
+  secretChatId String
+  senderId     String
+  textEnc      String     // Текст зашифрован сессионным ключом (AES-GCM)
+  pinnedAt     DateTime?
+  fileUrlEnc   String?    // Зашифрованный URL файла-вложения в MinIO
+  createdAt    DateTime   @default(now())
+  secretChat   SecretChat @relation(fields: [secretChatId], references: [id], onDelete: Cascade)
+  sender       User       @relation(fields: [senderId], references: [id], onDelete: Cascade)
+
+  @@index([secretChatId])
+  @@index([secretChatId, pinnedAt])
+  @@index([createdAt])
+}

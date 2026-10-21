@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="480" viewBox="0 0 1280 480" role="img" aria-labelledby="title description">
+  <title id="title">Eclipse</title>
+  <desc id="description">A new generation of messaging. The Eclipse logo on a charcoal background with soft geometric shapes.</desc>
+  <defs>
+    <linearGradient id="background" x2="1" y2="1"><stop stop-color="#171a20"/><stop offset="1" stop-color="#0d0f13"/></linearGradient>
+    <linearGradient id="surface" x2="0.7" y2="1"><stop stop-color="#363b46"/><stop offset="1" stop-color="#22262e"/></linearGradient>
+    <pattern id="dots" width="24" height="24" patternUnits="userSpaceOnUse"><circle cx="2" cy="2" r="1" fill="#f0f1f4" opacity=".07"/></pattern>
+    <clipPath id="frame"><rect width="1280" height="480" rx="28"/></clipPath>
+  </defs>
+  <g clip-path="url(#frame)">
+    <rect width="1280" height="480" fill="url(#background)"/>
+    <rect width="1280" height="480" fill="url(#dots)"/>
+    <circle cx="1180" cy="28" r="170" fill="#252932" opacity=".55"/>
+    <rect x="850" y="112" width="252" height="252" rx="90" fill="url(#surface)" transform="rotate(-12 976 238)"/>
+    <circle cx="1050" cy="330" r="126" fill="#14171d"/>
+    <circle cx="1050" cy="330" r="74" fill="#2e333d"/>
+    <circle cx="1050" cy="330" r="28" fill="#aeb7c6"/>
+    <path d="M818 300h32v32h32v32h-32v32h-32v-32h-32v-32h32z" fill="#737d8d"/>
+    <rect x="1148" y="168" width="42" height="42" rx="13" fill="#606b7b" transform="rotate(12 1169 189)"/>
+    <g transform="translate(66 56) scale(.17)" fill="#f5f6f8">
+      <path d="M255.225 46.588c-26.494 0-47.772 21.275-47.772 47.77 0 26.495 21.278 47.775 47.772 47.775 26.493 0 47.77-21.28 47.77-47.774 0-26.497-21.276-47.772-47.77-47.772zm-69.67 5.285c-32.036 21.7-53.203 57.98-53.203 99.02 0 66.417 54.854 120.078 122.668 120.078 67.813 0 123.035-53.66 123.035-120.077 0-41.04-21.17-77.32-53.205-99.02 17.492 17.676 28.082 41.888 28.082 68.72 0 54.042-43.87 97.915-97.91 97.915-54.042 0-97.913-43.873-97.913-97.916 0-26.83 10.958-51.043 28.45-68.72h-.005zm-63.36 4.666C61.015 97.982 20.59 167.265 20.59 245.64c0 126.838 104.755 229.32 234.26 229.32 129.504 0 234.964-102.482 234.964-229.32 0-78.374-40.426-147.657-101.605-189.1 33.403 33.756 53.624 79.993 53.624 131.237 0 103.206-83.78 186.987-186.984 186.987-103.204 0-186.987-83.78-186.987-186.987 0-51.244 20.928-97.48 54.332-131.238z"/>
+    </g>
+    <g font-family="Inter,Segoe UI,Arial,sans-serif">
+      <text x="68" y="262" fill="#f5f6f8" font-size="100" font-weight="650" letter-spacing="-5">Eclipse</text>
+      <text x="72" y="318" fill="#b4bbc8" font-size="28">A new generation of messaging.</text>
+      <text x="72" y="411" fill="#919aa9" font-size="21" letter-spacing="1">eclpse.ru</text>
+      <text x="174" y="110" fill="#aab3c2" font-size="16" letter-spacing="4">OPEN SOURCE</text>
+    </g>
+  </g>
+</svg>

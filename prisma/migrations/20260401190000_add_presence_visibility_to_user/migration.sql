@@ -1,0 +1,2 @@
+ALTER TABLE "User"
+  ADD COLUMN IF NOT EXISTS "presenceVisibility" TEXT NOT NULL DEFAULT 'all';

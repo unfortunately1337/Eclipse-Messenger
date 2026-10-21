@@ -1,0 +1,19 @@
+[variables]
+# Work around upstream GitHub tarball issues on the default pinned nixpkgs revision.
+NIXPACKS_NIXPKGS_ARCHIVE = "https://github.com/NixOS/nixpkgs/archive/nixos-25.11.tar.gz"
+NIXPACKS_NODE_VERSION = "24"
+# Keep build toolchain/dev deps available for Prisma + Next build.
+NPM_CONFIG_PRODUCTION = "false"
+NODE_ENV = "production"
+
+[phases.setup]
+nixPkgs = ["nodejs_24", "openssl", "python3", "pkg-config", "gcc", "gnumake"]
+
+[phases.install]
+cmds = ["npm ci --include=dev"]
+
+[phases.build]
+cmds = ["npx prisma generate", "npm run build"]
+
+[start]
+cmd = "npm run start"

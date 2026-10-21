@@ -1,0 +1,6 @@
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "Generated dependencies and local build output"
+paths = ['''(^|[/\\])(node_modules|\.next|\.git|coverage)([/\\]|$)''']
