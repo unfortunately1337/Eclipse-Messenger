@@ -20,7 +20,7 @@ npm run build
 
 Run ESLint on files you changed. The existing codebase has lint debt, so do not
 reformat unrelated files to make a contribution. When changing Next.js code, read
-the bundled framework documentation referenced in `AGENTS.md`.
+the bundled framework documentation in `node_modules/next/dist/docs/`.
 
 Do not remove Prisma migrations. Add a migration when changing persistent schema.
 Use synthetic data in tests. Changes to encryption, authentication, membership and
