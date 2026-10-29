@@ -301,7 +301,10 @@ async function fetchSecurePayload(messageId, chatId) {
 }
 
 self.addEventListener("push", (event) => {
-  const payload = normalizeMessage(parsePayload(event));
+  const raw = parsePayload(event);
+  const source = raw?.web?.data || raw?.data || raw;
+  if (source?.type === "call") { event.waitUntil(handleCallPush(source)); return; }
+  const payload = normalizeMessage(raw);
   if (!payload) return;
 
   event.waitUntil((async () => {
@@ -379,3 +382,49 @@ self.addEventListener("notificationclick", (event) => {
     }
   })());
 });
+
+
+
+// Serialize updates for one call; retain the delivered state across worker restarts.
+const callPushWork = new Map();
+function handleCallPush(source) {
+  const id = source.callId;
+  if (typeof id !== "string" || !/^[a-f0-9-]{36}$/i.test(id)) return Promise.resolve();
+  const previous = callPushWork.get(id) || Promise.resolve();
+  const work = previous.catch(() => {}).then(async () => {
+    const response = await fetch('/api/calls/notification?id=' + encodeURIComponent(id), { credentials: 'same-origin', cache: 'no-store' });
+    const tag = 'call:' + id;
+    if (!response.ok) { if (response.status === 410 || response.status === 403 || response.status === 401) for (const notification of await self.registration.getNotifications({ tag })) notification.close(); return; }
+    const result = await response.json();
+    const call = result.data;
+    if (!result.ok || !call) return;
+    if (call.recipientId !== source.recipientId) return;
+    const windows = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+    for (const client of windows) client.postMessage({ type: 'CALLS_CHANGED' });
+    const cache = await caches.open('eclipse-call-notifications-v1');
+    const key = new Request(self.location.origin + '/__call_notification/' + id);
+    const saved = await cache.match(key);
+    const delivered = saved ? await saved.text() : '';
+    if (call.state === 'closed') {
+      for (const notification of await self.registration.getNotifications({ tag })) notification.close();
+      await cache.put(key, new Response('closed'));
+      return;
+    }
+    if (delivered === call.state || delivered === 'closed' || delivered === 'missed') return;
+    // The visible app already renders the full incoming call. Background devices
+    // get one OS notification with a stable tag, updated for a missed call.
+    if (!windows.some(client => client.visibilityState === 'visible')) {
+      const ru = await notificationLanguage() === 'ru';
+      await self.registration.showNotification(call.senderName, {
+        body: call.state === 'ringing' ? (ru ? '☎ Входящий звонок…' : '☎ Incoming call…') : (ru ? '☎ Пропущенный звонок' : '☎ Missed call'),
+        icon: '/brand/call-notification.svg', badge: '/brand/call-notification.svg', tag, renotify: false,
+        data: { url: call.deepLink, callId: id },
+      });
+    }
+    await cache.put(key, new Response(call.state));
+    const keys = await cache.keys();
+    for (const old of keys.slice(0, Math.max(0, keys.length - 200))) await cache.delete(old);
+  }).catch(() => {});
+  callPushWork.set(id, work);
+  return work.finally(() => { if (callPushWork.get(id) === work) callPushWork.delete(id); });
+}

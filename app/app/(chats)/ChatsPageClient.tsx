@@ -23,6 +23,11 @@ import { customThemeMessageBackground, customThemeChatBackground, customThemeTex
 import { readAudioFileMetadata } from "@/lib/client/audio-file-metadata";
 import { PanelNavigation } from "./components/common/PanelNavigation";
 import { PANEL_SUBVIEW_VARIANTS, PANEL_TRANSITION } from "@/lib/client/panel-motion";
+import { schedulePanelIdle } from "@/lib/client/panel-work";
+import { requestNetworkCheck } from "@/lib/client/network-monitor";
+import { usePanelDirection } from "@/lib/client/use-panel-direction";
+import { useStableEvent } from "@/lib/client/use-stable-event";
+import { AnimatedChatLayout } from "./components/common/AnimatedChatLayout";
 import { BotMenuToggle, BotReplyMenu, useBotChatSettings } from "./components/common/BotChatControls";
 import { MemberActionMenu, useMemberContextMenu } from "./components/common/MemberActionMenu";
 import { SecretChatInfoDialog } from "./components/common/SecretChatInfoDialog";
@@ -44,11 +49,21 @@ function formatSharedFileSize(bytes?: number): string {
 import { CSSProperties, ChangeEvent, ElementType, Fragment, PointerEvent as ReactPointerEvent, ReactNode, UIEvent, memo, useCallback, useDeferredValue, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import dynamic from "next/dynamic";
-import { UserCog, Album, ArrowLeft, ArrowRight, ArrowUp, AtSign, Bell, Bookmark, Bot, Camera, Check, ChevronDown, ChevronLeft, ChevronRight, CircleAlert, CircleDashed, CircleEllipsis, CircleFadingPlus, ClockFading, CloudUpload, Copy, Database, Download, EllipsisVertical, Eraser, Eye, EyeClosed, EyeOff, FastForward, File as FileIcon, Flame, Folder, Hash, HatGlasses, Heart, History, Image as ImageIcon, Info, KeySquare, Laptop, Link as LinkIcon, Loader2, Lock, LogOut, Mail, MapPin, BarChart3, ListCollapse, Maximize, Megaphone, Ghost, Gift, MessageCircleDashed, Mic, Monitor, MoreVertical, Music, Music2, Paperclip, Pause, Phone, PinOff, Play, Plus, PlusCircle, QrCode, Rewind, Save, Search, Settings, Share, SlidersHorizontal, Smartphone, Smile, Sparkles, SquarePlay, SwitchCamera, Tablet, Type, UserPlus, UsersRound, UserX, Volume2, VolumeX, X, Users, Settings2, UserRoundPlus, Shield, ShieldAlert, ShieldUser, Brush, MonitorSpeaker, Wallet } from "lucide-react";
+import { UserCog, Album, ArrowLeft, ArrowRight, ArrowUp, AtSign, Bell, Bookmark, Bot, Camera, Check, ChevronDown, ChevronLeft, ChevronRight, CircleAlert, CircleDashed, CircleEllipsis, CircleFadingPlus, ClockFading, CloudUpload, Copy, Database, Download, EllipsisVertical, Eraser, Eye, EyeClosed, EyeOff, FastForward, File as FileIcon, Flame, Folder, Hash, HatGlasses, Heart, History, Image as ImageIcon, Info, KeySquare, Laptop, Link as LinkIcon, Loader2, Lock, LogOut, Mail, MapPin, BarChart3, ListCollapse, Maximize, Megaphone, Ghost, Gift, MessageCircleDashed, Mic, Monitor, MoreVertical, Music, Music2, Paperclip, Pause, PinOff, Play, Plus, PlusCircle, QrCode, Rewind, Save, Search, Settings, Share, SlidersHorizontal, Smartphone, Smile, Sparkles, SquarePlay, SwitchCamera, Tablet, Type, UserPlus, UsersRound, UserX, Volume2, VolumeX, X, Users, Settings2, UserRoundPlus, Shield, ShieldAlert, ShieldUser, Brush, MonitorSpeaker, Wallet } from "lucide-react";
 import { TiPin } from "react-icons/ti";
 import { BsPinAngleFill } from "react-icons/bs";
 import { PINS_UPDATED_EVENT, pinScopeKey, type PinScope } from "@/lib/message-pins";
 import { useMessagePins } from "./hooks/useMessagePins";
+import { replaceRecordingCamera, type RecordingCameraRequest } from "@/lib/client/recording-camera";
+import UserProfileActions from "./components/common/UserProfileActions";
+import CommunityProfileActions from "./components/common/CommunityProfileActions";
+import { useMessageSearch } from "./hooks/useMessageSearch";
+import { MessageSearchBar, MessageSearchNavigation } from "./components/common/MessageSearchBar";
+import { SearchHighlightedText } from "./components/common/SearchHighlightedText";
+import CallMessageBubble from "./components/common/CallMessageBubble";
+import { FiPhone, FiVideo } from "react-icons/fi";
+import { readCallMessage, callMessageTitle } from "@/lib/call-history";
+import { useCalls, CALLS_CHANGED_EVENT } from "./hooks/useCalls";
 import { PinnedMessageBar } from "./components/common/PinnedMessageBar";
 import { GiHamburgerMenu } from "react-icons/gi";
 import { RiMicFill, RiReplyFill, RiRobot3Fill } from "react-icons/ri";
@@ -60,7 +75,7 @@ import { GrRadialSelected } from "react-icons/gr";
 import { FaArrowsRotate } from "react-icons/fa6";
 import { FaLink, FaLock, FaReply, FaVolumeMute } from "react-icons/fa";
 import { MdDelete, MdEdit } from "react-icons/md";
-import { AnimatePresence, LayoutGroup, motion, useReducedMotion } from "framer-motion";
+import { AnimatePresence, LayoutGroup, MotionConfig, motion, useReducedMotion } from "framer-motion";
 import { MediaAvatar, MediaBanner, isRealMediaAvatar } from "@/components/ui/media";
 import { MediaViewerTopBar } from "./components/common/MediaViewerTopBar";
 import { AvatarMediaViewerModal } from "./components/common/AvatarMediaViewerModal";
@@ -106,6 +121,7 @@ const SettingsDrawer = dynamic(() => import("./components/common/SettingsDrawer"
   ssr: false,
   loading: () => null,
 });
+const CallRoomPanel = dynamic(() => import("./components/common/CallRoomPanel").then(module => module.CallRoomPanel), { ssr: false });
 import ChatPoll from "@/components/ChatPoll";
 import { CountdownTimer } from "@/components/CountdownTimer";
 import ProfileQrPanel from "@/components/ProfileQrPanel";
@@ -118,7 +134,7 @@ import {
   type LiveBackgroundNeatPreset,
   type LiveBackgroundSettings,
   loadLiveBackgroundSettings,
-  saveLiveBackgroundSettings,
+  updateLiveBackgroundSettings,
 } from "@/lib/client/live-background";
 import { resolveE2EIdentity } from "@/lib/client/e2e-identity";
 import { renderEmojiText } from "@/components/EmojiText";
@@ -142,7 +158,7 @@ import { normalizeStoryOverlay, type StoryMediaTransform, type StoryOverlay, typ
 import { broadcastSelfProfileUpdated, broadcastProfileUpdated, subscribeProfileUpdated } from "@/lib/client/local-updates";
 import { getEffectiveProfileGradient, getEffectiveProfileAccentColor, isMediaBackgroundUrl } from "@/lib/profile-gradients";
 import { compressImageFile, verifyFileMagicBytes } from "@/lib/client/media-compression";
-import { loadEncryptedMediaBlob, encryptMediaBlob, resolveMessageMedia, clearEncryptedMedia, collectLegacyMediaUrls, markLegacyMediaRestored } from "@/lib/client/media-crypto";
+import { loadEncryptedMediaBlob, encryptMediaBlob, resolveEncryptedMediaUrl, resolveMessageMedia, clearEncryptedMedia, collectLegacyMediaUrls, markLegacyMediaRestored } from "@/lib/client/media-crypto";
 import { cacheMediaBlobUrl, getCachedMediaUrl, clearMediaBlobCache } from "@/lib/client/media-cache";
 import { isSafeUrl, sanitizeExternalUrl, getSafeHostname } from "@/lib/client/safe-content";
 
@@ -1842,19 +1858,20 @@ function normalizeLastMessagePreview(value: string) {
 let chatCacheGeneration = 0;
 const legacyMediaGrantAttempts = new Map<string, number>();
 const parsedMessageCache = new Map<string, ParsedMessageContent>();
-function parseMessageContentCached(value: string) {
+function parseMessageContentCached(value: string, resolveMedia = true) {
   const key = value || "";
   if (key.length > 4096) {
-    return resolveMessageMedia(parseMessageContent(key));
+    const parsed = parseMessageContent(key);
+    return resolveMedia ? resolveMessageMedia(parsed) : parsed;
   }
   const cached = parsedMessageCache.get(key);
-  if (cached) return resolveMessageMedia(cached);
+  if (cached) return resolveMedia ? resolveMessageMedia(cached) : cached;
   const parsed = parseMessageContent(key);
   if (parsedMessageCache.size > PARSED_MESSAGE_CACHE_MAX) {
     parsedMessageCache.clear();
   }
   parsedMessageCache.set(key, parsed);
-  return resolveMessageMedia(parsed);
+  return resolveMedia ? resolveMessageMedia(parsed) : parsed;
 }
 
 function getEditableTextFromParsed(parsed: ParsedMessageContent) {
@@ -2480,7 +2497,7 @@ function formatChatListTimeLabel(iso: string) {
 }
 
 function getReplyPreviewText(value: string) {
-  const parsed = parseMessageContentCached(value || "");
+  const parsed = parseMessageContentCached(value || "", false);
   const base = parsed.kind === "story_reply" ? parsed.text : normalizeLastMessagePreviewCached(value || "");
   return truncateEmojiText(base, 80);
 }
@@ -2690,14 +2707,19 @@ function resolveChatListPreviewMeta(input: unknown): ChatListPreviewMeta {
   }
 
   body = readForwardedContent(body)?.content ?? body;
-  const parsedBody = body.startsWith(MEDIA_PREFIX) ? parseMessageContentCached(body) : null;
+  const parsedBody = body.startsWith(MEDIA_PREFIX) ? parseMessageContentCached(body, false) : null;
+  const previewThumb = (src?: string | null) => {
+    if (!src) return null;
+    const cached = getCachedMediaUrl(src);
+    return src.includes("#eclipse-e2e=") && cached === src ? null : cached;
+  };
   if (parsedBody) {
     if (parsedBody.kind === "image") {
       const caption = (parsedBody.caption || "").trim();
       return {
         kind: "image",
         text: caption ? `${authorPrefix}${caption}`.trim() : t("{0}Фотография", { 0: authorPrefix }).trim(),
-        thumbUrl: parsedBody.src,
+        thumbUrl: previewThumb(parsedBody.src),
       };
     }
     if (parsedBody.kind === "album") {
@@ -2706,7 +2728,7 @@ function resolveChatListPreviewMeta(input: unknown): ChatListPreviewMeta {
       return {
         kind: "album",
         text: caption ? `${authorPrefix}${caption}`.trim() : t("{0}Альбом", { 0: authorPrefix }).trim(),
-        thumbUrl: firstThumb,
+        thumbUrl: previewThumb(firstThumb),
       };
     }
     if (parsedBody.kind === "music") {
@@ -2717,14 +2739,14 @@ function resolveChatListPreviewMeta(input: unknown): ChatListPreviewMeta {
         return {
           kind: "video_note",
           text: t("{0}Видеосообщение", { 0: authorPrefix }).trim(),
-          thumbUrl: parsedBody.src,
+          thumbUrl: previewThumb(parsedBody.src),
         };
       }
       const caption = (parsedBody.caption || "").trim();
       return {
         kind: "video",
         text: caption ? `${authorPrefix}${caption}`.trim() : t("{0}Видео", { 0: authorPrefix }).trim(),
-        thumbUrl: parsedBody.src,
+        thumbUrl: previewThumb(parsedBody.src),
       };
     }
     if (parsedBody.kind === "voice") {
@@ -2975,7 +2997,7 @@ const CHAT_PAGE_SIZE = 60;
 const CHAT_LIST_SCROLL_STATE_STEP = CHAT_ITEM_ESTIMATED_HEIGHT;
 const MESSAGE_ITEM_ESTIMATED_HEIGHT = 96;
 const MESSAGE_ROW_GAP = 0;
-const MESSAGE_SCROLL_STATE_STEP = 14;
+const MESSAGE_SCROLL_STATE_STEP = 96;
 const CHAT_PREVIEW_DECRYPT_LIMIT = 16;
 const CHAT_PREVIEW_SHARED_KEY_WARMUP_LIMIT = 6;
 const SHARED_KEY_WARMUP_COOLDOWN_MS = 45_000;
@@ -4075,12 +4097,17 @@ export default function ChatsPageClient() {
   const [chats, setChats] = useState<ChatSummary[]>([]);
   const chatsRef = useRef<ChatSummary[]>([]);
   const [activeConversation, setActiveConversation] = useState<ConversationResponse | null>(null);
+  const [mediaReadyVersion, setMediaReadyVersion] = useState(0);
   const [startingBot, setStartingBot] = useState(false);
   const botStartRequestRef = useRef<{ link: string; requestId: string } | null>(null);
   const activeConversationRef = useRef<ConversationResponse | null>(null);
   const [messages, setMessages] = useState<DecryptedMessage[]>([]);
   useEffect(() => {
-    const refresh = () => setMessages(previous => [...previous]);
+    const refresh = () => {
+      chatListPreviewMetaCache.clear();
+      setMediaReadyVersion(version => version + 1);
+      setMessages(previous => [...previous]);
+    };
     const purge = () => { clearChatMemoryCaches(); setMessages([]); };
     window.addEventListener("eclipse:caches-cleared", purge);
     window.addEventListener("eclipse:media-ready", refresh);
@@ -4088,6 +4115,7 @@ export default function ChatsPageClient() {
   }, []);
   const [dragActive, setDragActive] = useState(false);
   const wallpaperFileInputRef = useRef<HTMLInputElement>(null);
+  const wallpaperTargetRef = useRef<string | null>(null);
   const [uploadingWallpaper, setUploadingWallpaper] = useState(false);
   const [applyingWallpaper, setApplyingWallpaper] = useState(false);
   const pickedFilesProcessingRef = useRef(false);
@@ -4285,13 +4313,7 @@ export default function ChatsPageClient() {
       message.includes("NetworkError") ||
       message.includes("Failed to execute 'fetch'")
     ) {
-      showAppToast({
-        type: "error",
-        title: t("Нестабильное соединение с интернетом"),
-        description: t("Проверьте подключение."),
-        icon: "globe",
-        durationMs: 4000,
-      });
+      requestNetworkCheck();
       return;
     }
     showChatActionPanel({ icon: "error", message }, 3200);
@@ -4323,6 +4345,7 @@ export default function ChatsPageClient() {
     });
   }, []);
   const [profileModalOpen, setProfileModalOpen] = useState(false);
+  const [profileOpenedExternally, setProfileOpenedExternally] = useState(false);
   const [profileMoreOpen, setProfileMoreOpen] = useState(false);
   const [hoverReactionMessageId, setHoverReactionMessageId] = useState<string | null>(null);
   const [hoverReactionExpandedMessageId, setHoverReactionExpandedMessageId] = useState<string | null>(null);
@@ -4472,8 +4495,6 @@ export default function ChatsPageClient() {
   const [channelModalLoading, setChannelModalLoading] = useState(false);
   const [channelModalError, setChannelModalError] = useState<string | null>(null);
   const [channelModalData, setChannelModalData] = useState<ChannelModalData | null>(null);
-  const [channelMoreOpen, setChannelMoreOpen] = useState(false);
-  const [groupMoreOpen, setGroupMoreOpen] = useState(false);
   const [channelNameDraft, setChannelNameDraft] = useState("");
   const [channelDescriptionDraft, setChannelDescriptionDraft] = useState("");
   const [channelNameEditing, setChannelNameEditing] = useState(false);
@@ -4533,6 +4554,10 @@ export default function ChatsPageClient() {
   const [profileActiveTab, setProfileActiveTab] = useState<"members" | "media" | "files" | "voice" | "links" | "music">("media");
   const [profilePlayingAudioUrl, setProfilePlayingAudioUrl] = useState<string | null>(null);
   const [profileScrollTop, setProfileScrollTop] = useState(0);
+  const handleProfileScroll = useCallback((event: React.UIEvent<HTMLDivElement>) => {
+    // The header only has two states; pixel-by-pixel updates redraw the entire chat.
+    setProfileScrollTop(event.currentTarget.scrollTop > 140 ? 141 : 0);
+  }, []);
   const [profileError, setProfileError] = useState<string | null>(null);
   const [profileData, setProfileData] = useState<ProfilePreview | null>(null);
   const profileDataRef = useRef(profileData);
@@ -4726,6 +4751,10 @@ export default function ChatsPageClient() {
   useEffect(() => { if (!settingsPanelOpen) setSettingsPanelCovered(false); }, [settingsPanelOpen]);
   const [settingsDrawerLoaded, setSettingsDrawerLoaded] = useState(false);
   useEffect(() => { if (settingsPanelOpen) setSettingsDrawerLoaded(true); }, [settingsPanelOpen]);
+  useEffect(() => schedulePanelIdle(() => {
+    // Warm the split bundle without mounting settings or fetching private settings data.
+    void import("./components/common/SettingsDrawer").catch(() => {});
+  }, 1200), []);
 
   const settingsAvatarInputRef = useRef<HTMLInputElement | null>(null);
   const settingsMusicInputRef = useRef<HTMLInputElement | null>(null);
@@ -4763,43 +4792,9 @@ export default function ChatsPageClient() {
     prevCreateChatStepRef.current = createChatStep;
   }, [createChatStep, createChatKind]);
 
-  const [profileNavDirection, setProfileNavDirection] = useState<"forward" | "backward">("forward");
-  const prevProfileSubViewRef = useRef<string | null>(null);
-  useEffect(() => {
-    const isEntering = profileSubView !== null && prevProfileSubViewRef.current === null;
-    const isExiting = profileSubView === null && prevProfileSubViewRef.current !== null;
-    if (isEntering) setProfileNavDirection("forward");
-    else if (isExiting) setProfileNavDirection("backward");
-    prevProfileSubViewRef.current = profileSubView;
-  }, [profileSubView]);
-
-  const [groupNavDirection, setGroupNavDirection] = useState<"forward" | "backward">("forward");
-  const prevGroupSubViewRef = useRef<string | null>(null);
-  useEffect(() => {
-    const getGroupSubDepth = (sv: string | null) => {
-      if (!sv) return 0;
-      if (sv === "add_members" || sv === "reactions" || sv === "type") return 2;
-      return 1;
-    };
-    const cur = getGroupSubDepth(groupSubView);
-    const prev = getGroupSubDepth(prevGroupSubViewRef.current);
-    if (cur !== prev) setGroupNavDirection(cur > prev ? "forward" : "backward");
-    prevGroupSubViewRef.current = groupSubView;
-  }, [groupSubView]);
-
-  const [channelNavDirection, setChannelNavDirection] = useState<"forward" | "backward">("forward");
-  const prevChannelSubViewRef = useRef<string | null>(null);
-  useEffect(() => {
-    const getChannelSubDepth = (sv: string | null) => {
-      if (!sv) return 0;
-      if (sv === "add_subscribers" || sv === "reactions" || sv === "type") return 2;
-      return 1;
-    };
-    const cur = getChannelSubDepth(channelSubView);
-    const prev = getChannelSubDepth(prevChannelSubViewRef.current);
-    if (cur !== prev) setChannelNavDirection(cur > prev ? "forward" : "backward");
-    prevChannelSubViewRef.current = channelSubView;
-  }, [channelSubView]);
+  const profileNavDirection = usePanelDirection(profileSubView === null ? 0 : 1);
+  const groupNavDirection = usePanelDirection(!groupSubView ? 0 : ["add_members", "reactions", "type"].includes(groupSubView) ? 2 : 1);
+  const channelNavDirection = usePanelDirection(!channelSubView ? 0 : ["add_subscribers", "reactions", "type"].includes(channelSubView) ? 2 : 1);
 
   const [secretChatCreateOpen, setSecretChatCreateOpen] = useState(false);
   const [secretChatInfoOpen, setSecretChatInfoOpen] = useState(false);
@@ -5348,6 +5343,7 @@ export default function ChatsPageClient() {
   const [videoRecordingStream, setVideoRecordingStream] = useState<MediaStream | null>(null);
   const [videoRecorderOpen, setVideoRecorderOpen] = useState(false);
   const [videoRecording, setVideoRecording] = useState(false);
+  const [videoCameraSwitching, setVideoCameraSwitching] = useState(false);
   const [videoRecordingLocked, setVideoRecordingLocked] = useState(false);
   const recordingLocksRef = useRef({ voice: false, video: false });
   recordingLocksRef.current = { voice: voiceRecordingLocked, video: videoRecordingLocked };
@@ -5629,6 +5625,7 @@ export default function ChatsPageClient() {
   const videoPreviewRef = useRef<HTMLVideoElement | null>(null);
   const videoInputDeviceIdsRef = useRef<string[]>([]);
   const activeVideoDeviceIdRef = useRef<string | null>(null);
+  const videoCameraSwitchInProgressRef = useRef(false);
   const skipMicTapRef = useRef(false);
   const pusherRef = useRef<{ disconnect: () => void } | null>(null);
   const realtimeSelfIdRef = useRef<string | null>(null);
@@ -5721,7 +5718,6 @@ export default function ChatsPageClient() {
   const mobileHeaderOffsetRef = useRef(0);
   const chatListTouchStartRef = useRef<{ y: number; x: number; top: number } | null>(null);
   const [chatListScrollTop, setChatListScrollTop] = useState(0);
-  const [, setMobileHeaderOffset] = useState(0);
   const [mobileChatViewportHeight, setMobileChatViewportHeight] = useState<number | null>(null);
   const mobileEmojiPickerHeight = Math.max(0, Math.min(300, Math.max(260, (mobileChatViewportHeight ?? 640) * .44), (mobileChatViewportHeight ?? 640) - 90));
   const [chatListViewportHeight, setChatListViewportHeight] = useState(0);
@@ -6026,9 +6022,6 @@ export default function ChatsPageClient() {
         lastCommittedChatListScrollTopRef.current = nextCommittedTop;
         setChatListScrollTop(nextCommittedTop);
       }
-      if (!isDesktop) {
-        setMobileHeaderOffset(pendingMobileHeaderOffsetRef.current);
-      }
     });
   }, [isDesktop]);
 
@@ -6147,10 +6140,7 @@ export default function ChatsPageClient() {
       const committedTop = lastCommittedMessagesScrollTopRef.current;
       const shouldCommitMessagesTop =
         Math.abs(nextTop - committedTop) >= (bottomScrollAnimationRef.current ? 240 : MESSAGE_SCROLL_STATE_STEP) ||
-        (!bottomScrollAnimationRef.current && (
-          nextTop <= MESSAGE_HISTORY_LOAD_THRESHOLD + MESSAGE_ITEM_ESTIMATED_HEIGHT ||
-          distanceToBottom <= MESSAGE_AUTO_SCROLL_THRESHOLD + MESSAGE_ITEM_ESTIMATED_HEIGHT
-        ));
+        (nextTop !== committedTop && (nextTop <= 0 || distanceToBottom <= 0));
       if (shouldCommitMessagesTop) {
         lastCommittedMessagesScrollTopRef.current = nextTop;
         setMessagesScrollTop(nextTop);
@@ -6545,6 +6535,18 @@ export default function ChatsPageClient() {
     [activeConversation, profileData, requestedChatType, selectedChat, selectedLink, selfId],
   );
   const contactChat = activeChat;
+  const callTarget = useMemo(() => {
+    if (!activeChat || activeChat.isBot || activeChat.isSystem || activeChat.link.startsWith("secret-") || activeChat.canSendMessages === false) return null;
+    if (activeChat.chatType === "group") return { kind: "group" as const, link: activeChat.link };
+    if ((!activeChat.chatType || activeChat.chatType === "direct") && activeChat.peerId !== selfId) return { kind: "direct" as const, link: activeChat.link };
+    return null;
+  }, [activeChat, selfId]);
+  const calls = useCalls(selfId, callTarget);
+  useEffect(() => {
+    if (!calls.error) return;
+    showAppToast({ type: "error", title: t(calls.error), durationMs: 5000 });
+    calls.clearError();
+  }, [calls.error, calls.clearError, t]);
   const isDirectChatActive = Boolean(
     activeChat && (activeChat.chatType === "direct" || (!activeChat.chatType && activeConversation?.chatType === "direct"))
   );
@@ -9871,7 +9873,7 @@ export default function ChatsPageClient() {
     () =>
       messages.some((message) => {
         if (message.senderId !== selfId) return false;
-        const parsed = parseMessageContentCached(message.text);
+        const parsed = parseMessageContentCached(message.text, false);
         return parsed.kind === "sticker" && isWelcomeStickerSrc(parsed.src);
       }),
     [messages, selfId],
@@ -10132,7 +10134,9 @@ export default function ChatsPageClient() {
     }
     return Boolean(forwardDraft?.messages.length || messageText.trim() || pendingMediaBatch?.length || pendingImage || pendingVideo || pendingAudio || pendingFile);
   }, [editTarget, forwardDraft, forwardSending, messageText, pendingAudio, pendingFile, pendingImage, pendingMediaBatch, pendingVideo, sending, sendingMedia]);
+  const profileMediaVisible = desktopDetailsPanelOpen || profileModalOpen || groupModalOpen || channelModalOpen;
   const chatSharedMediaList = useMemo(() => {
+    if (!profileMediaVisible || profileActiveTab !== "media") return [];
     const list: Array<{
       id: string;
       messageId: string;
@@ -10152,7 +10156,9 @@ export default function ChatsPageClient() {
 
     const effectiveSelfId = selfId ?? selfProfile?.id ?? null;
     for (const message of messages) {
-      const parsed = parseMessageContentCached(message.text);
+      const raw = parseMessageContentCached(message.text, false);
+      if (!["image", "video", "album"].includes(raw.kind)) continue;
+      const parsed = resolveMessageMedia(raw);
       const isMine = activeConversation?.chatType === "saved" || (effectiveSelfId ? message.senderId === effectiveSelfId : false);
       const isChannelMedia = activeConversation?.chatType === "channel";
       const senderMeta = activeConversation?.chatType === "group" ? groupMembersById.get(message.senderId) ?? null : null;
@@ -10244,6 +10250,8 @@ export default function ChatsPageClient() {
     }
     return list;
   }, [
+    profileMediaVisible,
+    profileActiveTab,
     activeChat?.avatarUrl,
     activeChat?.displayName,
     activeChat?.peerId,
@@ -10263,6 +10271,7 @@ export default function ChatsPageClient() {
     selfProfile?.id, t]);
 
   const chatSharedFilesList = useMemo(() => {
+    if (!profileMediaVisible || profileActiveTab !== "files") return [];
     const list: Array<{
       id: string;
       messageId: string;
@@ -10275,7 +10284,9 @@ export default function ChatsPageClient() {
     }> = [];
 
     for (const message of messages) {
-      const parsed = parseMessageContentCached(message.text);
+      const raw = parseMessageContentCached(message.text, false);
+      if (!["file"].includes(raw.kind)) continue;
+      const parsed = resolveMessageMedia(raw);
       if (parsed.kind === "file" && (parsed.src || (parsed as any).url)) {
         const fileUrl = parsed.src || (parsed as any).url || "";
         const fileName = parsed.name || t("Файл");
@@ -10293,9 +10304,10 @@ export default function ChatsPageClient() {
       }
     }
     return list;
-  }, [messages, t]);
+  }, [messages, profileMediaVisible, profileActiveTab, t]);
 
   const chatSharedVoiceList = useMemo(() => {
+    if (!profileMediaVisible || profileActiveTab !== "voice") return [];
     const list: Array<{
       id: string;
       messageId: string;
@@ -10310,7 +10322,9 @@ export default function ChatsPageClient() {
 
     const effectiveSelfId = selfId ?? selfProfile?.id ?? null;
     for (const message of messages) {
-      const parsed = parseMessageContentCached(message.text);
+      const raw = parseMessageContentCached(message.text, false);
+      if (!["voice"].includes(raw.kind)) continue;
+      const parsed = resolveMessageMedia(raw);
       if (parsed.kind === "voice" && parsed.src) {
         const isChannel = activeConversation?.chatType === "channel";
         const isMine = activeConversation?.chatType === "saved" || (effectiveSelfId ? message.senderId === effectiveSelfId : false);
@@ -10352,6 +10366,8 @@ export default function ChatsPageClient() {
     }
     return list;
   }, [
+    profileMediaVisible,
+    profileActiveTab,
     activeChat?.avatarUrl,
     activeChat?.displayName,
     activeChat?.peerId,
@@ -10369,6 +10385,7 @@ export default function ChatsPageClient() {
     selfProfile?.id, t]);
 
   const chatSharedMusicList = useMemo(() => {
+    if (!profileMediaVisible || profileActiveTab !== "music") return [];
     const list: Array<{
       id: string;
       messageId: string;
@@ -10382,7 +10399,9 @@ export default function ChatsPageClient() {
     }> = [];
 
     for (const message of messages) {
-      const parsed = parseMessageContentCached(message.text);
+      const raw = parseMessageContentCached(message.text, false);
+      if (!["music"].includes(raw.kind)) continue;
+      const parsed = resolveMessageMedia(raw);
       if (parsed.kind === "music" && parsed.url) {
         list.push({
           id: `${message.id}-music`,
@@ -10398,7 +10417,7 @@ export default function ChatsPageClient() {
       }
     }
     return list;
-  }, [messages, t]);
+  }, [messages, profileMediaVisible, profileActiveTab, t]);
 
   const chatSharedLinksList = useMemo(() => {
     const list: Array<{
@@ -10435,31 +10454,22 @@ export default function ChatsPageClient() {
     return list;
   }, [messages]);
 
-  const profilePhotosCount = useMemo(() => {
-    return chatSharedMediaList.filter((m) => m.kind === "image").length;
-  }, [chatSharedMediaList]);
-
-  const profileVideosCount = useMemo(() => {
-    return chatSharedMediaList.filter((m) => m.kind === "video").length;
-  }, [chatSharedMediaList]);
-
-  const profileMediaCountSubtitle = useMemo(() => {
-    const parts: string[] = [];
-    if (profilePhotosCount > 0) {
-      parts.push(t("{0} фото", { 0: profilePhotosCount }));
-    }
-    if (profileVideosCount > 0) {
-      parts.push(t("{0} видео", { 0: profileVideosCount }));
-    }
-    if (parts.length === 0) return t("Нет медиа");
-    return parts.join(", ");
-  }, [profilePhotosCount, profileVideosCount, t]);
+  const profileHeaderStatusText = useMemo(() => {
+    if (!profileData) return "";
+    if (profileIsSaved) return t("ваше облачное хранилище");
+    if (profileIsBot) return t("бот");
+    if (profileData.id === activePeerId && (isDirectChatActive || isSecretChat)) return activeStatusText;
+    return t(getPresenceStatusText(profileData.id, onlineUserIds, lastOfflineAtByUserId, presenceNowTs,
+      profileData.id === selfId || profileData.presenceVisibility !== "none",
+      profileData.id === selfId || profileData.lastSeenVisibility !== "none"));
+  }, [profileData, profileIsSaved, profileIsBot, activePeerId, isDirectChatActive, isSecretChat, activeStatusText, onlineUserIds, lastOfflineAtByUserId, presenceNowTs, selfId, t]);
 
   const chatImageGallery = useMemo<ChatImageGalleryItem[]>(() => {
     const gallery: ChatImageGalleryItem[] = [];
     const effectiveSelfId = selfId ?? selfProfile?.id ?? null;
     for (const message of messages) {
-      const parsed = parseMessageContentCached(message.text);
+      const parsed = parseMessageContentCached(message.text, false);
+      if (parsed.kind !== "image" && (parsed.kind !== "album" || !parsed.items.some(item => item.kind === "image"))) continue;
       const senderMeta = activeConversation?.chatType === "group" ? groupMembersById.get(message.senderId) ?? null : null;
       const senderProfile = readProfileFromCache(message.senderId);
       const isMine = activeConversation?.chatType === "saved" || (effectiveSelfId ? message.senderId === effectiveSelfId : false);
@@ -10557,7 +10567,7 @@ export default function ChatsPageClient() {
   const openImageViewer = useCallback(
     (item: ChatImageGalleryItem) => {
       const index = chatImageGallery.findIndex(
-        (entry) => entry.messageId === item.messageId && entry.src === item.src,
+        (entry) => entry.messageId === item.messageId && (entry.src === item.src || getCachedMediaUrl(entry.src) === item.src),
       );
       setImageViewer(item);
       setImageViewerIndex(index >= 0 ? index : 0);
@@ -11296,6 +11306,8 @@ export default function ChatsPageClient() {
           (chat.chatType === "eclipse" && chat.isSystem && chat.systemPayload?.botRole !== "user")) {
         safePreviewText = localizeSystemText(safePreviewText);
       }
+      const callPreview = readCallMessage(chat.systemPayload);
+      if (callPreview) safePreviewText = t(callMessageTitle(callPreview, selfId ?? ""));
       if (isEmptyChat && chat.chatType !== "eclipse") {
         if (chat.chatType === "group") {
           safePreviewText = t("Группа создана");
@@ -11311,6 +11323,7 @@ export default function ChatsPageClient() {
         preview,
         isEmptyChat,
         safePreviewText,
+        callPreview,
         senderPrefix,
         timeLabel: formatChatListTimeLabel(chat.lastMessageAt),
         unreadCount: chatUnreadCountByLink.get(chat.link) ?? 0,
@@ -11334,6 +11347,8 @@ export default function ChatsPageClient() {
     selectedLink,
     sendingLabelByLink,
     typingActiveByLink,
+    selfId,
+    mediaReadyVersion,
     virtualChats, t]);
   const messageSizes = useMemo(
     () => {
@@ -11349,6 +11364,7 @@ export default function ChatsPageClient() {
         try {
           if (message.systemPayload) {
             const eventType = (message.systemPayload as any)?.eventType;
+            if (eventType === "call") return 64;
             if (eventType === "wallpaper_change") {
               const currentUserId = selfId ?? selfProfile?.id ?? currentUserIdRef.current ?? "";
               const senderId = (message.systemPayload as any)?.metadata?.senderId;
@@ -11360,7 +11376,7 @@ export default function ChatsPageClient() {
           }
           const layoutText =
             message.text;
-          const parsed = parseMessageContentCached(layoutText);
+          const parsed = parseMessageContentCached(layoutText, false);
           if (parsed.kind === "text") {
             const lines = parsed.text ? parsed.text.split("\n").length : 1;
             const textLen = parsed.text ? parsed.text.length : 0;
@@ -11451,7 +11467,7 @@ export default function ChatsPageClient() {
       messagesAtBottomRef.current = distanceToBottom <= MESSAGE_AUTO_SCROLL_THRESHOLD;
       bottomScrollAnimationRef.current = null;
       programmaticScrollRef.current = false;
-      flashMessageHighlight(messageId, highlightDurationMs);
+      if (highlightDurationMs > 0) flashMessageHighlight(messageId, highlightDurationMs);
     });
   }, [
     MESSAGE_AUTO_SCROLL_THRESHOLD,
@@ -11677,9 +11693,10 @@ export default function ChatsPageClient() {
     if (messages.length === 0 || messagesViewportHeight <= 0) {
       return { start: 0, end: -1 };
     }
-    const start = findStartIndex(messageOffsets.offsets, messageSizes, messagesScrollTop);
+    // Pixel overscan also covers runs of very short rows between scroll commits.
+    const start = findStartIndex(messageOffsets.offsets, messageSizes, Math.max(0, messagesScrollTop - 320));
     let end = start;
-    const viewportEnd = messagesScrollTop + messagesViewportHeight;
+    const viewportEnd = messagesScrollTop + messagesViewportHeight + 320;
     while (
       end < messages.length &&
       messageOffsets.offsets[end] + messageSizes[end] + MESSAGE_ROW_GAP < viewportEnd
@@ -11935,11 +11952,9 @@ export default function ChatsPageClient() {
         const nextOffset = Math.min(MOBILE_CHAT_HEADER_HIDE_DISTANCE, nextTop);
         mobileHeaderOffsetRef.current = nextOffset;
         pendingMobileHeaderOffsetRef.current = nextOffset;
-        setMobileHeaderOffset(nextOffset);
       } else {
         mobileHeaderOffsetRef.current = 0;
         pendingMobileHeaderOffsetRef.current = 0;
-        setMobileHeaderOffset(0);
       }
     };
 
@@ -12593,6 +12608,17 @@ export default function ChatsPageClient() {
       loadOlderMessagesRef.current = null;
     };
   }, [loadOlderMessages]);
+
+  const messageSearchItems = useMemo(() => messages.filter(message => !message.systemPayload).map(message => {
+    const parsed = parseMessageContentCached(message.text, false);
+    const text = "text" in parsed && typeof parsed.text === "string" ? parsed.text : "caption" in parsed && typeof parsed.caption === "string" ? parsed.caption : "";
+    return { id: message.id, text: emojiPlainText(text) };
+  }), [messages]);
+  const messageSearch = useMessageSearch({
+    scope: `${selfId}:${selectedLink?.toLowerCase() ?? ""}:${activeChat?.chatType ?? "direct"}`,
+    messages: messageSearchItems, hasMore: hasMoreMessagesBefore, loading: loadingOlderMessages,
+    loadOlder: loadOlderMessages, scroll: scrollToMessageById, stopScroll: interruptMessageAutoScroll,
+  });
 
   const pinScope = useMemo<PinScope | null>(() => {
     if (!activeConversation?.conversationId) return null;
@@ -13920,6 +13946,10 @@ export default function ChatsPageClient() {
         }
         return;
       }
+      preview.controls = false;
+      preview.disablePictureInPicture = true;
+      preview.disableRemotePlayback = true;
+      preview.setAttribute("webkit-playsinline", "true");
       preview.srcObject = stream;
       preview.muted = true;
       preview.playsInline = true;
@@ -13941,9 +13971,9 @@ export default function ChatsPageClient() {
   }, []);
 
   const requestVideoRecorderStream = useCallback(
-    async (options: { facingMode: "user" | "environment"; deviceId?: string | null }) => {
+    async (options: RecordingCameraRequest) => {
       const baseAudio = {
-        audio: {
+        audio: options.audio === false ? false : {
           echoCancellation: true,
           noiseSuppression: true,
           autoGainControl: true,
@@ -13959,7 +13989,10 @@ export default function ChatsPageClient() {
         frameRate: { ideal: 30, max: 30 },
       } as const;
       const directConstraints =
-        options.deviceId && options.deviceId.trim()
+        options.preferFacing ? {
+          ...baseAudio,
+          video: { facingMode: { exact: options.facingMode }, ...baseVideo },
+        } : options.deviceId && options.deviceId.trim()
           ? {
             ...baseAudio,
             video: {
@@ -13976,14 +14009,13 @@ export default function ChatsPageClient() {
           };
 
       const attachAudioTrackIfMissing = async (stream: MediaStream) => {
+        if (options.audio === false) return stream;
         const hasAudioTrack = stream.getAudioTracks().some((track) => track.readyState === "live");
         if (hasAudioTrack) return stream;
-        const audioFallback = await navigator.mediaDevices.getUserMedia({ audio: true });
-        const merged = new MediaStream([
-          ...stream.getVideoTracks(),
-          ...audioFallback.getAudioTracks(),
-        ]);
-        return merged;
+        try {
+          const audioFallback = await navigator.mediaDevices.getUserMedia({ audio: true });
+          return new MediaStream([...stream.getVideoTracks(), ...audioFallback.getAudioTracks()]);
+        } catch (error) { stream.getTracks().forEach(track => track.stop()); throw error; }
       };
 
       try {
@@ -13996,7 +14028,7 @@ export default function ChatsPageClient() {
             const fallback = await navigator.mediaDevices.getUserMedia({
               ...baseAudio,
               video: {
-                facingMode: { ideal: options.facingMode },
+                deviceId: { exact: options.deviceId.trim() },
                 ...baseVideo,
               },
             });
@@ -14008,7 +14040,7 @@ export default function ChatsPageClient() {
         }
         try {
           const genericFallback = await navigator.mediaDevices.getUserMedia({
-            audio: true,
+            audio: options.audio !== false,
             video: {
               facingMode: { ideal: options.facingMode },
               aspectRatio: { ideal: 1.0 },
@@ -14021,7 +14053,7 @@ export default function ChatsPageClient() {
         } catch {
           try {
             const basicStream = await navigator.mediaDevices.getUserMedia({
-              audio: true,
+              audio: options.audio !== false,
               video: true,
             });
             await refreshVideoInputDevices();
@@ -14359,39 +14391,26 @@ export default function ChatsPageClient() {
   );
 
   const flipVideoCamera = useCallback(async () => {
-    if (!videoRecorderOpen) return;
-    const nextFacing: "user" | "environment" = videoFacingMode === "user" ? "environment" : "user";
+    const original = videoStreamRef.current;
+    if (!videoRecorderOpen || !original || videoCameraSwitchInProgressRef.current) return;
+    videoCameraSwitchInProgressRef.current = true;
+    setVideoCameraSwitching(true);
+    const recordingLink = selectedLinkRef.current;
+    const capture = videoCaptureRef.current;
+    const isCurrent = () => videoStreamRef.current === original && selectedLinkRef.current === recordingLink && (!capture || videoCaptureRef.current === capture);
     try {
-      const wasRecording = videoRecording;
-      const currentDeviceId = activeVideoDeviceIdRef.current;
-      const knownDevices = videoInputDeviceIdsRef.current;
-      let nextDeviceId: string | null = null;
-      if (currentDeviceId && knownDevices.length > 1) {
-        const currentIndex = knownDevices.indexOf(currentDeviceId);
-        if (currentIndex >= 0) {
-          nextDeviceId = knownDevices[(currentIndex + 1) % knownDevices.length] ?? null;
-        }
-      }
-      const stream = await requestVideoRecorderStream({
-        facingMode: nextFacing,
-        deviceId: nextDeviceId,
-      });
-      const oldStream = videoStreamRef.current;
-      videoStreamRef.current = stream;
-      attachVideoPreviewStream(stream);
-      if (wasRecording && videoCaptureRef.current) {
-        // Change only the picture source. Restarting MediaRecorder creates a second container.
-        await videoCaptureRef.current.setSource(stream);
-        stream.getAudioTracks().forEach(track => track.stop());
-      }
-      if (oldStream) {
-        (wasRecording ? oldStream.getVideoTracks() : oldStream.getTracks()).forEach(track => track.stop());
-      }
-      setVideoFacingMode(nextFacing);
-    } catch {
-      setErrorText(t("Не удалось переключить камеру"));
-    }
-  }, [attachVideoPreviewStream, requestVideoRecorderStream, videoFacingMode, videoRecorderOpen, videoRecording, t]);
+      const next = await replaceRecordingCamera({ currentStream: original, facingMode: videoFacingMode,
+        deviceIds: videoInputDeviceIdsRef.current, capture, requestStream: requestVideoRecorderStream, isCurrent });
+      if (!isCurrent()) { next.stream.getTracks().forEach(track => track.stop()); return; }
+      videoStreamRef.current = next.stream;
+      setVideoRecordingStream(next.stream);
+      attachVideoPreviewStream(next.stream);
+      setVideoFacingMode(next.facingMode);
+      if (!next.switched) showAppToast({ type: "error", title: t("Не удалось переключить камеру") });
+    } catch (error) {
+      if (isCurrent() && !(error instanceof DOMException && error.name === "AbortError")) showAppToast({ type: "error", title: t("Не удалось переключить камеру") });
+    } finally { videoCameraSwitchInProgressRef.current = false; setVideoCameraSwitching(false); }
+  }, [attachVideoPreviewStream, requestVideoRecorderStream, videoFacingMode, videoRecorderOpen, t]);
 
   useEffect(() => {
     if (!voiceRecording) return;
@@ -15435,7 +15454,7 @@ export default function ChatsPageClient() {
     setSwipeOffsetX(0);
   }, [swipeOffsetX]);
 
-  async function openProfileModal(link: string, forceModal = false) {
+  async function openProfileModal(link: string, forceModal = false, external = true) {
     if (!link) return;
     let targetLink = link.trim().replace(/^@+/, "");
     const lower = targetLink.toLowerCase();
@@ -15445,6 +15464,7 @@ export default function ChatsPageClient() {
       if (!targetLink) return;
     }
 
+    setProfileOpenedExternally(external);
     if (isDesktop && !forceModal) {
       setInspectedDetailsEntity({ type: "direct", link: targetLink });
       setDesktopDetailsPanelOpen(true);
@@ -16248,18 +16268,21 @@ export default function ChatsPageClient() {
   const messageTextRenderCache = useMemo(() => ({
     nodes: new Map<string, React.ReactNode>(),
     characters: 0,
-  }), [openExternalLinkPrompt, selectedLink]);
+  }), [openExternalLinkPrompt, selectedLink, selfId, messageSearch.query]);
 
   const renderLinkifiedText = useCallback(
     (value: string) => {
+      const cached = messageTextRenderCache.nodes.get(value);
+      if (cached !== undefined) return cached;
       const blocks = parseCodeBlocks(value);
-      return blocks.map((block, blockIndex) => {
+      const nodes = blocks.map((block, blockIndex) => {
         if (block.type === "code-block") {
           return (
             <CodeBlock
               key={`code-block-${blockIndex}`}
               code={block.code || ""}
               language={block.language}
+              searchQuery={messageSearch.query}
             />
           );
         }
@@ -16269,7 +16292,7 @@ export default function ChatsPageClient() {
           if (segment.kind === "text") {
             return (
               <span key={`${keyPrefix}-text`}>
-                {parseInlineMarkdown(segment.text, keyPrefix, renderEmojiText)}
+                {parseInlineMarkdown(segment.text, keyPrefix, value => <SearchHighlightedText text={value} query={messageSearch.query} emojis />, messageSearch.query)}
               </span>
             );
           }
@@ -16294,15 +16317,27 @@ export default function ChatsPageClient() {
                 className="cursor-pointer underline underline-offset-2 decoration-current/70 hover:opacity-80"
                 rel="noreferrer noopener"
               >
-                {segment.text}
+                <SearchHighlightedText text={segment.text} query={messageSearch.query} emojis />
               </a>
             );
           }
           return null;
         });
       });
+      // Keep plaintext only within this chat, with a strict memory bound.
+      if (value.length <= 100_000) {
+        while (messageTextRenderCache.nodes.size >= 200 || messageTextRenderCache.characters + value.length > 100_000) {
+          const oldest = messageTextRenderCache.nodes.keys().next().value;
+          if (oldest === undefined) break;
+          messageTextRenderCache.characters -= oldest.length;
+          messageTextRenderCache.nodes.delete(oldest);
+        }
+        messageTextRenderCache.nodes.set(value, nodes);
+        messageTextRenderCache.characters += value.length;
+      }
+      return nodes;
     },
-    [openExternalLinkPrompt, renderTextWithEmojis],
+    [openExternalLinkPrompt, messageTextRenderCache, messageSearch.query],
   );
 
   const renderInlineReactions = (
@@ -16505,6 +16540,10 @@ export default function ChatsPageClient() {
         };
 
         const userChannel = pusher.subscribe(`private-user-${selfId}`);
+        const refreshCallsRealtime = () => window.dispatchEvent(new Event(CALLS_CHANGED_EVENT));
+        userChannel.bind("call:changed", refreshCallsRealtime);
+        userChannel.bind("pusher:subscription_succeeded", refreshCallsRealtime);
+        pusher.connection?.bind("connected", refreshCallsRealtime);
         const resolveChatIdByLink = (chatType: "group" | "channel", link: string) => {
           const chat = chatsRef.current.find((item) => item.chatType === chatType && item.link === link);
           const prefix = chatType === "group" ? "group:" : "channel:";
@@ -17019,7 +17058,8 @@ export default function ChatsPageClient() {
             return;
           }
           if (payload.systemPayload) {
-            const previewText = payload.systemPayload.title || t("Уведомление");
+            const callMessage = readCallMessage(payload.systemPayload);
+            const previewText = callMessage ? t(callMessageTitle(callMessage, selfId ?? "")) : payload.systemPayload.title || t("Уведомление");
             const effectiveSelfId = selfId ?? selfProfile?.id ?? currentUserIdRef.current ?? null;
             const isOwnMessage = effectiveSelfId ? payload.senderId === effectiveSelfId : false;
             const incomingDirectMessage: DecryptedMessage = {
@@ -17053,7 +17093,7 @@ export default function ChatsPageClient() {
                 return next;
               });
               setMessages((prev) => appendAndSortMessages(sanitizeMessages(prev), incomingDirectMessage));
-            } else {
+            } else if (!isOwnMessage) {
               setUnreadByLink((prev) => ({
                 ...prev,
                 [payload.fromLink]: Math.min(99, (prev[payload.fromLink] ?? 0) + 1),
@@ -17255,6 +17295,10 @@ export default function ChatsPageClient() {
 
           if (!payload?.fromLink) return;
           if (payload.isSystemMessage || payload.systemPayload) {
+            if (readCallMessage(payload.systemPayload)) {
+              if (isMessageMarkedDeleted(payload.id)) return;
+              clearConversationCaches(selfId, payload.fromLink, "direct");
+            }
             // Update the message in state if the chat is open
             if (selectedLinkRef.current === payload.fromLink) {
               setMessages((prev) => {
@@ -17279,9 +17323,10 @@ export default function ChatsPageClient() {
             }
             // Update the chat summary in the sidebar
             setChats((prev) => {
-              const previewText = payload.systemPayload?.title || t("Уведомление");
+              const callMessage = readCallMessage(payload.systemPayload);
+              const previewText = callMessage ? t(callMessageTitle(callMessage, selfId ?? "")) : payload.systemPayload?.title || t("Уведомление");
               return prev.map((chat) =>
-                chat.link === payload.fromLink
+                chat.link === payload.fromLink && (!callMessage || !chat.lastMessageAt || new Date(chat.lastMessageAt).getTime() <= new Date(payload.createdAt).getTime())
                   ? {
                     ...chat,
                     lastMessage: previewText,
@@ -18336,16 +18381,20 @@ export default function ChatsPageClient() {
   }
 
   const handleWallpaperUpload = useCallback(async (file: File) => {
-    const currentLink = activeChat?.link || profileData?.link;
+    const currentLink = wallpaperTargetRef.current || activeChat?.link || profileData?.link;
+    wallpaperTargetRef.current = null;
     if (!currentLink) {
       showAppToast({ type: "error", title: t("Выберите личный чат для установки обоев") });
       return;
     }
 
+    const targetChat = chats.find(chat => chat.link === currentLink);
+    const previousWallpaper = { wallpaperUrl: targetChat?.wallpaperUrl ?? null, wallpaperPosY: targetChat?.wallpaperPosY ?? null };
+    const isTarget = (conversation: ConversationResponse | null) => Boolean(conversation?.peer && (conversation.peer.link === currentLink || conversation.peer.secondaryLinks?.includes(currentLink)));
     const localPreviewUrl = URL.createObjectURL(file);
 
     // Optimistically update active conversation and chat item
-    setActiveConversation((prev) => (prev ? { ...prev, wallpaperUrl: localPreviewUrl, wallpaperPosY: 50 } : null));
+    setActiveConversation((prev) => (isTarget(prev) && prev ? { ...prev, wallpaperUrl: localPreviewUrl, wallpaperPosY: 50 } : prev));
     setChats((prev) =>
       prev.map((c) => (c.link === currentLink ? { ...c, wallpaperUrl: localPreviewUrl, wallpaperPosY: 50 } : c))
     );
@@ -18378,12 +18427,12 @@ export default function ChatsPageClient() {
         }),
       });
 
-      setActiveConversation((prev) => (prev ? { ...prev, wallpaperUrl: mediaRes.url, wallpaperPosY: 50 } : null));
+      setActiveConversation((prev) => (isTarget(prev) && prev ? { ...prev, wallpaperUrl: mediaRes.url, wallpaperPosY: 50 } : prev));
       setChats((prev) =>
         prev.map((c) => (c.link === currentLink ? { ...c, wallpaperUrl: mediaRes.url, wallpaperPosY: 50 } : c))
       );
 
-      if (wallpaperRes?.message) {
+      if (wallpaperRes?.message && isTarget(activeConversationRef.current)) {
         const newMsg: DecryptedMessage = {
           id: wallpaperRes.message.id,
           senderId: wallpaperRes.message.senderId,
@@ -18400,12 +18449,13 @@ export default function ChatsPageClient() {
       console.error("Failed to set wallpaper:", err);
       const msg = err instanceof Error ? err.message : t("Не удалось установить обои");
       showAppToast({ type: "error", title: msg });
-      setActiveConversation((prev) => (prev ? { ...prev, wallpaperUrl: null, wallpaperPosY: null } : null));
+      setActiveConversation((prev) => (isTarget(prev) && prev ? { ...prev, ...previousWallpaper } : prev));
+      setChats(prev => prev.map(chat => chat.link === currentLink ? { ...chat, ...previousWallpaper } : chat));
     } finally {
       setUploadingWallpaper(false);
       URL.revokeObjectURL(localPreviewUrl);
     }
-  }, [activeChat?.link, profileData?.link, t]);
+  }, [activeChat?.link, profileData?.link, chats, t]);
 
   const handleApplyPeerWallpaper = useCallback(async (url: string, posY?: number) => {
     const currentLink = activeChat?.link || profileData?.link;
@@ -19251,12 +19301,13 @@ export default function ChatsPageClient() {
 
   function openActiveDetails() {
     if (!activeChat) return;
+    setProfileOpenedExternally(false);
     if (isEclipseConversation || isSavedConversation) {
       if (isDesktop && desktopDetailsPanelOpen && profileData?.link === activeChat.link) {
         setDesktopDetailsPanelOpen(false);
         setInspectedDetailsEntity(null);
       } else {
-        void openProfileModal(isSavedConversation ? "saved" : ECLIPSE_DIALOG_LINK);
+        void openProfileModal(isSavedConversation ? "saved" : ECLIPSE_DIALOG_LINK, false, false);
       }
       return;
     }
@@ -19267,7 +19318,7 @@ export default function ChatsPageClient() {
     ) {
       const peerLink = activeConversation?.peer?.link || (activeChat as any)?.peer?.link || "";
       if (peerLink) {
-        void openProfileModal(peerLink);
+        void openProfileModal(peerLink, false, false);
       }
       return;
     }
@@ -19287,7 +19338,7 @@ export default function ChatsPageClient() {
       void openGroupModal(activeChat.link);
       return;
     }
-    void openProfileModal(activeChat.link);
+    void openProfileModal(activeChat.link, false, false);
   }
 
   const openChatListDangerAction = useCallback(async (chat: { link: string; chatType: ConversationChatType }) => {
@@ -20054,6 +20105,51 @@ export default function ChatsPageClient() {
   };
 
 
+  const openMessageSearchFor = (link: string, kind: ConversationChatType) => {
+    interruptMessageAutoScroll();
+    setMessageHelperId(null); setStickerPickerOpen(false); setAttachmentMenuOpen(false); clearSelectionMode();
+    setProfileModalOpen(false); setChannelModalOpen(false); setGroupModalOpen(false);
+    setDesktopDetailsPanelOpen(false); setInspectedDetailsEntity(null);
+    if (selectedLink?.toLowerCase() !== link.toLowerCase() || (activeChat?.chatType ?? "direct") !== kind) openChatSearchResult(link, kind);
+    messageSearch.begin(`${selfId}:${link.toLowerCase()}:${kind}`);
+  };
+
+  const renderCommunityProfileActions = (kind: "group" | "channel") => {
+    const entity = kind === "group" ? groupModalData?.group : channelModalData?.channel;
+    if (!entity) return null;
+    const isOwner = entity.ownerId === selfId || (kind === "group" ? groupModalData?.group.myRole === "owner" : Boolean(channelModalData?.channel.isOwner));
+    const canManage = isOwner || entity.myRole === "admin";
+    const danger = isOwner ? "delete" : kind === "group" || channelModalData?.channel.isSubscribed ? "leave" : null;
+    return <CommunityProfileActions key={kind + ":" + entity.link} kind={kind} muted={mutedChatLinkSet.has(entity.link)} glass={transparentVisual} canManage={canManage} danger={danger}
+      onToggleSound={() => toggleChatMutedState(entity.link)}
+      onManage={() => { if (canManage) { if (kind === "group") setGroupSubView("settings"); else setChannelSubView("settings"); } }}
+      onSearch={kind === "channel" ? () => openMessageSearchFor(entity.link, "channel") : undefined}
+      onDanger={() => { if (kind === "group") setGroupDangerAction(isOwner ? "delete" : "leave"); else setChannelDangerAction(isOwner ? "delete" : "leave"); }} />;
+  };
+
+  const renderUserProfileActions = () => {
+    if (!profileData || profileIsBot || profileIsSaved || profileData.id === selfId) return null;
+    return (
+      <UserProfileActions
+        key={profileData.id}
+        muted={mutedChatLinkSet.has(profileData.link)}
+        glass={transparentVisual}
+        callDisabled={!calls.enabled || calls.busy || Boolean(calls.current)}
+        uploadingWallpaper={uploadingWallpaper}
+        onCall={() => void calls.start("audio", { kind: "direct", link: profileData.link })}
+        onToggleSound={() => toggleChatMutedState(profileData.link)}
+        onChat={profileOpenedExternally ? () => {
+          setProfileModalOpen(false); setDesktopDetailsPanelOpen(false); setInspectedDetailsEntity(null);
+          messageSearch.close();
+          openChatSearchResult(profileData.link, "direct");
+        } : undefined}
+        onSearch={() => openMessageSearchFor(profileData.link, "direct")}
+        onWallpaper={() => { wallpaperTargetRef.current = profileData.link; wallpaperFileInputRef.current?.click(); }}
+        onSecretChat={() => void openSecretChatFromProfile()}
+      />
+    );
+  };
+
   const renderProfileDetailsSkeleton = () => (
     <div className="min-h-[320px]" aria-hidden="true" />
   );
@@ -20494,7 +20590,7 @@ export default function ChatsPageClient() {
       // let fetch set multipart boundary
       skipCsrf: false,
     });
-    return encrypted && scope ? { ...res, url: encrypted.protectUrl(res.url, `${scope.scopeType}:${scope.scopeId}`, res.expiresAt) } : res;
+    return encrypted && scope ? { ...res, url: encrypted.protectUrl(res.url, `${scope.scopeType}:${scope.scopeId}`, res.expiresAt, { cacheOriginal: true }) } : res;
   }
 
 
@@ -21976,14 +22072,43 @@ export default function ChatsPageClient() {
     </div>;
   };
 
+  const closeSettingsPanel = useStableEvent(() => setSettingsPanelOpen(false));
+  const handleSettingsTransitionComplete = useStableEvent(() => setSettingsPanelCovered(true));
+  const uploadSettingsMedia = useStableEvent(uploadMediaFile);
+  const openSettingsStory = useStableEvent((source?: HTMLElement) => {
+    if (selfGroupIndex !== -1) openStoryViewer(selfGroupIndex, 0, source);
+  });
+  const handleSettingsThemeUpdate = useStableEvent((settings: Partial<LiveBackgroundSettings>) => {
+    try {
+      updateLiveBackgroundSettings(settings);
+    } catch (failure) {
+      // The theme editor retains the draft and shows its inline storage error.
+      if (settings.customTheme) throw failure;
+      showAppToast({ type: "error", title: t("Не удалось сохранить оформление. Проверьте свободное место и настройки хранилища браузера.") });
+    }
+  });
+
   const inviteArrivalRef = useInviteArrival(Boolean(activeConversation && !loadingConversation && !decryptingConversation), (activeConversation?.chatType === "group" ? activeConversation.group?.link : activeConversation?.chatType === "channel" ? activeConversation.channel?.link : "") ?? "", activeConversation?.chatType ?? "");
 
   return (
+    <MotionConfig transition={PANEL_TRANSITION} reducedMotion="user">
     <div
       ref={inviteArrivalRef}
       className={`w-full max-w-full px-0 overflow-x-hidden ${mobileChatOpen ? "h-[100dvh] overflow-hidden" : "h-[100dvh]"}`}
       style={uiAccentStyle}
     >
+      <input
+        ref={wallpaperFileInputRef}
+        type="file"
+        accept="image/*"
+        className="hidden"
+        onChange={(e) => {
+          const f = e.target.files?.[0];
+          if (f) void handleWallpaperUpload(f);
+          e.target.value = "";
+        }}
+      />
+      {calls.presentation && selfId && <CallRoomPanel key={`${selfId}:${calls.presentation.id}`} call={calls.presentation} selfId={selfId} glass={transparentVisual} busy={calls.busy} onJoin={calls.join} onLeave={calls.leave}/>}
       <div className="relative h-full min-h-0 w-full max-w-full overflow-hidden bg-[#0e0e10] dark:bg-[#0e0e10]">
         <TelegramDoodleWallpaper patternEnabled={activeCustomTheme?.backgroundMode !== "image"} backgroundOverride={activeCustomTheme ? customThemeChatBackground(activeCustomTheme) : undefined} presetColors={liveBgPresetColors} presetId={activeCustomTheme ? "none" : liveBackgroundPreset} opacity={liveBackgroundOpacity} />
         <AnimatePresence>{forwardPickerMessages && <ForwardRecipientPicker desktop={isDesktop} transparentVisual={transparentVisual} title={forwardPickerMode === "share" ? t("Отправить") : t("Переслать")} recipients={forwardRecipients} onClose={() => setForwardPickerMessages(null)} onSelect={chooseForwardRecipient}/>}</AnimatePresence>
@@ -22010,14 +22135,7 @@ export default function ChatsPageClient() {
             </motion.div>
           ) : null}
         </AnimatePresence>
-        <div
-          className={cn(
-            "relative h-full min-h-0 grid transition-[grid-template-columns] duration-[180ms] ease-[cubic-bezier(0.25,1,0.5,1)] motion-reduce:transition-none",
-            canUseDesktopDetailsPanel && desktopDetailsPanelOpen
-              ? "md:grid-cols-[350px_minmax(0,1fr)_340px] lg:grid-cols-[370px_minmax(0,1fr)_360px]"
-              : "md:grid-cols-[350px_minmax(0,1fr)_0px] lg:grid-cols-[370px_minmax(0,1fr)_0px]",
-          )}
-        >
+        <AnimatedChatLayout detailsOpen={canUseDesktopDetailsPanel && desktopDetailsPanelOpen}>
           <motion.aside
             animate={
               mobileChatOpen
@@ -22031,7 +22149,7 @@ export default function ChatsPageClient() {
               mobileChatOpen ? "pointer-events-none md:pointer-events-auto" : "",
               chatListHelper ? "z-[200]" : "",
             )}
-            data-app-panel data-panel-covered={(settingsPanelOpen && settingsPanelCovered) || !!createChatKind || undefined} style={leftSidebarThemeStyle}
+            data-call-sidebar data-app-panel data-panel-covered={(settingsPanelOpen && settingsPanelCovered) || !!createChatKind || undefined} style={leftSidebarThemeStyle}
           >
             <div className="px-3.5 pb-1 pt-3 border-b-0">
               <AnimatePresence mode="wait" initial={false}>
@@ -22889,6 +23007,7 @@ export default function ChatsPageClient() {
                           preview,
                           isEmptyChat,
                           safePreviewText,
+                          callPreview,
                           senderPrefix,
                           timeLabel,
                           unreadCount,
@@ -23112,7 +23231,9 @@ export default function ChatsPageClient() {
                                             {senderPrefix ? (
                                               <span className="truncate text-zinc-500 dark:text-zinc-400">{senderPrefix}</span>
                                             ) : null}
-                                            {preview.thumbUrl && preview.kind !== "sticker" ? (
+                                            {callPreview ? (
+                                              callPreview.mode === "video" ? <FiVideo size={15} className="shrink-0 opacity-80" aria-hidden /> : <FiPhone size={15} className="shrink-0 opacity-80" aria-hidden />
+                                            ) : preview.thumbUrl && preview.kind !== "sticker" ? (
                                               preview.kind === "video_note" ? (
                                                 <video
                                                   src={preview.thumbUrl}
@@ -23139,6 +23260,8 @@ export default function ChatsPageClient() {
                                               )
                                             ) : (
                                               <>
+                                                {preview.kind === "image" || preview.kind === "album" ? <ImageIcon size={14} className="shrink-0 opacity-80" /> : null}
+                                                {preview.kind === "video" || preview.kind === "video_note" ? <SquarePlay size={14} className="shrink-0 opacity-80" /> : null}
                                                 {preview.kind === "music" ? <Music2 size={14} className="shrink-0 opacity-80" /> : null}
                                                 {preview.kind === "voice" ? <Mic size={14} className="shrink-0 opacity-80" /> : null}
                                                 {preview.kind === "file" ? <Paperclip size={14} className="shrink-0 opacity-80" /> : null}
@@ -23387,7 +23510,7 @@ export default function ChatsPageClient() {
                   className={`${isDesktop ? "px-5 pt-2.5" : "px-2.5 pt-[max(env(safe-area-inset-top),8px)]"} pointer-events-none absolute inset-x-0 top-0 z-30`}
                 >
                   <AnimatePresence mode="wait" initial={false}>
-                    {selectionMode ? (
+                    {messageSearch.open ? <MessageSearchBar query={messageSearch.query} count={messageSearch.matches.length} index={messageSearch.index} busy={messageSearch.busy} hasMore={messageSearch.hasMore} failed={messageSearch.failed} style={composerInputThemeStyle} onChange={messageSearch.change} onMove={messageSearch.move} onClose={messageSearch.close} /> : selectionMode ? (
                       <motion.div
                         key="selection-header"
                         initial={{ opacity: 0, y: -10, scale: 0.96 }}
@@ -23501,7 +23624,7 @@ export default function ChatsPageClient() {
                           {!isEclipseConversation && <SmoothStatusLine
                             kind={activeStatusIndicatorKind}
                             text={activeStatusText}
-                            className="mt-[1px] h-3.5 w-full"
+                            className="mt-[1px] h-3.5 w-full -translate-y-[2px]"
                             labelClassName={cn("text-[11px] leading-none", activeStatusIndicatorKind ? activeStatusClass : "text-zinc-300/74")}
                             align="center"
                           />}
@@ -23556,7 +23679,9 @@ export default function ChatsPageClient() {
                   </AnimatePresence>
                 </header>
                 <div
-                  className="pointer-events-none absolute inset-x-0 top-0 z-20 mx-auto w-full max-w-[920px] px-2.5 pb-1 md:px-5"
+                  inert={messageSearch.open}
+                  aria-hidden={messageSearch.open}
+                  className={cn("pointer-events-none absolute inset-x-0 top-0 z-20 mx-auto w-full max-w-[920px] px-2.5 pb-1 md:px-5", messageSearch.open && "invisible")}
                   style={{
                     paddingTop: isDesktop
                       ? "calc(2.5rem + 14px)"
@@ -23612,7 +23737,7 @@ export default function ChatsPageClient() {
                   }}
                   data-chat-message-viewport
                   className={cn(
-                    "relative flex-1 min-h-0 overflow-y-auto no-scrollbar overflow-x-hidden px-2.5 py-3 md:px-6 md:py-4 lg:px-7",
+                    "relative isolate z-0 flex-1 min-h-0 overflow-y-auto no-scrollbar overflow-x-hidden px-2.5 py-3 md:px-6 md:py-4 lg:px-7",
                     isSecretChat
                       ? globalMusicVisible
                         ? "pt-[165px] md:pt-[160px]"
@@ -23722,6 +23847,22 @@ export default function ChatsPageClient() {
                               const dateSeparatorLabel = showDateSeparator ? formatMessageDayLabel(message.createdAt) : "";
                               const effectiveSelfId = selfId ?? selfProfile?.id ?? currentUserIdRef.current ?? "";
                               const isWallpaperChange = (message.systemPayload as any)?.eventType === "wallpaper_change";
+
+                              const callMessage = readCallMessage(message.systemPayload);
+                              if (callMessage && activeConversation?.chatType === "direct") {
+                                const outgoing = callMessage.callerId === effectiveSelfId;
+                                return (
+                                  <div key={message.id} data-message-id={message.id} ref={getMessageRowRef(message.id, message.localId)} className="px-0 pb-1" style={{ position: "absolute", top, left: 0, right: 0 }}>
+                                    {showDateSeparator && <div className="mb-1.5 flex justify-center"><span className="chat-service-pill" style={dateSeparatorThemeStyle}>{dateSeparatorLabel}</span></div>}
+                                    <CallMessageBubble call={callMessage} selfId={effectiveSelfId} timeText={timeText} hasTail={true}
+                                      className={cn(outgoing ? mineMessageClassName : incomingMessageClassName, resolveStackedBubbleShape({ isMine: outgoing, chainWithPrevious: false, chainWithNext: false }))}
+                                      style={outgoing ? mineMessageGradientStyle : undefined}
+                                      disabled={!calls.enabled || calls.busy || Boolean(calls.current)}
+                                      onCall={() => { const link = activeConversation?.peer?.link; if (link) void calls.start(callMessage.mode, { kind: "direct", link }); }}
+                                    />
+                                  </div>
+                                );
+                              }
 
                               if (isWallpaperChange) {
                                 const currentChatWallpaper = activeConversation?.wallpaperUrl || activeChat?.wallpaperUrl;
@@ -25296,9 +25437,9 @@ export default function ChatsPageClient() {
                                               >
                                                 <FaReply size={15} />
                                                 {t("Ответить")}</Button>
-                                              <Button type="button" variant="ghost" size="sm" disabled={!messagePins.canManage || messagePins.busy || message.id.startsWith("optimistic:")} onClick={() => { setMessageHelperId(null); void messagePins.toggle((message).id); }} className="h-9 w-full justify-start rounded-xl px-2.5 gap-3 text-inherit hover:bg-white/10 disabled:opacity-40"><BsPinAngleFill size={17} className="shrink-0" />{messagePins.pins.some(pin => pin.id === (message).id) ? t("Открепить") : t("Закрепить")}</Button>
-<Button type="button" variant="ghost" size="sm" disabled={Boolean(selectedLink?.startsWith("secret-"))} onClick={() => beginForwardMessages([message])} className="h-9 w-full justify-start rounded-xl px-2.5 gap-3 text-inherit hover:bg-white/10 disabled:opacity-40"><IoArrowRedo size={17} />{t("Переслать")}</Button>
-<Button
+                                              {!(!messagePins.canManage || messagePins.busy || message.id.startsWith("optimistic:")) && (<Button type="button" variant="ghost" size="sm" disabled={!messagePins.canManage || messagePins.busy || message.id.startsWith("optimistic:")} onClick={() => { setMessageHelperId(null); void messagePins.toggle((message).id); }} className="h-9 w-full justify-start rounded-xl px-2.5 gap-3 text-inherit hover:bg-white/10 disabled:opacity-40"><BsPinAngleFill size={17} className="shrink-0" />{messagePins.pins.some(pin => pin.id === (message).id) ? t("Открепить") : t("Закрепить")}</Button>)}
+{!(Boolean(selectedLink?.startsWith("secret-"))) && (<Button type="button" variant="ghost" size="sm" disabled={Boolean(selectedLink?.startsWith("secret-"))} onClick={() => beginForwardMessages([message])} className="h-9 w-full justify-start rounded-xl px-2.5 gap-3 text-inherit hover:bg-white/10 disabled:opacity-40"><IoArrowRedo size={17} />{t("Переслать")}</Button>)}
+{!(!isEditable || editSaving || (editTarget ? editTarget.id !== message.id : false)) && (<Button
                                                 type="button"
                                                 variant="ghost"
                                                 size="sm"
@@ -25309,8 +25450,22 @@ export default function ChatsPageClient() {
                                                 className="h-9 w-full justify-start px-2.5 gap-2 text-zinc-700 dark:text-zinc-100 hover:bg-zinc-100 dark:hover:bg-white/10 hover:text-zinc-900 dark:hover:text-white disabled:opacity-50"
                                               >
                                                 <MdEdit size={16} />
-                                                {t("Редактировать")}</Button>
-                                              <Button
+                                                {t("Редактировать")}</Button>)}
+                                              {!(parsed.kind === "image"
+                                                    ? !parsed.caption.trim()
+                                                    : parsed.kind === "poll"
+                                                      ? !parsed.question.trim()
+                                                      : parsed.kind === "album"
+                                                        ? !parsed.caption.trim()
+                                                        : parsed.kind === "sticker"
+                                                          ? true
+                                                          : parsed.kind === "voice" || parsed.kind === "video"
+                                                            ? true
+                                                            : parsed.kind === "file"
+                                                              ? !(parsed.caption || parsed.name).trim()
+                                                              : parsed.kind === "music"
+                                                                ? !(parsed.caption || parsed.title).trim()
+                                                                : !parsed.text.trim()) && (<Button
                                                 type="button"
                                                 variant="ghost"
                                                 size="sm"
@@ -25353,7 +25508,7 @@ export default function ChatsPageClient() {
                                                 className="h-9 w-full justify-start px-2.5 gap-2 text-zinc-700 dark:text-zinc-100 hover:bg-zinc-100 dark:hover:bg-white/10 hover:text-zinc-900 dark:hover:text-white"
                                               >
                                                 <IoCopy size={15} />
-                                                {t("Копировать")}</Button>
+                                                {t("Копировать")}</Button>)}
                                               <Button
                                                 type="button"
                                                 variant="ghost"
@@ -25363,7 +25518,10 @@ export default function ChatsPageClient() {
                                               >
                                                 <GrRadialSelected size={15} />
                                                 {t("Выбрать")}</Button>
-                                              <Button
+                                              {!(deletingMessageId === message.id ||
+                                                  (activeConversation?.chatType === "group"
+                                                    ? !isMine && !canModerateGroupMessages
+                                                    : !isMine)) && (<Button
                                                 type="button"
                                                 variant="ghost"
                                                 size="sm"
@@ -25378,7 +25536,7 @@ export default function ChatsPageClient() {
                                               >
                                                 <MdDelete size={17} />
                                                 {deletingMessageId === message.id ? t("Удаление...") : t("Удалить")}
-                                              </Button>
+                                              </Button>)}
                                             </div>
                                           </motion.div>
                                         ) : null}
@@ -25695,7 +25853,7 @@ export default function ChatsPageClient() {
                                     >
                                       <FaReply size={16} className="shrink-0 text-white/80" />
                                       {t("Ответить")}</Button>
-                                    <Button
+                                    {!(!helperCanCopy) && (<Button
                                       type="button"
                                       variant="ghost"
                                       size="sm"
@@ -25704,10 +25862,10 @@ export default function ChatsPageClient() {
                                       className="h-9 w-full justify-start rounded-[12px] px-2.5 gap-3 text-[13.5px] font-medium text-white/95 hover:bg-white/10 hover:text-white disabled:opacity-40 active:scale-[0.98] transition-colors cursor-pointer"
                                     >
                                       <IoCopy size={17} className="shrink-0 text-white/80" />
-                                      {t("Скопировать")}</Button>
-                                    <Button type="button" variant="ghost" size="sm" disabled={!messagePins.canManage || messagePins.busy || helperMessage.id.startsWith("optimistic:")} onClick={() => { setMessageHelperId(null); void messagePins.toggle((helperMessage!).id); }} className="h-9 w-full justify-start rounded-xl px-2.5 gap-3 text-inherit hover:bg-white/10 disabled:opacity-40"><BsPinAngleFill size={17} className="shrink-0" />{messagePins.pins.some(pin => pin.id === (helperMessage!).id) ? t("Открепить") : t("Закрепить")}</Button>
-<Button type="button" variant="ghost" size="sm" disabled={Boolean(selectedLink?.startsWith("secret-"))} onClick={() => beginForwardMessages([helperMessage!])} className="h-9 w-full justify-start rounded-xl px-2.5 gap-3 text-inherit hover:bg-white/10 disabled:opacity-40"><IoArrowRedo size={17} />{t("Переслать")}</Button>
-<Button
+                                      {t("Скопировать")}</Button>)}
+                                    {!(!messagePins.canManage || messagePins.busy || helperMessage.id.startsWith("optimistic:")) && (<Button type="button" variant="ghost" size="sm" disabled={!messagePins.canManage || messagePins.busy || helperMessage.id.startsWith("optimistic:")} onClick={() => { setMessageHelperId(null); void messagePins.toggle((helperMessage!).id); }} className="h-9 w-full justify-start rounded-xl px-2.5 gap-3 text-inherit hover:bg-white/10 disabled:opacity-40"><BsPinAngleFill size={17} className="shrink-0" />{messagePins.pins.some(pin => pin.id === (helperMessage!).id) ? t("Открепить") : t("Закрепить")}</Button>)}
+{!(Boolean(selectedLink?.startsWith("secret-"))) && (<Button type="button" variant="ghost" size="sm" disabled={Boolean(selectedLink?.startsWith("secret-"))} onClick={() => beginForwardMessages([helperMessage!])} className="h-9 w-full justify-start rounded-xl px-2.5 gap-3 text-inherit hover:bg-white/10 disabled:opacity-40"><IoArrowRedo size={17} />{t("Переслать")}</Button>)}
+{!(!helperIsEditable || editSaving || (helperEditTargetId !== null && helperEditTargetId !== helperMessage.id)) && (<Button
                                       type="button"
                                       variant="ghost"
                                       size="sm"
@@ -25716,7 +25874,7 @@ export default function ChatsPageClient() {
                                       className="h-9 w-full justify-start rounded-[12px] px-2.5 gap-3 text-[13.5px] font-medium text-white/95 hover:bg-white/10 hover:text-white disabled:opacity-40 active:scale-[0.98] transition-colors cursor-pointer"
                                     >
                                       <MdEdit size={18} className="shrink-0 text-white/80" />
-                                      {t("Редактировать")}</Button>
+                                      {t("Редактировать")}</Button>)}
                                     <Button
                                       type="button"
                                       variant="ghost"
@@ -25726,7 +25884,7 @@ export default function ChatsPageClient() {
                                     >
                                       <GrRadialSelected size={17} className="shrink-0 text-white/80" />
                                       {t("Выбрать")}</Button>
-                                    <Button
+                                    {!(removingMessageIds.has(helperMessage.id) || !helperCanDelete) && (<Button
                                       type="button"
                                       variant="ghost"
                                       size="sm"
@@ -25736,7 +25894,7 @@ export default function ChatsPageClient() {
                                     >
                                       <MdDelete size={19} className="shrink-0" />
                                       {removingMessageIds.has(helperMessage.id) ? t("Удаление...") : t("Удалить")}
-                                    </Button>
+                                    </Button>)}
                                   </>
                                 )} />
                                   </motion.div>
@@ -25969,7 +26127,7 @@ export default function ChatsPageClient() {
                                     >
                                       <FaReply size={16} className="shrink-0 text-white/80" />
                                       {t("Ответить")}</Button>
-                                    <Button
+                                    {!(!helperCanCopy) && (<Button
                                       type="button"
                                       variant="ghost"
                                       size="sm"
@@ -25978,10 +26136,10 @@ export default function ChatsPageClient() {
                                       className="h-9 w-full justify-start rounded-[12px] px-2.5 gap-3 text-[13.5px] font-medium text-white/95 hover:bg-white/10 hover:text-white disabled:opacity-40 active:scale-[0.98] transition-colors"
                                     >
                                       <IoCopy size={17} className="shrink-0 text-white/80" />
-                                      {t("Скопировать")}</Button>
-                                    <Button type="button" variant="ghost" size="sm" disabled={!messagePins.canManage || messagePins.busy || helperMessage.id.startsWith("optimistic:")} onClick={() => { setMessageHelperId(null); void messagePins.toggle((helperMessage!).id); }} className="h-9 w-full justify-start rounded-xl px-2.5 gap-3 text-inherit hover:bg-white/10 disabled:opacity-40"><BsPinAngleFill size={17} className="shrink-0" />{messagePins.pins.some(pin => pin.id === (helperMessage!).id) ? t("Открепить") : t("Закрепить")}</Button>
-<Button type="button" variant="ghost" size="sm" disabled={Boolean(selectedLink?.startsWith("secret-"))} onClick={() => beginForwardMessages([helperMessage!])} className="h-9 w-full justify-start rounded-xl px-2.5 gap-3 text-inherit hover:bg-white/10 disabled:opacity-40"><IoArrowRedo size={17} />{t("Переслать")}</Button>
-<Button
+                                      {t("Скопировать")}</Button>)}
+                                    {!(!messagePins.canManage || messagePins.busy || helperMessage.id.startsWith("optimistic:")) && (<Button type="button" variant="ghost" size="sm" disabled={!messagePins.canManage || messagePins.busy || helperMessage.id.startsWith("optimistic:")} onClick={() => { setMessageHelperId(null); void messagePins.toggle((helperMessage!).id); }} className="h-9 w-full justify-start rounded-xl px-2.5 gap-3 text-inherit hover:bg-white/10 disabled:opacity-40"><BsPinAngleFill size={17} className="shrink-0" />{messagePins.pins.some(pin => pin.id === (helperMessage!).id) ? t("Открепить") : t("Закрепить")}</Button>)}
+{!(Boolean(selectedLink?.startsWith("secret-"))) && (<Button type="button" variant="ghost" size="sm" disabled={Boolean(selectedLink?.startsWith("secret-"))} onClick={() => beginForwardMessages([helperMessage!])} className="h-9 w-full justify-start rounded-xl px-2.5 gap-3 text-inherit hover:bg-white/10 disabled:opacity-40"><IoArrowRedo size={17} />{t("Переслать")}</Button>)}
+{!(!helperIsEditable || editSaving || (helperEditTargetId !== null && helperEditTargetId !== helperMessage.id)) && (<Button
                                       type="button"
                                       variant="ghost"
                                       size="sm"
@@ -25990,7 +26148,7 @@ export default function ChatsPageClient() {
                                       className="h-9 w-full justify-start rounded-[12px] px-2.5 gap-3 text-[13.5px] font-medium text-white/95 hover:bg-white/10 hover:text-white disabled:opacity-40 active:scale-[0.98] transition-colors"
                                     >
                                       <MdEdit size={18} className="shrink-0 text-white/80" />
-                                      {t("Редактировать")}</Button>
+                                      {t("Редактировать")}</Button>)}
                                     <Button
                                       type="button"
                                       variant="ghost"
@@ -26000,7 +26158,7 @@ export default function ChatsPageClient() {
                                     >
                                       <GrRadialSelected size={17} className="shrink-0 text-white/80" />
                                       {t("Выбрать")}</Button>
-                                    <Button
+                                    {!(removingMessageIds.has(helperMessage.id) || !helperCanDelete) && (<Button
                                       type="button"
                                       variant="ghost"
                                       size="sm"
@@ -26010,7 +26168,7 @@ export default function ChatsPageClient() {
                                     >
                                       <MdDelete size={19} className="shrink-0" />
                                       {removingMessageIds.has(helperMessage.id) ? t("Удаление...") : t("Удалить")}
-                                    </Button>
+                                    </Button>)}
                                   </>
                                 )} />
                               </motion.div>
@@ -26094,9 +26252,9 @@ export default function ChatsPageClient() {
                           >
                             <FaReply size={16} className="shrink-0 text-white/80" />
                             {t("Ответить")}</Button>
-                          <Button type="button" variant="ghost" size="sm" disabled={!messagePins.canManage || messagePins.busy || helperMessage.id.startsWith("optimistic:")} onClick={() => { setMessageHelperId(null); void messagePins.toggle((helperMessage!).id); }} className="h-9 w-full justify-start rounded-xl px-2.5 gap-3 text-inherit hover:bg-white/10 disabled:opacity-40"><BsPinAngleFill size={17} className="shrink-0" />{messagePins.pins.some(pin => pin.id === (helperMessage!).id) ? t("Открепить") : t("Закрепить")}</Button>
-<Button type="button" variant="ghost" size="sm" disabled={Boolean(selectedLink?.startsWith("secret-"))} onClick={() => beginForwardMessages([helperMessage!])} className="h-9 w-full justify-start rounded-xl px-2.5 gap-3 text-inherit hover:bg-white/10 disabled:opacity-40"><IoArrowRedo size={17} />{t("Переслать")}</Button>
-<Button
+                          {!(!messagePins.canManage || messagePins.busy || helperMessage.id.startsWith("optimistic:")) && (<Button type="button" variant="ghost" size="sm" disabled={!messagePins.canManage || messagePins.busy || helperMessage.id.startsWith("optimistic:")} onClick={() => { setMessageHelperId(null); void messagePins.toggle((helperMessage!).id); }} className="h-9 w-full justify-start rounded-xl px-2.5 gap-3 text-inherit hover:bg-white/10 disabled:opacity-40"><BsPinAngleFill size={17} className="shrink-0" />{messagePins.pins.some(pin => pin.id === (helperMessage!).id) ? t("Открепить") : t("Закрепить")}</Button>)}
+{!(Boolean(selectedLink?.startsWith("secret-"))) && (<Button type="button" variant="ghost" size="sm" disabled={Boolean(selectedLink?.startsWith("secret-"))} onClick={() => beginForwardMessages([helperMessage!])} className="h-9 w-full justify-start rounded-xl px-2.5 gap-3 text-inherit hover:bg-white/10 disabled:opacity-40"><IoArrowRedo size={17} />{t("Переслать")}</Button>)}
+{!(!helperIsEditable || editSaving || (helperEditTargetId !== null && helperEditTargetId !== helperMessage!.id)) && (<Button
                             type="button"
                             variant="ghost"
                             size="sm"
@@ -26105,8 +26263,22 @@ export default function ChatsPageClient() {
                             className="h-9 w-full justify-start rounded-[12px] px-2.5 gap-3 text-[13.5px] font-medium text-white/95 hover:bg-white/[0.08] hover:text-white disabled:opacity-40 active:scale-[0.98] transition-all duration-150"
                           >
                             <MdEdit size={18} className="shrink-0 text-white/80" />
-                            {t("Редактировать")}</Button>
-                          <Button
+                            {t("Редактировать")}</Button>)}
+                          {!(helperParsed!.kind === "image"
+                                ? !helperParsed!.caption.trim()
+                                : helperParsed!.kind === "poll"
+                                  ? !helperParsed!.question.trim()
+                                  : helperParsed!.kind === "album"
+                                    ? !helperParsed!.caption.trim()
+                                    : helperParsed!.kind === "sticker"
+                                      ? true
+                                      : helperParsed!.kind === "voice" || helperParsed!.kind === "video"
+                                        ? true
+                                        : helperParsed!.kind === "file"
+                                          ? !(helperParsed!.caption || helperParsed!.name).trim()
+                                          : helperParsed!.kind === "music"
+                                            ? !(helperParsed!.caption || helperParsed!.title).trim()
+                                            : !helperParsed!.text.trim()) && (<Button
                             type="button"
                             variant="ghost"
                             size="sm"
@@ -26149,7 +26321,7 @@ export default function ChatsPageClient() {
                             className="h-9 w-full justify-start rounded-[12px] px-2.5 gap-3 text-[13.5px] font-medium text-white/95 hover:bg-white/[0.08] hover:text-white disabled:opacity-40 active:scale-[0.98] transition-all duration-150"
                           >
                             <IoCopy size={17} className="shrink-0 text-white/80" />
-                            {t("Скопировать")}</Button>
+                            {t("Скопировать")}</Button>)}
                           <Button
                             type="button"
                             variant="ghost"
@@ -26159,7 +26331,7 @@ export default function ChatsPageClient() {
                           >
                             <GrRadialSelected size={17} className="shrink-0 text-white/80" />
                             {t("Выбрать")}</Button>
-                          <Button
+                          {!(removingMessageIds.has(helperMessage!.id) || !helperCanDelete) && (<Button
                             type="button"
                             variant="ghost"
                             size="sm"
@@ -26169,7 +26341,7 @@ export default function ChatsPageClient() {
                           >
                             <MdDelete size={19} className="shrink-0" />
                             {removingMessageIds.has(helperMessage!.id) ? t("Удаление...") : t("Удалить")}
-                          </Button>
+                          </Button>)}
                         </div>
                       </div>
                     </motion.div>
@@ -26177,7 +26349,7 @@ export default function ChatsPageClient() {
                 </AnimatePresence>
 
                 <AnimatePresence>
-                  {showScrollToBottomButton ? (
+                  {showScrollToBottomButton && !messageSearch.open ? (
                     <div className="pointer-events-none absolute inset-x-0 bottom-0 z-30 px-2.5 md:px-6 lg:px-7">
                       <div className="relative mx-auto w-full max-w-[700px]">
                         <motion.div
@@ -26258,10 +26430,17 @@ export default function ChatsPageClient() {
                 <div className="relative aspect-square w-[min(78vw,300px,calc(100dvh-180px))] max-w-full shrink-0 md:w-[min(280px,calc(100dvh-180px))] overflow-hidden rounded-full bg-black shadow-[0_16px_40px_rgba(0,0,0,0.6)]">
                   <video
                     ref={videoPreviewRef}
+                    data-video-recorder-preview
+                    controls={false}
+                    controlsList="nodownload nofullscreen noplaybackrate noremoteplayback"
+                    disablePictureInPicture
+                    disableRemotePlayback
+                    tabIndex={-1}
+                    onContextMenu={event => event.preventDefault()}
                     muted
                     playsInline
                     autoPlay
-                    className={cn("h-full w-full object-cover rounded-full", videoFacingMode === "user" ? "-scale-x-100" : "")}
+                    className={cn("pointer-events-none h-full w-full object-cover rounded-full", videoFacingMode === "user" ? "-scale-x-100" : "")}
                   />
                   {/* Telegram-style circular progress indicator running along the outer rim */}
                   <svg
@@ -26298,9 +26477,16 @@ export default function ChatsPageClient() {
         ) : null}
       </AnimatePresence>
 
+                {messageSearch.open && <div data-message-search-navigation style={{ zIndex: 90, isolation: "isolate" }} className="pointer-events-none absolute inset-x-0 bottom-0 px-2.5 pb-[calc(env(safe-area-inset-bottom)+6px)] pt-1 md:px-6 md:py-2.5 lg:px-7">
+                  <MessageSearchNavigation desktop={isDesktop} query={messageSearch.query} count={messageSearch.matches.length} index={messageSearch.index} busy={messageSearch.busy} hasMore={messageSearch.hasMore} failed={messageSearch.failed} style={composerInputThemeStyle} onMove={messageSearch.move} />
+                </div>}
+
                 <footer
                   ref={footerRef}
+                  inert={messageSearch.open}
+                  aria-hidden={messageSearch.open}
                   className={cn(
+                    messageSearch.open && "invisible",
                     "pointer-events-none absolute inset-x-0 bottom-0 px-2.5 pt-1 md:px-6 md:py-2.5 lg:px-7",
                     (videoRecording || videoRecorderOpen) ? "z-[95]" : "z-[85]",
                     stickerPickerOpen ? "pb-0 md:pb-2.5" : "pb-[calc(env(safe-area-inset-bottom)+6px)]"
@@ -26585,17 +26771,6 @@ export default function ChatsPageClient() {
                             multiple
                             className="hidden"
                             onChange={(event) => void onPickMedia(event)}
-                          />
-                          <input
-                            ref={wallpaperFileInputRef}
-                            type="file"
-                            accept="image/*"
-                            className="hidden"
-                            onChange={(e) => {
-                              const f = e.target.files?.[0];
-                              if (f) void handleWallpaperUpload(f);
-                              e.target.value = "";
-                            }}
                           />
                           <div data-recording-composer-row className="relative order-1 mt-0.5 flex w-full gap-2 items-end justify-center text-white select-none">
                             {(voiceRecording || videoRecording) && (
@@ -27023,6 +27198,8 @@ export default function ChatsPageClient() {
                                        <motion.button
                                          type="button"
                                          onClick={() => void flipVideoCamera()}
+                                         disabled={videoCameraSwitching}
+                                         aria-busy={videoCameraSwitching}
                                          initial={{ scale: 0.7, opacity: 0, y: 8 }}
                                          animate={{ scale: 1, opacity: 1, y: 0 }}
                                          exit={{ scale: 0.7, opacity: 0, y: 8 }}
@@ -27032,7 +27209,7 @@ export default function ChatsPageClient() {
                                          aria-label={t("Перевернуть камеру")}
                                          title={t("Перевернуть камеру")}
                                        >
-                                         <FaArrowsRotate size={15} />
+                                         {videoCameraSwitching ? <Spinner className="h-[15px] w-[15px]" /> : <FaArrowsRotate size={15} />}
                                        </motion.button>
                                      )}
                                      <motion.button
@@ -27137,7 +27314,7 @@ export default function ChatsPageClient() {
             )}
           </motion.section>
           {canUseDesktopDetailsPanel ? (
-            <div data-details-reveal className="relative hidden min-w-0 overflow-hidden md:block" aria-hidden={!desktopDetailsPanelOpen} inert={!desktopDetailsPanelOpen}>
+            <div data-details-reveal className="relative hidden min-w-0 overflow-visible md:block" aria-hidden={!desktopDetailsPanelOpen} inert={!desktopDetailsPanelOpen}>
             <motion.aside data-community-details
               className={cn(
                 "absolute inset-y-2.5 right-2.5 flex min-h-0 w-[324px] lg:w-[344px] flex-col overflow-hidden rounded-[26px] text-zinc-100 border-0 shadow-2xl shadow-black/50",
@@ -27146,7 +27323,12 @@ export default function ChatsPageClient() {
               )}
               data-app-panel style={desktopDetailsPanelThemeStyle}
               initial={false}
-              animate={{ opacity: desktopDetailsPanelOpen ? 1 : 0 }}
+              animate={{
+                opacity: desktopDetailsPanelOpen ? 1 : 0,
+                x: desktopDetailsPanelOpen || reducedPanelMotion ? 0 : 24,
+                visibility: "visible",
+                transitionEnd: { visibility: desktopDetailsPanelOpen ? "visible" : "hidden" },
+              }}
               transition={PANEL_TRANSITION}
             >
               {(() => {
@@ -27244,8 +27426,8 @@ export default function ChatsPageClient() {
                       <X size={22} />
                     </button>
                   )}
-                  <div className="flex flex-col min-w-0 flex-1">
-                    <h2 className={cn("min-w-0 truncate font-semibold text-zinc-100 transition-opacity duration-150", effectiveDetailsChatType === "direct" ? "text-[17px] leading-tight" : "text-[20px] leading-none")}>
+                  <div className={cn("flex flex-col min-w-0 flex-1", isCollapsedDetailsHeader && "pointer-events-none absolute left-16 right-16 items-center text-center")}>
+                    <h2 className={cn("min-w-0 max-w-full truncate font-semibold text-zinc-100 transition-opacity duration-150", effectiveDetailsChatType === "direct" ? "text-[17px] leading-tight" : "text-[20px] leading-none")}>
                       {effectiveDetailsChatType === "direct" && profileSubView === null
                         ? isCollapsedDetailsHeader && profileData
                           ? (contactExists && contactDraftDisplayName ? contactDraftDisplayName : profileData.displayName)
@@ -27276,7 +27458,7 @@ export default function ChatsPageClient() {
                     </h2>
                     {effectiveDetailsChatType === "direct" && profileSubView === null && isCollapsedDetailsHeader && profileData ? (
                       <span className="text-[12px] text-zinc-400 truncate leading-tight mt-0.5 transition-opacity duration-150">
-                        {profileMediaCountSubtitle}
+                        {profileHeaderStatusText}
                       </span>
                     ) : null}
                   </div>
@@ -27391,7 +27573,7 @@ export default function ChatsPageClient() {
                           <MdEdit size={21} />
                         </button>
                       )}
-                      <div className="relative">
+                      {(profileIsBot || profileIsSaved || profileData.id === selfId) && (<div className="relative">
                         <button
                           type="button"
                           onClick={() => setProfileMoreOpen((value) => !value)}
@@ -27413,6 +27595,7 @@ export default function ChatsPageClient() {
                                 type="button"
                                 onClick={() => {
                                   setProfileMoreOpen(false);
+                                  wallpaperTargetRef.current = profileData.link;
                                   wallpaperFileInputRef.current?.click();
                                 }}
                                 disabled={uploadingWallpaper}
@@ -27432,132 +27615,12 @@ export default function ChatsPageClient() {
                             </motion.div>
                           ) : null}
                         </AnimatePresence>
-                      </div>
+                      </div>)}
                     </>
                   )}
-                  {effectiveDetailsChatType === "group" && groupModalData?.group && groupSubView === null && (
-                    <div className="flex items-center gap-1">
-                      {canManageGroup && (
-                        <button
-                          type="button"
-                          onClick={() => setGroupSubView("settings")}
-                          className="grid h-10 w-10 shrink-0 place-items-center rounded-full text-zinc-300 transition-colors hover:bg-white/8 hover:text-white cursor-pointer"
-                          aria-label={t("Настройки группы")}
-                        >
-                          <MdEdit size={21} />
-                        </button>
-                      )}
-                      <div className="relative">
-                        <button
-                          type="button"
-                          onClick={() => setGroupMoreOpen((prev) => !prev)}
-                          className="grid h-10 w-10 shrink-0 place-items-center rounded-full text-zinc-300 transition-colors hover:bg-white/8 hover:text-white cursor-pointer"
-                          aria-label={t("Опции")}
-                        >
-                          <EllipsisVertical size={20} />
-                        </button>
-                        <AnimatePresence>
-                          {groupMoreOpen ? (
-                            <motion.div
-                              className="absolute right-0 top-11 z-[150] w-52 overflow-hidden rounded-[18px] bg-[#1e1e1e]/95 p-1 shadow-[0_18px_38px_rgba(0,0,0,0.45)] ring-1 ring-white/[0.08] backdrop-blur-2xl"
-                              initial={{ opacity: 0, scale: 0.9, y: -4, transformOrigin: "top right" }}
-                              animate={{ opacity: 1, scale: 1, y: 0, transformOrigin: "top right" }}
-                              exit={{ opacity: 0, scale: 0.9, y: -4, transformOrigin: "top right" }}
-                              transition={{ duration: 0.18, ease: [0.16, 1, 0.3, 1] }}
-                            >
-                              {groupModalData.group.myRole === "owner" ? (
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    setGroupMoreOpen(false);
-                                    setGroupDangerAction("delete");
-                                  }}
-                                  className="flex h-10 w-full items-center gap-2.5 rounded-[14px] px-3 text-left text-[13.5px] font-semibold text-red-400 transition-colors hover:bg-red-500/[0.12] active:scale-[0.98] cursor-pointer"
-                                >
-                                  <MdDelete size={18} />
-                                  <span>{t("Удалить группу")}</span>
-                                </button>
-                              ) : (
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    setGroupMoreOpen(false);
-                                    setGroupDangerAction("leave");
-                                  }}
-                                  className="flex h-10 w-full items-center gap-2.5 rounded-[14px] px-3 text-left text-[13.5px] font-semibold text-red-400 transition-colors hover:bg-red-500/[0.12] active:scale-[0.98] cursor-pointer"
-                                >
-                                  <LogOut size={16} />
-                                  <span>{t("Покинуть группу")}</span>
-                                </button>
-                              )}
-                            </motion.div>
-                          ) : null}
-                        </AnimatePresence>
-                      </div>
-                    </div>
-                  )}
-                  {effectiveDetailsChatType === "channel" && channelModalData?.channel && channelSubView === null && (
-                    <div className="flex items-center gap-1">
-                      {(channelModalData.channel.isOwner || channelModalData.channel.myCanChangeName || channelModalData.channel.myCanChangeAvatar || channelModalData.channel.myCanManageAdmins || channelModalData.channel.myCanAddMembers || channelModalData.channel.myCanChangeReactions) && (
-                        <button
-                          type="button"
-                          onClick={() => setChannelSubView("settings")}
-                          className="grid h-10 w-10 shrink-0 place-items-center rounded-full text-zinc-300 transition-colors hover:bg-white/8 hover:text-white cursor-pointer"
-                          aria-label={t("Настройки канала")}
-                        >
-                          <MdEdit size={21} />
-                        </button>
-                      )}
-                      <div className="relative">
-                        <button
-                          type="button"
-                          onClick={() => setChannelMoreOpen((prev) => !prev)}
-                          className="grid h-10 w-10 shrink-0 place-items-center rounded-full text-zinc-300 transition-colors hover:bg-white/8 hover:text-white cursor-pointer"
-                          aria-label={t("Опции")}
-                        >
-                          <EllipsisVertical size={20} />
-                        </button>
-                        <AnimatePresence>
-                          {channelMoreOpen ? (
-                            <motion.div
-                              className="absolute right-0 top-11 z-[150] w-52 overflow-hidden rounded-[18px] bg-[#1e1e1e]/95 p-1 shadow-[0_18px_38px_rgba(0,0,0,0.45)] ring-1 ring-white/[0.08] backdrop-blur-2xl"
-                              initial={{ opacity: 0, scale: 0.9, y: -4, transformOrigin: "top right" }}
-                              animate={{ opacity: 1, scale: 1, y: 0, transformOrigin: "top right" }}
-                              exit={{ opacity: 0, scale: 0.9, y: -4, transformOrigin: "top right" }}
-                              transition={{ duration: 0.18, ease: [0.16, 1, 0.3, 1] }}
-                            >
-                              {channelModalData.channel.isOwner ? (
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    setChannelMoreOpen(false);
-                                    setChannelDangerAction("delete");
-                                  }}
-                                  className="flex h-10 w-full items-center gap-2.5 rounded-[14px] px-3 text-left text-[13.5px] font-semibold text-red-400 transition-colors hover:bg-red-500/[0.12] active:scale-[0.98] cursor-pointer"
-                                >
-                                  <MdDelete size={18} />
-                                  <span>{t("Удалить канал")}</span>
-                                </button>
-                              ) : channelModalData.channel.isSubscribed ? (
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    setChannelMoreOpen(false);
-                                    setChannelDangerAction("leave");
-                                  }}
-                                  className="flex h-10 w-full items-center gap-2.5 rounded-[14px] px-3 text-left text-[13.5px] font-semibold text-red-400 transition-colors hover:bg-red-500/[0.12] active:scale-[0.98] cursor-pointer"
-                                >
-                                  <LogOut size={16} />
-                                  <span>{t("Покинуть канал")}</span>
-                                </button>
-                              ) : null}
-                            </motion.div>
-                          ) : null}
-                        </AnimatePresence>
-                      </div>
-                    </div>
-                  )}
-                  {hasBackButton && effectiveDetailsChatType === "direct" && profileSubView !== "secret_chat" && <button
+
+
+                  {hasBackButton && effectiveDetailsChatType === "direct" && profileSubView !== "secret_chat" && profileSubView !== "contact_editor" && <button
                     type="button"
                     onClick={() => {
                       setDesktopDetailsPanelOpen(false);
@@ -27573,7 +27636,7 @@ export default function ChatsPageClient() {
             );
           })()}
               <div className={cn("relative z-[1] flex min-h-0 w-full flex-1 flex-col", (profileSubView === "qrcode" || groupSubView === "qrcode" || channelSubView === "qrcode" || (effectiveDetailsChatType === "direct" && profileSubView === null)) ? "h-full" : "h-[calc(100%-56px)]")}>
-                <div onScroll={(e) => setProfileScrollTop(e.currentTarget.scrollTop)} className={cn("min-h-0 flex-1 h-full flex flex-col no-scrollbar", (profileSubView === "qrcode" || profileSubView === "secret_chat" || groupSubView === "qrcode" || channelSubView === "qrcode") ? "overflow-hidden" : "overflow-y-auto pb-5")}>
+                <div onScroll={handleProfileScroll} className={cn("min-h-0 flex-1 h-full flex flex-col no-scrollbar", (profileSubView === "qrcode" || profileSubView === "secret_chat" || groupSubView === "qrcode" || channelSubView === "qrcode") ? "overflow-hidden" : "overflow-y-auto pb-5")}>
                   {effectiveDetailsChatType === "direct" ? (
                     profileLoading ? (
                       renderProfileDetailsSkeleton()
@@ -27645,7 +27708,7 @@ export default function ChatsPageClient() {
 
                             return (
                               <div
-                                className="relative flex flex-col items-center pt-14 pb-0 text-center transition-all duration-300 overflow-hidden mb-3"
+                                className={cn("relative flex flex-col items-center pt-14 pb-0 text-center transition-all duration-300 overflow-hidden", profileData.backgroundUrl || profileData.musicUrl ? "mb-3" : "mb-2")}
                                 style={{
                                   background: effectiveGradient || "transparent",
                                 }}
@@ -27662,7 +27725,7 @@ export default function ChatsPageClient() {
                                     <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-black/35 to-black/25 pointer-events-none" />
                                   </>
                                 ) : null}
-                                <div className="relative z-10 flex flex-col items-center px-5 pb-6 sm:pb-7">
+                                <div className={cn("relative z-10 flex flex-col items-center px-5", profileData.backgroundUrl || profileData.musicUrl ? "pb-6 sm:pb-7" : "pb-2")}>
                                   <div className="relative">
                                     <div className="relative w-[124px] h-[124px] flex items-center justify-center">
                                       {/* Subtle soft white ambient halo behind avatar like in Telegram */}
@@ -27771,7 +27834,9 @@ export default function ChatsPageClient() {
                             );
                           })()}
 
-                          {/* User Info Card */}
+                          {renderUserProfileActions()}
+
+                      {/* User Info Card */}
                           <div hidden={profileIsSaved} className="mx-4 overflow-hidden rounded-[24px] bg-white/[0.04] p-1.5 shadow-[0_10px_28px_rgba(0,0,0,0.12)] space-y-0.5">
                             {/* Username Row */}
                             <div
@@ -27889,7 +27954,7 @@ export default function ChatsPageClient() {
                             ) : null}
 
                             {/* Notifications Row */}
-                            <button
+                            {(profileIsBot || profileIsSaved || profileData.id === selfId) && (<button
                               type="button"
                               onClick={() => toggleChatMutedState(profileData.link)}
                               className="mx-0.5 w-[calc(100%-4px)] rounded-[16px] flex min-h-[52px] items-center justify-between gap-3.5 px-3.5 py-2 text-left transition-colors hover:bg-white/[0.06] active:scale-[0.99] cursor-pointer"
@@ -27915,7 +27980,7 @@ export default function ChatsPageClient() {
                                   )}
                                 />
                               </span>
-                            </button>
+                            </button>)}
                           </div>
 
 
@@ -28630,9 +28695,10 @@ export default function ChatsPageClient() {
                               <p className="mt-1 text-sm text-zinc-400">{groupModalData.members.length} {t(" участников")}</p>
                             </div>
 
-                            {/* Joined Link & Notifications Card */}
-                            <div className="mt-5 overflow-hidden rounded-[24px] bg-white/[0.04] p-1 shadow-[0_10px_28px_rgba(0,0,0,0.12)]">
-                              <CommunityDescription description={groupModalData.group.description} />
+                            {/* Profile actions and community information */}
+                            {renderCommunityProfileActions("group")}
+{(groupModalData.group.description?.trim() || groupModalData.group.isPublic) ? (<div className="mt-5 overflow-hidden rounded-[24px] bg-white/[0.04] p-1 shadow-[0_10px_28px_rgba(0,0,0,0.12)]">
+
                               {groupModalData.group.isPublic && groupModalData.group.link ? (
                                 <div
                                   onClick={() => {
@@ -28665,32 +28731,10 @@ export default function ChatsPageClient() {
                                   )}
                                 </div>
                               ) : null}
+                              <CommunityDescription description={groupModalData.group.description} />
 
-                              <button
-                                type="button"
-                                className="flex min-h-14 w-full items-center gap-3.5 px-4 py-3 text-left rounded-[18px] transition-all hover:bg-white/[0.06] active:scale-[0.99] cursor-pointer"
-                                aria-pressed={!mutedChatLinkSet.has(groupModalData.group.link)}
-                                onClick={() => toggleChatMutedState(groupModalData.group.link)}
-                              >
-                                <Bell size={20} className="shrink-0 text-zinc-300" />
-                                <span className="min-w-0 flex-1 text-[15px] font-semibold text-white">{t("Уведомления")}</span>
-                                <span
-                                  className={cn(
-                                    "relative h-6 w-11 shrink-0 rounded-full transition-colors duration-200",
-                                    mutedChatLinkSet.has(groupModalData.group.link) ? "bg-zinc-700" : "bg-[var(--ui-accent-solid,#38bdf8)]",
-                                  )}
-                                >
-                                  <span
-                                    className={cn(
-                                      "absolute top-0.5 h-5 w-5 rounded-full shadow-md transition-transform duration-200",
-                                      mutedChatLinkSet.has(groupModalData.group.link)
-                                        ? "translate-x-0.5 bg-white"
-                                        : "translate-x-[22px] bg-zinc-950",
-                                    )}
-                                  />
-                                </span>
-                              </button>
-                            </div>
+
+                            </div>) : null}
 
                             {/* Group Community Media, Files, Voice, Links, Music */}
                             <div className="mt-3">
@@ -29106,9 +29150,10 @@ export default function ChatsPageClient() {
                               <p className="mt-1 text-sm text-zinc-400">{formatSearchCount(channelModalData.channel.subscribersCount, t("подписчик"), t("подписчика"), t("подписчиков"))}</p>
                             </div>
 
-                            {/* Joined Link & Notifications Card */}
-                            <div className="mt-5 overflow-hidden rounded-[24px] bg-white/[0.04] p-1 shadow-[0_10px_28px_rgba(0,0,0,0.12)]">
-                              <CommunityDescription description={channelModalData.channel.description} />
+                            {/* Profile actions and community information */}
+                            {renderCommunityProfileActions("channel")}
+{(channelModalData.channel.description?.trim() || channelModalData.channel.isPublic) ? (<div className="mt-5 overflow-hidden rounded-[24px] bg-white/[0.04] p-1 shadow-[0_10px_28px_rgba(0,0,0,0.12)]">
+
                               {channelModalData.channel.isPublic && channelModalData.channel.link ? (
                                 <div
                                   onClick={() => {
@@ -29141,32 +29186,10 @@ export default function ChatsPageClient() {
                                   )}
                                 </div>
                               ) : null}
+                              <CommunityDescription description={channelModalData.channel.description} />
 
-                              <button
-                                type="button"
-                                className="flex min-h-14 w-full items-center gap-3.5 px-4 py-3 text-left rounded-[18px] transition-all hover:bg-white/[0.06] active:scale-[0.99] cursor-pointer"
-                                aria-pressed={!mutedChatLinkSet.has(channelModalData.channel.link)}
-                                onClick={() => toggleChatMutedState(channelModalData.channel.link)}
-                              >
-                                <Bell size={20} className="shrink-0 text-zinc-300" />
-                                <span className="min-w-0 flex-1 text-[15px] font-semibold text-white">{t("Уведомления")}</span>
-                                <span
-                                  className={cn(
-                                    "relative h-6 w-11 shrink-0 rounded-full transition-colors duration-200",
-                                    mutedChatLinkSet.has(channelModalData.channel.link) ? "bg-zinc-700" : "bg-[var(--ui-accent-solid,#38bdf8)]",
-                                  )}
-                                >
-                                  <span
-                                    className={cn(
-                                      "absolute top-0.5 h-5 w-5 rounded-full shadow-md transition-transform duration-200",
-                                      mutedChatLinkSet.has(channelModalData.channel.link)
-                                        ? "translate-x-0.5 bg-white"
-                                        : "translate-x-[22px] bg-zinc-950",
-                                    )}
-                                  />
-                                </span>
-                              </button>
-                            </div>
+
+                            </div>) : null}
 
                             {/* Channel Media, Files, Voice, Links, Music */}
                             <div className="mt-3">
@@ -29185,7 +29208,7 @@ export default function ChatsPageClient() {
             </motion.aside>
             </div>
           ) : null}
-        </div>
+        </AnimatedChatLayout>
       </div>
 
 
@@ -29305,7 +29328,7 @@ export default function ChatsPageClient() {
                     ? t("{0} из {1}", { 0: imageViewerIndex + 1, 1: chatImageGallery.length })
                     : null
                 }
-                src={imageViewer.src}
+                src={resolveEncryptedMediaUrl(imageViewer.src)}
                 downloadLabel={t("Сохранить фото")}
                 isMine={Boolean(imageViewer.isMine || activeConversation?.chatType === "saved" || imageViewer.authorName === "Вы")}
                 onAuthorClick={handleImageViewerAuthorClick}
@@ -29380,7 +29403,7 @@ export default function ChatsPageClient() {
                     className="flex h-full w-full items-center justify-center"
                   >
                     <img
-                      src={getCachedMediaUrl(imageViewer.src)}
+                      src={resolveEncryptedMediaUrl(imageViewer.src) || undefined}
                       alt={t("Фотография")}
                       className="h-full w-full max-h-[calc(100dvh-150px)] max-w-[calc(100vw-16px)] sm:max-w-[calc(100vw-32px)] md:max-h-[calc(100dvh-160px)] md:max-w-[min(88vw,1200px)] object-contain rounded-2xl md:rounded-3xl shadow-2xl select-none pointer-events-none"
                       draggable={false}
@@ -29606,15 +29629,15 @@ export default function ChatsPageClient() {
                       >
                         <X size={22} />
                       </button>
-                      <div className="flex flex-col min-w-0 flex-1">
-                        <h2 className="min-w-0 truncate text-[17px] font-bold leading-tight text-white drop-shadow-sm transition-opacity duration-150">
+                      <div className={cn("flex flex-col min-w-0 flex-1", profileScrollTop > 140 && "pointer-events-none absolute left-16 right-16 items-center text-center")}>
+                        <h2 className="min-w-0 max-w-full truncate text-[17px] font-bold leading-tight text-white drop-shadow-sm transition-opacity duration-150">
                           {profileScrollTop > 140
                             ? (contactExists && contactDraftDisplayName ? contactDraftDisplayName : profileData.displayName)
                             : t("Информация")}
                         </h2>
                         {profileScrollTop > 140 ? (
                           <span className="text-[12px] text-zinc-300/85 truncate leading-tight mt-0.5 transition-opacity duration-150">
-                            {profileMediaCountSubtitle}
+                            {profileHeaderStatusText}
                           </span>
                         ) : null}
                       </div>
@@ -29638,7 +29661,7 @@ export default function ChatsPageClient() {
                           <MdEdit size={21} />
                         </button>
                       )}
-                      <div className="relative">
+                      {(profileIsBot || profileIsSaved || profileData.id === selfId) && (<div className="relative">
                         <button
                           type="button"
                           onClick={() => setProfileMoreOpen((value) => !value)}
@@ -29660,6 +29683,7 @@ export default function ChatsPageClient() {
                                 type="button"
                                 onClick={() => {
                                   setProfileMoreOpen(false);
+                                  wallpaperTargetRef.current = profileData.link;
                                   wallpaperFileInputRef.current?.click();
                                 }}
                                 disabled={uploadingWallpaper}
@@ -29679,10 +29703,10 @@ export default function ChatsPageClient() {
                             </motion.div>
                           ) : null}
                         </AnimatePresence>
-                      </div>
+                      </div>)}
                     </div>
 
-                    <div onScroll={(e) => setProfileScrollTop(e.currentTarget.scrollTop)} className="min-h-0 flex-1 overflow-y-auto no-scrollbar pb-6">
+                    <div onScroll={handleProfileScroll} className="min-h-0 flex-1 overflow-y-auto no-scrollbar pb-6">
                       {(() => {
                         const effectiveGradient = getEffectiveProfileGradient(
                           profileData.backgroundUrl,
@@ -29698,7 +29722,7 @@ export default function ChatsPageClient() {
 
                         return (
                           <div
-                            className="relative flex flex-col items-center pt-14 pb-0 text-center transition-all duration-300 overflow-hidden mb-3"
+                            className={cn("relative flex flex-col items-center pt-14 pb-0 text-center transition-all duration-300 overflow-hidden", profileData.backgroundUrl || profileData.musicUrl ? "mb-3" : "mb-2")}
                             style={{
                               background: effectiveGradient || "transparent",
                             }}
@@ -29715,7 +29739,7 @@ export default function ChatsPageClient() {
                                 <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-black/35 to-black/25 pointer-events-none" />
                               </>
                             ) : null}
-                            <div className="relative z-10 flex flex-col items-center px-5 pb-3">
+                            <div className={cn("relative z-10 flex flex-col items-center px-5", profileData.backgroundUrl || profileData.musicUrl ? "pb-3" : "pb-2")}>
                               <div className="relative">
                                 <div className="relative w-[112px] h-[112px] flex items-center justify-center">
                                   {/* Subtle soft white ambient halo behind avatar like in Telegram */}
@@ -29823,6 +29847,8 @@ export default function ChatsPageClient() {
                           </div>
                         );
                       })()}
+
+                      {renderUserProfileActions()}
 
                       {/* User Info Card */}
                       <div hidden={profileIsSaved} className="mx-4 overflow-hidden rounded-[24px] bg-white/[0.04] p-1.5 shadow-[0_10px_28px_rgba(0,0,0,0.12)] space-y-0.5">
@@ -29942,7 +29968,7 @@ export default function ChatsPageClient() {
                         ) : null}
 
                         {/* Notifications Row */}
-                        <button
+                        {(profileIsBot || profileIsSaved || profileData.id === selfId) && (<button
                           type="button"
                           onClick={() => toggleChatMutedState(profileData.link)}
                           className="mx-0.5 w-[calc(100%-4px)] rounded-[16px] flex min-h-[52px] items-center justify-between gap-3.5 px-3.5 py-2 text-left transition-colors hover:bg-white/[0.06] active:scale-[0.99] cursor-pointer"
@@ -29968,7 +29994,7 @@ export default function ChatsPageClient() {
                               )}
                             />
                           </span>
-                        </button>
+                        </button>)}
                       </div>
 
                       {contactMessage && (contactMessage.includes("Не удалось") || contactMessage.includes("Укажите")) ? (
@@ -30800,78 +30826,7 @@ export default function ChatsPageClient() {
                           <X size={22} />
                         </button>
                         <h2 className="min-w-0 flex-1 truncate text-[20px] font-semibold leading-none">{t("Информация о канале")}</h2>
-                        <div className="flex items-center gap-1">
-                          {(channelModalData.channel.isOwner || channelModalData.channel.myCanChangeAvatar || channelModalData.channel.myCanChangeName || channelModalData.channel.myCanManageAdmins || channelModalData.channel.myCanAddMembers || channelModalData.channel.myCanChangeReactions) && (
-                            <button
-                              type="button"
-                              onClick={() => setChannelSubView("settings")}
-                              className="grid h-10 w-10 shrink-0 place-items-center rounded-full text-zinc-300 transition-colors hover:bg-white/8 hover:text-white"
-                              aria-label={t("Редактировать канал")}
-                            >
-                              <MdEdit size={21} />
-                            </button>
-                          )}
-                          <div className="relative">
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setChannelMoreOpen((prev) => !prev);
-                              }}
-                              className="grid h-10 w-10 shrink-0 place-items-center rounded-full text-zinc-300 transition-colors hover:bg-white/8 hover:text-white cursor-pointer"
-                              aria-label={t("Опции")}
-                            >
-                              <EllipsisVertical size={20} />
-                            </button>
-                            <AnimatePresence>
-                              {channelMoreOpen ? (
-                                <>
-                                  <div
-                                    className="fixed inset-0 z-[145]"
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      setChannelMoreOpen(false);
-                                    }}
-                                  />
-                                  <motion.div
-                                    className="absolute right-0 top-11 z-[150] w-52 overflow-hidden rounded-[18px] bg-[#1e1e1e]/95 p-1 shadow-[0_18px_38px_rgba(0,0,0,0.45)] ring-1 ring-white/[0.08] backdrop-blur-2xl"
-                                    initial={{ opacity: 0, scale: 0.9, y: -4, transformOrigin: "top right" }}
-                                    animate={{ opacity: 1, scale: 1, y: 0, transformOrigin: "top right" }}
-                                    exit={{ opacity: 0, scale: 0.9, y: -4, transformOrigin: "top right" }}
-                                    transition={{ duration: 0.18, ease: [0.16, 1, 0.3, 1] }}
-                                    onClick={(e) => e.stopPropagation()}
-                                  >
-                                    {channelModalData.channel.isOwner ? (
-                                      <button
-                                        type="button"
-                                        onClick={() => {
-                                          setChannelMoreOpen(false);
-                                          setChannelDangerAction("delete");
-                                        }}
-                                        className="flex h-10 w-full items-center gap-2.5 rounded-[14px] px-3 text-left text-[13.5px] font-semibold text-red-400 transition-colors hover:bg-red-500/[0.12] active:scale-[0.98] cursor-pointer"
-                                      >
-                                        <MdDelete size={18} />
-                                        <span>{t("Удалить канал")}</span>
-                                      </button>
-                                    ) : channelModalData.channel.isSubscribed ? (
-                                      <button
-                                        type="button"
-                                        onClick={() => {
-                                          setChannelMoreOpen(false);
-                                          setChannelDangerAction("leave");
-                                        }}
-                                        className="flex h-10 w-full items-center gap-2.5 rounded-[14px] px-3 text-left text-[13.5px] font-semibold text-red-400 transition-colors hover:bg-red-500/[0.12] active:scale-[0.98] cursor-pointer"
-                                      >
-                                        <LogOut size={16} />
-                                        <span>{t("Покинуть канал")}</span>
-                                      </button>
-                                    ) : null}
-                                  </motion.div>
-                                </>
-                              ) : null}
-                            </AnimatePresence>
-                          </div>
-                        </div>
+
                       </div>
                       <div className="flex flex-col px-4 pt-2">
                         <div className="flex flex-col items-center text-center">
@@ -30905,9 +30860,10 @@ export default function ChatsPageClient() {
                           <p className="mt-1 text-sm text-zinc-400">{formatSearchCount(channelModalData.channel.subscribersCount, t("подписчик"), t("подписчика"), t("подписчиков"))}</p>
                         </div>
 
-                        {/* Joined Link & Notifications Card */}
-                        <div className="mt-5 overflow-hidden rounded-[24px] bg-white/[0.04] p-1 shadow-[0_10px_28px_rgba(0,0,0,0.12)]">
-                          <CommunityDescription description={channelModalData.channel.description} />
+                        {/* Profile actions and community information */}
+                        {renderCommunityProfileActions("channel")}
+{(channelModalData.channel.description?.trim() || channelModalData.channel.isPublic) ? (<div className="mt-5 overflow-hidden rounded-[24px] bg-white/[0.04] p-1 shadow-[0_10px_28px_rgba(0,0,0,0.12)]">
+
                           {channelModalData.channel.isPublic && channelModalData.channel.link ? (
                             <div
                               onClick={() => {
@@ -30940,32 +30896,10 @@ export default function ChatsPageClient() {
                               )}
                             </div>
                           ) : null}
+                              <CommunityDescription description={channelModalData.channel.description} />
 
-                          <button
-                            type="button"
-                            className="flex min-h-14 w-full items-center gap-3.5 px-4 py-3 text-left rounded-[18px] transition-all hover:bg-white/[0.06] active:scale-[0.99] cursor-pointer"
-                            aria-pressed={!mutedChatLinkSet.has(channelModalData.channel.link)}
-                            onClick={() => toggleChatMutedState(channelModalData.channel.link)}
-                          >
-                            <Bell size={20} className="shrink-0 text-zinc-300" />
-                            <span className="min-w-0 flex-1 text-[15px] font-semibold text-white">{t("Уведомления")}</span>
-                            <span
-                              className={cn(
-                                "relative h-6 w-11 shrink-0 rounded-full transition-colors duration-200",
-                                mutedChatLinkSet.has(channelModalData.channel.link) ? "bg-zinc-700" : "bg-[var(--ui-accent-solid,#38bdf8)]",
-                              )}
-                            >
-                              <span
-                                className={cn(
-                                  "absolute top-0.5 h-5 w-5 rounded-full shadow-md transition-transform duration-200",
-                                  mutedChatLinkSet.has(channelModalData.channel.link)
-                                    ? "translate-x-0.5 bg-white"
-                                    : "translate-x-[22px] bg-zinc-950",
-                                )}
-                              />
-                            </span>
-                          </button>
-                        </div>
+
+                        </div>) : null}
 
                         {/* Channel Community Shared Tabs */}
                         <div className="mt-3">
@@ -31520,78 +31454,7 @@ export default function ChatsPageClient() {
                           <X size={22} />
                         </button>
                         <h2 className="min-w-0 flex-1 truncate text-[20px] font-semibold leading-none">{t("Информация о группе")}</h2>
-                        <div className="flex items-center gap-1">
-                          {canManageGroup && (
-                            <button
-                              type="button"
-                              onClick={() => setGroupSubView("settings")}
-                              className="grid h-10 w-10 shrink-0 place-items-center rounded-full text-zinc-300 transition-colors hover:bg-white/8 hover:text-white"
-                              aria-label={t("Редактировать группу")}
-                            >
-                              <MdEdit size={21} />
-                            </button>
-                          )}
-                          <div className="relative">
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setGroupMoreOpen((prev) => !prev);
-                              }}
-                              className="grid h-10 w-10 shrink-0 place-items-center rounded-full text-zinc-300 transition-colors hover:bg-white/8 hover:text-white cursor-pointer"
-                              aria-label={t("Опции")}
-                            >
-                              <EllipsisVertical size={20} />
-                            </button>
-                            <AnimatePresence>
-                              {groupMoreOpen ? (
-                                <>
-                                  <div
-                                    className="fixed inset-0 z-[145]"
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      setGroupMoreOpen(false);
-                                    }}
-                                  />
-                                  <motion.div
-                                    className="absolute right-0 top-11 z-[150] w-52 overflow-hidden rounded-[18px] bg-[#1e1e1e]/95 p-1 shadow-[0_18px_38px_rgba(0,0,0,0.45)] ring-1 ring-white/[0.08] backdrop-blur-2xl"
-                                    initial={{ opacity: 0, scale: 0.9, y: -4, transformOrigin: "top right" }}
-                                    animate={{ opacity: 1, scale: 1, y: 0, transformOrigin: "top right" }}
-                                    exit={{ opacity: 0, scale: 0.9, y: -4, transformOrigin: "top right" }}
-                                    transition={{ duration: 0.18, ease: [0.16, 1, 0.3, 1] }}
-                                    onClick={(e) => e.stopPropagation()}
-                                  >
-                                    {groupModalData.group.myRole === "owner" ? (
-                                      <button
-                                        type="button"
-                                        onClick={() => {
-                                          setGroupMoreOpen(false);
-                                          setGroupDangerAction("delete");
-                                        }}
-                                        className="flex h-10 w-full items-center gap-2.5 rounded-[14px] px-3 text-left text-[13.5px] font-semibold text-red-400 transition-colors hover:bg-red-500/[0.12] active:scale-[0.98] cursor-pointer"
-                                      >
-                                        <MdDelete size={18} />
-                                        <span>{t("Удалить группу")}</span>
-                                      </button>
-                                    ) : (
-                                      <button
-                                        type="button"
-                                        onClick={() => {
-                                          setGroupMoreOpen(false);
-                                          setGroupDangerAction("leave");
-                                        }}
-                                        className="flex h-10 w-full items-center gap-2.5 rounded-[14px] px-3 text-left text-[13.5px] font-semibold text-red-400 transition-colors hover:bg-red-500/[0.12] active:scale-[0.98] cursor-pointer"
-                                      >
-                                        <LogOut size={16} />
-                                        <span>{t("Покинуть группу")}</span>
-                                      </button>
-                                    )}
-                                  </motion.div>
-                                </>
-                              ) : null}
-                            </AnimatePresence>
-                          </div>
-                        </div>
+
                       </div>
                       <div className="flex flex-col px-4 pt-2">
                         <div className="flex flex-col items-center text-center">
@@ -31625,9 +31488,10 @@ export default function ChatsPageClient() {
                           <p className="mt-1 text-sm text-zinc-400">{groupModalData.members.length} {t(" участников")}</p>
                         </div>
 
-                        {/* Joined Link & Notifications Card */}
-                        <div className="mt-5 overflow-hidden rounded-[24px] bg-white/[0.04] p-1 shadow-[0_10px_28px_rgba(0,0,0,0.12)]">
-                          <CommunityDescription description={groupModalData.group.description} />
+                        {/* Profile actions and community information */}
+                        {renderCommunityProfileActions("group")}
+{(groupModalData.group.description?.trim() || groupModalData.group.isPublic) ? (<div className="mt-5 overflow-hidden rounded-[24px] bg-white/[0.04] p-1 shadow-[0_10px_28px_rgba(0,0,0,0.12)]">
+
                           {groupModalData.group.isPublic && groupModalData.group.link ? (
                             <div
                               onClick={() => {
@@ -31660,32 +31524,10 @@ export default function ChatsPageClient() {
                               )}
                             </div>
                           ) : null}
+                              <CommunityDescription description={groupModalData.group.description} />
 
-                          <button
-                            type="button"
-                            className="flex min-h-14 w-full items-center gap-3.5 px-4 py-3 text-left rounded-[18px] transition-all hover:bg-white/[0.06] active:scale-[0.99] cursor-pointer"
-                            aria-pressed={!mutedChatLinkSet.has(groupModalData.group.link)}
-                            onClick={() => toggleChatMutedState(groupModalData.group.link)}
-                          >
-                            <Bell size={20} className="shrink-0 text-zinc-300" />
-                            <span className="min-w-0 flex-1 text-[15px] font-semibold text-white">{t("Уведомления")}</span>
-                            <span
-                              className={cn(
-                                "relative h-6 w-11 shrink-0 rounded-full transition-colors duration-200",
-                                mutedChatLinkSet.has(groupModalData.group.link) ? "bg-zinc-700" : "bg-[var(--ui-accent-solid,#38bdf8)]",
-                              )}
-                            >
-                              <span
-                                className={cn(
-                                  "absolute top-0.5 h-5 w-5 rounded-full shadow-md transition-transform duration-200",
-                                  mutedChatLinkSet.has(groupModalData.group.link)
-                                    ? "translate-x-0.5 bg-white"
-                                    : "translate-x-[22px] bg-zinc-950",
-                                )}
-                              />
-                            </span>
-                          </button>
-                        </div>
+
+                        </div>) : null}
 
                         {/* Action Panels: Members, Admins, Settings */}
                         <div className="mt-4 overflow-hidden rounded-[24px] bg-white/[0.04] p-1 shadow-[0_10px_28px_rgba(0,0,0,0.12)]" style={chatProfileSectionThemeStyle}>
@@ -32999,43 +32841,22 @@ export default function ChatsPageClient() {
 
       {(settingsPanelOpen || settingsDrawerLoaded) && <SettingsDrawer
         isOpen={settingsPanelOpen}
-        onTransitionComplete={() => setSettingsPanelCovered(true)}
-        onClose={() => setSettingsPanelOpen(false)}
+        onTransitionComplete={handleSettingsTransitionComplete}
+        onClose={closeSettingsPanel}
         selfProfile={selfProfile}
         setSelfProfile={setSelfProfile}
         liveBackgroundSettings={liveBackgroundLayerSettings}
-        onUpdateLiveBackgroundSettings={(settings: any) => {
-          saveLiveBackgroundSettings({
-            neatPreset: settings.neatPreset !== undefined ? settings.neatPreset : liveBackgroundPreset,
-            opacity: settings.opacity !== undefined ? settings.opacity : liveBackgroundOpacity,
-            motionSpeed: settings.motionSpeed !== undefined ? settings.motionSpeed : liveBackgroundMotionSpeed,
-            messageThemeEnabled: settings.messageThemeEnabled !== undefined ? settings.messageThemeEnabled : messageThemeEnabled,
-            transparentVisual: settings.transparentVisual ?? transparentVisual,
-            customTheme: settings.customTheme !== undefined ? settings.customTheme : customTheme,
-            customThemeEnabled: settings.customThemeEnabled ?? customThemeEnabled,
-          });
-          if (settings.neatPreset !== undefined) setLiveBackgroundPreset(settings.neatPreset);
-          if (settings.opacity !== undefined) setLiveBackgroundOpacity(settings.opacity);
-          if (settings.motionSpeed !== undefined) setLiveBackgroundMotionSpeed(settings.motionSpeed);
-          if (settings.messageThemeEnabled !== undefined) setMessageThemeEnabled(settings.messageThemeEnabled);
-          if (settings.transparentVisual !== undefined) setTransparentVisual(settings.transparentVisual);
-          if (settings.customTheme !== undefined) setCustomTheme(settings.customTheme);
-          if (settings.customThemeEnabled !== undefined) setCustomThemeEnabled(settings.customThemeEnabled);
-        }}
+        onUpdateLiveBackgroundSettings={handleSettingsThemeUpdate}
         uiAccentStyle={uiAccentStyle}
         panelThemeStyle={leftSidebarThemeStyle}
         mobileChatOpen={mobileChatOpen}
-        uploadMediaFile={uploadMediaFile}
+        uploadMediaFile={uploadSettingsMedia}
         clearChatMemoryCaches={clearChatMemoryCaches}
         setChatListMenuOpen={setChatListMenuOpen}
         requestedSettingsParam={requestedSettingsParam}
         selfStoryGroup={selfStoryGroup}
         animateStoryRing={animateSelfStoryRing}
-        onOpenStory={(source?: HTMLElement) => {
-          if (selfGroupIndex !== -1) {
-            openStoryViewer(selfGroupIndex, 0, source);
-          }
-        }}
+        onOpenStory={openSettingsStory}
       />}
 
       <AvatarMediaViewerModal
@@ -33073,5 +32894,6 @@ export default function ChatsPageClient() {
         }
       `}</style>
     </div>
+    </MotionConfig>
   );
 }

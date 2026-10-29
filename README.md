@@ -36,6 +36,12 @@ an independent instance with your own infrastructure.
 | Photos, videos, voice and video messages | Emoji statuses and custom-emoji rendering | Bot platform and JavaScript SDK |
 | Music playback, mini-player and sharing | Responsive mobile and desktop layouts | English and Russian interfaces |
 
+Personal chats also support voice and video calls, screen sharing, a minimized
+call player, per-person volume and call privacy with exceptions. Calls use an
+optional LiveKit Cloud project; group-call controls are not exposed in this release.
+Search within chats highlights matches and lets you navigate between results.
+See [calls and deployment configuration](docs/CALLS.md).
+
 Accounts support email-based sign-in, QR login, session management and optional
 two-factor authentication. Secret chats have a separate invitation and expiry
 lifecycle. Encryption and recovery properties differ by mode; read the
@@ -74,6 +80,7 @@ Before signing in or sending media:
 | Email | Configure working `SMTP_*` values in `.env`; registration and login codes need delivery |
 | Realtime | Set your own Pusher Channels credentials and matching `NEXT_PUBLIC_PUSHER_*` values |
 | Push notifications | Optionally configure your own Pusher Beams credentials |
+| Voice/video calls | Optionally set `LIVEKIT_URL`, `LIVEKIT_API_KEY` and `LIVEKIT_API_SECRET` for your own LiveKit Cloud project |
 
 ```sh
 npm run db:migrate
@@ -102,7 +109,7 @@ HTTPS origins. Preserve the intended host and protocol information. Changes to
 ## For developers
 
 **Stack:** Next.js 16 · React 19 · TypeScript · Tailwind CSS · PostgreSQL / Prisma ·
-Redis · S3-compatible storage · Pusher · Lottie.
+Redis · S3-compatible storage · Pusher · LiveKit · Lottie.
 
 | Directory | Contents |
 | --- | --- |
@@ -124,6 +131,8 @@ the local fallbacks have their own tests. Run ESLint on changed files. See
 [contributing](CONTRIBUTING.md) for existing lint limitations and the review process.
 
 - [Bot platform](BOT_PLATFORM.md)
+- [Voice/video calls](docs/CALLS.md)
+- [Performance notes](docs/PERFORMANCE.md)
 - [Maintenance tools](docs/MAINTENANCE.md)
 - [Localization](docs/localization.md)
 - [Security and responsible disclosure](SECURITY.md)

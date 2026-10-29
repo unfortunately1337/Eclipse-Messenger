@@ -4,8 +4,9 @@ import { translate as t } from "@/lib/i18n/translate";
 import { useTranslation } from "@/components/LocaleProvider";
 import React, { useState } from "react";
 import { Check, Copy } from "lucide-react";
+import { SearchHighlightedText } from "./SearchHighlightedText";
 
-export function CodeBlock({ code, language }: { code: string; language?: string }) {
+export function CodeBlock({ code, language, searchQuery = "" }: { code: string; language?: string; searchQuery?: string }) {
   const t = useTranslation();
   const [copied, setCopied] = useState(false);
 
@@ -41,7 +42,7 @@ export function CodeBlock({ code, language }: { code: string; language?: string 
         </button>
       </div>
       <pre className="overflow-x-auto p-3.5 font-mono text-[12.5px] leading-relaxed text-zinc-100 no-scrollbar select-text">
-        <code className="select-text">{code}</code>
+        <code className="select-text"><SearchHighlightedText text={code} query={searchQuery} /></code>
       </pre>
     </div>
   );
@@ -120,7 +121,7 @@ export function parseBold(text: string, keyPrefix: string, renderTextWithEmojis:
   return parts;
 }
 
-export function parseInlineMarkdown(text: string, keyPrefix: string, renderTextWithEmojis: (val: string) => React.ReactNode): React.ReactNode[] {
+export function parseInlineMarkdown(text: string, keyPrefix: string, renderTextWithEmojis: (val: string) => React.ReactNode, searchQuery = ""): React.ReactNode[] {
   // Line-by-line check for blockquotes and headers if multi-line
   const lines = text.split("\n");
   if (lines.length > 1) {
@@ -133,7 +134,7 @@ export function parseInlineMarkdown(text: string, keyPrefix: string, renderTextW
         return (
           <React.Fragment key={lineKey}>
             <span className="my-1 block border-l-[3px] border-[var(--ui-accent-solid,#38bdf8)]/80 pl-2.5 py-0.5 bg-white/[0.04] rounded-r-md text-current italic">
-              {parseInlineTokens(line.slice(2), `${lineKey}-quote`, renderTextWithEmojis)}
+              {parseInlineTokens(line.slice(2), `${lineKey}-quote`, renderTextWithEmojis, searchQuery)}
             </span>
             {!isLast && "\n"}
           </React.Fragment>
@@ -146,7 +147,7 @@ export function parseInlineMarkdown(text: string, keyPrefix: string, renderTextW
         return (
           <React.Fragment key={lineKey}>
             <span className="my-1 block font-bold text-[15px] leading-snug text-current">
-              {parseInlineTokens(headingMatch[2], `${lineKey}-heading`, renderTextWithEmojis)}
+              {parseInlineTokens(headingMatch[2], `${lineKey}-heading`, renderTextWithEmojis, searchQuery)}
             </span>
             {!isLast && "\n"}
           </React.Fragment>
@@ -155,17 +156,17 @@ export function parseInlineMarkdown(text: string, keyPrefix: string, renderTextW
 
       return (
         <React.Fragment key={lineKey}>
-          {parseInlineTokens(line, lineKey, renderTextWithEmojis)}
+          {parseInlineTokens(line, lineKey, renderTextWithEmojis, searchQuery)}
           {!isLast && "\n"}
         </React.Fragment>
       );
     });
   }
 
-  return parseInlineTokens(text, keyPrefix, renderTextWithEmojis);
+  return parseInlineTokens(text, keyPrefix, renderTextWithEmojis, searchQuery);
 }
 
-function parseInlineTokens(text: string, keyPrefix: string, renderTextWithEmojis: (val: string) => React.ReactNode): React.ReactNode[] {
+function parseInlineTokens(text: string, keyPrefix: string, renderTextWithEmojis: (val: string) => React.ReactNode, searchQuery = ""): React.ReactNode[] {
   const parts: React.ReactNode[] = [];
   // Token regex matching code, spoiler, bold-italic, bold, strikethrough, italic (* or _)
   const tokenRegex = /(`[^`\n]+`)|(\|\|[\s\S]+?\|\|)|(\*\*\*([^*]+)\*\*\*)|(\*\*([^*]+)\*\*)|(~~([^~]+)~~)|(\*([^*\n]+)\*)|(\b_([^_]+)_\b)/g;
@@ -190,7 +191,7 @@ function parseInlineTokens(text: string, keyPrefix: string, renderTextWithEmojis
           key={`${keyPrefix}-code-${elementIndex}`}
           className="mx-0.5 px-1.5 py-0.5 rounded-[5px] bg-black/25 dark:bg-white/10 font-mono text-[12.5px] text-zinc-200 border border-white/[0.05] align-baseline select-text inline-block"
         >
-          {match[1].slice(1, -1)}
+          <SearchHighlightedText text={match[1].slice(1, -1)} query={searchQuery} />
         </code>
       );
     } else if (match[2]) {

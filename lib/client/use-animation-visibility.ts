@@ -5,15 +5,30 @@ import { useEffect, useState, type RefObject } from "react";
 type WatchedElement = { intersects: boolean; visible: boolean; notify: (visible: boolean) => void };
 const watched = new Map<Element, WatchedElement>();
 let observer: IntersectionObserver | null = null;
-let scrolling = false;
-let scrollEnd: ReturnType<typeof setTimeout> | undefined;
-function onScroll() {
-  if (!scrolling) { scrolling = true; notifyVisibility(); }
-  clearTimeout(scrollEnd);
-  scrollEnd = setTimeout(() => { scrolling = false; notifyVisibility(); }, 140);
+const scrollEnds = new Map<Node, ReturnType<typeof setTimeout>>();
+function isScrolling(element: Element) {
+  for (const container of scrollEnds.keys()) if (container.contains(element)) return true;
+  return false;
+}
+function refreshContainer(container: Node) {
+  for (const [element, entry] of watched) {
+    if (container.contains(element)) updateEntry(entry, entry.intersects && !document.hidden && !isScrolling(element));
+  }
+}
+function onScroll(event: Event) {
+  const container = event.target;
+  if (!(container instanceof Node)) return;
+  const previous = scrollEnds.get(container);
+  if (previous !== undefined) clearTimeout(previous);
+  scrollEnds.set(container, setTimeout(() => {
+    scrollEnds.delete(container);
+    // A portal or responsive layout may have moved a watched element meanwhile.
+    notifyVisibility();
+  }, 140));
+  if (previous === undefined) refreshContainer(container);
 }
 function notifyVisibility() {
-  for (const entry of watched.values()) updateEntry(entry, entry.intersects && !document.hidden && !scrolling);
+  for (const [element, entry] of watched) updateEntry(entry, entry.intersects && !document.hidden && !isScrolling(element));
 }
 function updateEntry(entry: WatchedElement, visible: boolean) {
   if (entry.visible === visible) return;
@@ -35,12 +50,12 @@ export function watchAnimationVisibility(element: Element, notify: (visible: boo
           const current = watched.get(change.target);
           if (!current) continue;
           current.intersects = change.isIntersecting;
-          updateEntry(current, change.isIntersecting && !document.hidden && !scrolling);
+          updateEntry(current, change.isIntersecting && !document.hidden && !isScrolling(change.target));
         }
       }, { rootMargin: "60px" });
       observer.observe(element);
     } else {
-      updateEntry(entry, !document.hidden);
+      updateEntry(entry, !document.hidden && !isScrolling(element));
     }
     return () => {
       observer?.unobserve(element);
@@ -48,7 +63,8 @@ export function watchAnimationVisibility(element: Element, notify: (visible: boo
       if (!watched.size) {
         document.removeEventListener("visibilitychange", notifyVisibility);
         document.removeEventListener("scroll", onScroll, true);
-        clearTimeout(scrollEnd); scrolling = false;
+        for (const timer of scrollEnds.values()) clearTimeout(timer);
+        scrollEnds.clear();
         observer?.disconnect();
         observer = null;
       }

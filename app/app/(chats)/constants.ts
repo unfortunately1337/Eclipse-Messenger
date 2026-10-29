@@ -37,6 +37,9 @@ export const DEFAULT_SETTINGS_PRIVACY: SettingsPrivacyState = {
   allowProfileLink: true,
   allowGroupAdd: true,
   firstMessagePolicy: "all",
+  callPolicy: "all",
+  callAllowUserIds: [],
+  callDenyUserIds: [],
   newChatAutoDeleteDays: null,
   autoDeleteReadMessages: false,
   hideUsername: false,
@@ -55,6 +58,7 @@ export const SETTINGS_PRIVACY_DETAIL_TITLES: Record<string, string> = {
   allowProfileLink: "Добавление по ссылке",
   allowGroupAdd: "Добавление в группы",
   firstMessagePolicy: "Новые сообщения",
+  callPolicy: "Звонки",
   newChatAutoDeleteDays: "Удаление новых чатов",
   autoDeleteReadMessages: "Удаление прочитанного",
 };

@@ -245,6 +245,10 @@ export type SettingsPrivacyState = {
   allowProfileLink: boolean;
   allowGroupAdd: boolean;
   firstMessagePolicy: "all" | "contacts" | "none";
+  callPolicy: "all" | "contacts" | "none";
+  callAllowUserIds: string[];
+  callDenyUserIds: string[];
+  callExceptionUsers?: SettingsPrivacyUser[];
   newChatAutoDeleteDays: 1 | 7 | 30 | null;
   autoDeleteReadMessages: boolean;
   hideUsername: boolean;
@@ -263,6 +267,7 @@ export type SettingsPrivacyDetail =
   | "showInGlobalSearch"
   | "allowProfileLink"
   | "allowGroupAdd"
+  | "callPolicy"
   | "firstMessagePolicy"
   | "newChatAutoDeleteDays"
   | "autoDeleteReadMessages";
@@ -774,7 +779,7 @@ export type PusherFactory = new (
     members?: { each: (fn: (member: { id: string }) => void) => void };
   };
   disconnect: () => void;
-  connection?: { state?: string };
+  connection?: { state?: string; bind: (eventName: string, callback: () => void) => void };
 };
 
 export type ParsedMessageContent =
@@ -851,7 +856,7 @@ export type StoryFeedCacheSnapshot = {
   stories: StoryFeedGroup[];
 };
 
-export type BooleanPrivacyDetail = Exclude<SettingsPrivacyDetail, "onlineVisibility" | "lastSeenVisibility" | "firstMessagePolicy" | "newChatAutoDeleteDays">;
+export type BooleanPrivacyDetail = Exclude<SettingsPrivacyDetail, "callPolicy" | "onlineVisibility" | "lastSeenVisibility" | "firstMessagePolicy" | "newChatAutoDeleteDays">;
 export type BooleanPrivacyField = keyof Pick<SettingsPrivacyState, "showTyping" | "showMediaActivity" | "showReadReceipts" | "allowUsernameSearch" | "showInGlobalSearch" | "allowProfileLink" | "allowGroupAdd" | "autoDeleteReadMessages">;
 
 export type ActivityIndicatorKind = "typing" | "pulse";

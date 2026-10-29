@@ -16,6 +16,8 @@ import React, { useState, useEffect, useCallback, useMemo, useRef, ChangeEvent, 
 
 import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
 import { PANEL_SUBVIEW_VARIANTS, PANEL_TRANSITION, panelOverlayMotion } from "@/lib/client/panel-motion";
+import { schedulePanelIdle } from "@/lib/client/panel-work";
+import { usePanelDirection } from "@/lib/client/use-panel-direction";
 import {
   ArrowLeft, Trash, Trash2, Download, QrCode, Camera, Music, LogOut, KeySquare, X,
   Mail, Lock, ChevronRight, User, Laptop, Tablet, Monitor, Check,
@@ -596,18 +598,12 @@ export type SettingsDrawerProps = {
   requestedSettingsParam?: string | null;
 };
 
-export function SettingsDrawer(props: any) {
+export const SettingsDrawer = React.memo(function SettingsDrawer(props: any) {
   const t = useTranslation();
   const { locale, setLocale } = useLanguage();
   const reducedMotion = useReducedMotion();
   const showCustomThemeEditor = () => { setSettingsPanelView("custom-theme"); };
   const { isOpen, onClose, selfProfile, uiAccentStyle, selfStoryGroup, onOpenStory, animateStoryRing } = props;
-  useEffect(() => {
-    if (!isOpen) return;
-    preload("/gifs/lock-key.gif", { as: "image", fetchPriority: "high" });
-    void preloadLottieSticker("/tgs/two-factor-setup-intro.tgs").catch(() => {});
-    void preloadLottieSticker("/tgs/two-factor-setup-done.tgs").catch(() => {});
-  }, [isOpen]);
 
   const [internalPanelView, setInternalPanelView] = useState<SettingsPanelView>("main");
   const [selectedSessionDetail, setSelectedSessionDetail] = useState<SettingsSessionItem | null>(null);
@@ -628,12 +624,14 @@ export function SettingsDrawer(props: any) {
   const settingsPanelView = props.settingsPanelView ?? internalPanelView;
   const setSettingsPanelView = props.setSettingsPanelView ?? setInternalPanelView;
 
-  const [settingsNavDirection, setSettingsNavDirection] = useState<"forward" | "backward">("forward");
-  const prevSettingsViewRef = useRef<{ view: string; detail: any; security: any }>({
-    view: "main",
-    detail: null,
-    security: null,
-  });
+  useEffect(() => {
+    if (!isOpen || !["privacy", "security", "security-totp", "security-password"].includes(settingsPanelView)) return;
+    return schedulePanelIdle(() => {
+      preload("/gifs/lock-key.gif", { as: "image", fetchPriority: "low" });
+      void preloadLottieSticker("/tgs/two-factor-setup-intro.tgs").catch(() => {});
+      void preloadLottieSticker("/tgs/two-factor-setup-done.tgs").catch(() => {});
+    });
+  }, [isOpen, settingsPanelView]);
 
   const [showAvatarViewer, setShowAvatarViewer] = useState(false);
   const [deletingAvatar, setDeletingAvatar] = useState(false);
@@ -779,30 +777,10 @@ export function SettingsDrawer(props: any) {
   const settingsTotpQrUrl = props.settingsTotpQrUrl ?? internalTotpQrUrl;
 
   const [settingsSecurityPanel, setSettingsSecurityPanel] = useState<"main" | "totp" | "password" | "email" | null>(null);
-  useEffect(() => {
-    const getSettingsDepth = (view: string, detail: any, security: any) => {
-      if (view === "main") return 0;
-      if (detail === "lastSeenExceptions") return 3;
-      if (detail || security || view === "security-totp" || view === "security-password" || view === "scan-qr" || view === "custom-theme") return 2;
-      return 1;
-    };
-    const currentDepth = getSettingsDepth(settingsPanelView, settingsPrivacyDetail, settingsSecurityPanel);
-    const prevDepth = getSettingsDepth(
-      prevSettingsViewRef.current.view,
-      prevSettingsViewRef.current.detail,
-      prevSettingsViewRef.current.security
-    );
-
-    if (currentDepth !== prevDepth) {
-      setSettingsNavDirection(currentDepth > prevDepth ? "forward" : "backward");
-    }
-
-    prevSettingsViewRef.current = {
-      view: settingsPanelView,
-      detail: settingsPrivacyDetail,
-      security: settingsSecurityPanel,
-    };
-  }, [settingsPanelView, settingsPrivacyDetail, settingsSecurityPanel]);
+  const settingsDepth = settingsPanelView === "main" ? 0
+    : settingsPrivacyDetail === "lastSeenExceptions" ? 3
+    : settingsPrivacyDetail || settingsSecurityPanel || ["security-totp", "security-password", "scan-qr", "custom-theme"].includes(settingsPanelView) ? 2 : 1;
+  const settingsNavDirection = usePanelDirection(settingsDepth);
   const [settingsMoreOpen, setSettingsMoreOpen] = useState(false);
   const [settingsMusicUploading, setSettingsMusicUploading] = useState(false);
   const [settingsCoverUploading, setSettingsCoverUploading] = useState(false);
@@ -848,6 +826,9 @@ export function SettingsDrawer(props: any) {
   );
 
   // Internal API Fetchers
+  const [exceptionKind, setExceptionKind] = useState<"presence" | "callAllow" | "callDeny">("presence");
+  const exceptionIds: string[] = exceptionKind === "presence" ? settingsPrivacy.presenceExceptionUserIds || [] : exceptionKind === "callAllow" ? settingsPrivacy.callAllowUserIds || [] : settingsPrivacy.callDenyUserIds || [];
+  const exceptionUsers: SettingsPrivacyUser[] = exceptionKind === "presence" ? settingsPrivacy.presenceExceptionUsers || [] : (settingsPrivacy.callExceptionUsers || []).filter((user: SettingsPrivacyUser) => exceptionIds.includes(user.id));
   const [exceptionSearchQuery, setExceptionSearchQuery] = useState("");
   const [exceptionCandidates, setExceptionCandidates] = useState<SettingsPrivacyUser[]>([]);
   const [exceptionCandidatesLoading, setExceptionCandidatesLoading] = useState(false);
@@ -871,7 +852,12 @@ export function SettingsDrawer(props: any) {
     }
   };
 
+  const privacySavingRef = useRef(false);
+  const [privacySaving, setPrivacySaving] = useState(false);
   const updatePrivacyInternal = async (partial: Partial<SettingsPrivacyState>) => {
+    if (privacySavingRef.current) return;
+    privacySavingRef.current = true; setPrivacySaving(true);
+    const previous = settingsPrivacy;
     const updated = { ...settingsPrivacy, ...partial };
     setInternalPrivacy(updated);
     if (props.setSettingsPrivacy) props.setSettingsPrivacy(updated);
@@ -886,22 +872,28 @@ export function SettingsDrawer(props: any) {
         if (res && res.presenceExceptionUsers) {
           setInternalPrivacy((prev) => ({
             ...prev,
+            ...res,
             presenceExceptionUsers: res.presenceExceptionUsers,
           }));
           if (props.setSettingsPrivacy) {
             props.setSettingsPrivacy((prev: any) => ({
               ...prev,
+              ...res,
               presenceExceptionUsers: res.presenceExceptionUsers,
             }));
           }
         }
       }
     } catch (err) {
-      console.error("Failed to update privacy settings:", err);
-    }
+      setInternalPrivacy(previous);
+      props.setSettingsPrivacy?.(previous);
+      showAppToast({ type: "error", title: err instanceof Error ? err.message : t("Не удалось сохранить настройки") });
+    } finally { privacySavingRef.current = false; setPrivacySaving(false); }
   };
 
-  const openExceptionsSubView = async () => {
+  const openExceptionsSubView = async (kind: "presence" | "callAllow" | "callDeny" = "presence") => {
+    setExceptionKind(kind);
+    const savedUsers = kind === "presence" ? settingsPrivacy.presenceExceptionUsers || [] : settingsPrivacy.callExceptionUsers || [];
     setExceptionSearchQuery("");
     setSettingsPrivacyDetail("lastSeenExceptions");
     setExceptionCandidatesLoading(true);
@@ -921,7 +913,7 @@ export function SettingsDrawer(props: any) {
         }));
 
       const combined = [...loadedList];
-      (settingsPrivacy.presenceExceptionUsers || []).forEach((u: SettingsPrivacyUser) => {
+      (savedUsers).forEach((u: SettingsPrivacyUser) => {
         if (!combined.some((c) => c.id === u.id)) {
           combined.unshift(u);
         }
@@ -929,7 +921,7 @@ export function SettingsDrawer(props: any) {
       setExceptionCandidates(combined);
     } catch (err) {
       console.error("Failed to load contacts for exceptions:", err);
-      setExceptionCandidates(settingsPrivacy.presenceExceptionUsers || []);
+      setExceptionCandidates(savedUsers);
     } finally {
       setExceptionCandidatesLoading(false);
     }
@@ -971,34 +963,29 @@ export function SettingsDrawer(props: any) {
   }, [exceptionSearchQuery, settingsPrivacyDetail, selfProfile?.id]);
 
   const handleToggleException = async (user: SettingsPrivacyUser) => {
-    const currentIds = settingsPrivacy.presenceExceptionUserIds || [];
-    const currentUsers = settingsPrivacy.presenceExceptionUsers || [];
-    const isPresent = currentIds.includes(user.id);
-
-    let nextIds: string[];
-    let nextUsers: SettingsPrivacyUser[];
-
-    if (isPresent) {
-      nextIds = currentIds.filter((id: string) => id !== user.id);
-      nextUsers = currentUsers.filter((u: SettingsPrivacyUser) => u.id !== user.id);
-    } else {
-      nextIds = [...currentIds, user.id];
-      nextUsers = [...currentUsers.filter((u: SettingsPrivacyUser) => u.id !== user.id), user];
+    if (exceptionKind !== "presence") {
+      const key = exceptionKind === "callAllow" ? "callAllowUserIds" : "callDenyUserIds";
+      const other = exceptionKind === "callAllow" ? "callDenyUserIds" : "callAllowUserIds";
+      const ids = settingsPrivacy[key] || [];
+      await updatePrivacyInternal({
+        [key]: ids.includes(user.id) ? ids.filter((id: string) => id !== user.id) : [...ids, user.id],
+        [other]: (settingsPrivacy[other] || []).filter((id: string) => id !== user.id),
+        callExceptionUsers: [...(settingsPrivacy.callExceptionUsers || []).filter((item: SettingsPrivacyUser) => item.id !== user.id), user],
+      });
+      return;
     }
-
-    await updatePrivacyInternal({
-      presenceExceptionUserIds: nextIds,
-      presenceExceptionUsers: nextUsers,
-    });
+    const ids = settingsPrivacy.presenceExceptionUserIds || [];
+    const users = settingsPrivacy.presenceExceptionUsers || [];
+    await updatePrivacyInternal({ presenceExceptionUserIds: ids.includes(user.id) ? ids.filter((id: string) => id !== user.id) : [...ids, user.id], presenceExceptionUsers: ids.includes(user.id) ? users.filter((item: SettingsPrivacyUser) => item.id !== user.id) : [...users, user] });
   };
 
   const removeExceptionDirectly = async (userId: string) => {
-    const nextIds = (settingsPrivacy.presenceExceptionUserIds || []).filter((id: string) => id !== userId);
-    const nextUsers = (settingsPrivacy.presenceExceptionUsers || []).filter((u: SettingsPrivacyUser) => u.id !== userId);
-    await updatePrivacyInternal({
-      presenceExceptionUserIds: nextIds,
-      presenceExceptionUsers: nextUsers,
-    });
+    if (exceptionKind !== "presence") {
+      const key = exceptionKind === "callAllow" ? "callAllowUserIds" : "callDenyUserIds";
+      await updatePrivacyInternal({ [key]: (settingsPrivacy[key] || []).filter((id: string) => id !== userId) });
+      return;
+    }
+    await updatePrivacyInternal({ presenceExceptionUserIds: (settingsPrivacy.presenceExceptionUserIds || []).filter((id: string) => id !== userId), presenceExceptionUsers: (settingsPrivacy.presenceExceptionUsers || []).filter((user: SettingsPrivacyUser) => user.id !== userId) });
   };
 
   const loadSessionsInternal = async () => {
@@ -1249,13 +1236,13 @@ export function SettingsDrawer(props: any) {
 
   const settingsPanelTitle =
     settingsPanelView === "privacy" && settingsPrivacyDetail === "lastSeenExceptions"
-      ? settingsPrivacy.lastSeenVisibility === "all"
+      ? exceptionKind === "callAllow" ? t("Всегда разрешать") : exceptionKind === "callDeny" ? t("Никогда не разрешать") : settingsPrivacy.lastSeenVisibility === "all"
         ? t("Никогда не показывать")
         : settingsPrivacy.lastSeenVisibility === "none"
           ? t("Всегда показывать")
           : t("Исключения")
       : settingsPanelView === "privacy" && settingsPrivacyDetail
-      ? SETTINGS_PRIVACY_DETAIL_TITLES[settingsPrivacyDetail] || t("Настройка")
+      ? t(SETTINGS_PRIVACY_DETAIL_TITLES[settingsPrivacyDetail] || "Настройка")
       : settingsPanelView === "security" && settingsSecurityPanel
       ? settingsSecurityPanel === "totp"
         ? t("Двухфакторная авторизация")
@@ -1916,7 +1903,7 @@ export function SettingsDrawer(props: any) {
                   type="button"
                   onClick={() => {
                     if (settingsPanelView === "privacy" && settingsPrivacyDetail === "lastSeenExceptions") {
-                      setSettingsPrivacyDetail("lastSeenVisibility");
+                      setSettingsPrivacyDetail(exceptionKind === "presence" ? "lastSeenVisibility" : "callPolicy");
                     } else if (settingsPanelView === "privacy" && settingsPrivacyDetail) {
                       setSettingsPrivacyDetail(null);
                     } else if (settingsPanelView === "security" && settingsSecurityPanel) {
@@ -2564,10 +2551,10 @@ export function SettingsDrawer(props: any) {
                       </div>
 
                       {/* Current Exceptions list */}
-                      {(settingsPrivacy.presenceExceptionUsers || []).length > 0 ? (
-                        <PrivacySection title={t("В исключениях ({0})", { 0: (settingsPrivacy.presenceExceptionUsers || []).length })}>
+                      {exceptionUsers.length > 0 ? (
+                        <PrivacySection title={t("В исключениях ({0})", { 0: exceptionUsers.length })}>
                           <div className="space-y-0.5">
-                            {(settingsPrivacy.presenceExceptionUsers || []).map((excUser: SettingsPrivacyUser) => (
+                            {exceptionUsers.map((excUser: SettingsPrivacyUser) => (
                               <div
                                 key={excUser.id}
                                 className="w-full rounded-[14px] flex min-h-[56px] items-center justify-between gap-3 px-3 py-2 text-left hover:bg-white/[0.04] transition-colors"
@@ -2590,6 +2577,7 @@ export function SettingsDrawer(props: any) {
                                 </div>
                                 <button
                                   type="button"
+                                  disabled={privacySaving}
                                   onClick={() => void removeExceptionDirectly(excUser.id)}
                                   className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-white/[0.06] text-zinc-400 hover:text-red-400 hover:bg-white/[0.1] transition-colors cursor-pointer"
                                   title={t("Удалить из исключений")} aria-label={t("Удалить из исключений")}
@@ -2629,10 +2617,11 @@ export function SettingsDrawer(props: any) {
                           return (
                             <div className="space-y-0.5">
                               {filtered.map((cand) => {
-                                const isAdded = (settingsPrivacy.presenceExceptionUserIds || []).includes(cand.id);
+                                const isAdded = exceptionIds.includes(cand.id);
                                 return (
                                   <button type="button"
                                     key={cand.id}
+                                    disabled={privacySaving}
                                     onClick={() => void handleToggleException(cand)}
                                     className={cn(
                                       "w-full rounded-[14px] flex min-h-[56px] items-center justify-between gap-3 px-3 py-2 text-left cursor-pointer transition-colors",
@@ -2678,20 +2667,21 @@ export function SettingsDrawer(props: any) {
                   ) : (
                   <div className="p-4 space-y-4">
                     <PrivacySection title={SETTINGS_PRIVACY_DETAIL_TITLES[settingsPrivacyDetail] || t("Настройка")}>
-                      {settingsPrivacyDetail === "lastSeenVisibility" || settingsPrivacyDetail === "onlineVisibility" ? (
+                      {settingsPrivacyDetail === "lastSeenVisibility" || settingsPrivacyDetail === "onlineVisibility" || settingsPrivacyDetail === "callPolicy" ? (
                         <>
                           {[
                             { value: "all", label: t("Все") },
-                            { value: "contacts", label: t("Мои контакты") },
+                            { value: "contacts", label: t(settingsPrivacyDetail === "callPolicy" ? "Только контакты" : "Мои контакты") },
                             { value: "none", label: t("Никто") },
                           ].map((opt) => {
-                            const currentVal = settingsPrivacy.lastSeenVisibility;
+                            const currentVal = settingsPrivacyDetail === "callPolicy" ? settingsPrivacy.callPolicy : settingsPrivacy.lastSeenVisibility;
                             const selected = currentVal === opt.value;
                             return (
                               <button
                                 key={opt.value}
                                 type="button"
-                                onClick={() => void updatePrivacyInternal({ lastSeenVisibility: opt.value as any, onlineVisibility: opt.value as any })}
+                                disabled={privacySaving}
+                                onClick={() => void updatePrivacyInternal(settingsPrivacyDetail === "callPolicy" ? { callPolicy: opt.value as "all" | "contacts" | "none" } : { lastSeenVisibility: opt.value as any, onlineVisibility: opt.value as any })}
                                 className={cn(
                                   "mx-0.5 w-[calc(100%-4px)] rounded-[14px] flex min-h-[48px] items-center justify-between px-3.5 py-2.5 text-left transition-all hover:bg-white/[0.08] active:scale-[0.99] cursor-pointer",
                                   selected ? "bg-white/[0.06]" : ""
@@ -2755,6 +2745,12 @@ export function SettingsDrawer(props: any) {
                       ) : null}
                     </PrivacySection>
 
+                    {settingsPrivacyDetail === "callPolicy" && <>
+                      <p className="px-3 text-[12px] leading-5 text-zinc-400">{t("Выберите, кто может звонить вам. Исключения действуют независимо от основного правила.")}</p>
+                      <PrivacySection title={t("Исключения")}>
+                        {settingsPrivacy.callPolicy === "none" ? <PrivacyNavigationRow icon={UserCheck} label={t("Всегда разрешать")} value={String((settingsPrivacy.callAllowUserIds || []).length)} onClick={() => void openExceptionsSubView("callAllow")} /> : <PrivacyNavigationRow icon={UserX} label={t("Никогда не разрешать")} value={String((settingsPrivacy.callDenyUserIds || []).length)} onClick={() => void openExceptionsSubView("callDeny")} />}
+                      </PrivacySection>
+                    </>}
                     {settingsPrivacyDetail === "lastSeenVisibility" || settingsPrivacyDetail === "onlineVisibility" ? (
                       <PrivacySection title={t("Исключения")}>
                         <button type="button"
@@ -2839,6 +2835,11 @@ export function SettingsDrawer(props: any) {
                         description={t("Разрешить другим добавлять вас в группы")}
                         checked={settingsPrivacy.allowGroupAdd}
                         onChange={(val) => void updatePrivacyInternal({ allowGroupAdd: val })}
+                      />
+                      <PrivacyNavigationRow
+                        label={t("Звонки")}
+                        value={settingsPrivacy.callPolicy === "contacts" ? t("Только контакты") : settingsPrivacy.callPolicy === "none" ? t("Никто") : t("Все")}
+                        onClick={() => setSettingsPrivacyDetail("callPolicy")}
                       />
                       <PrivacyNavigationRow
                         label={t("Новые сообщения")}
@@ -4148,4 +4149,8 @@ export function SettingsDrawer(props: any) {
 
     </>
   );
-}
+}, (previous, next) => {
+  if (!previous.isOpen && !next.isOpen) return previous.selfProfile?.id === next.selfProfile?.id;
+  const keys = Object.keys(next);
+  return keys.length === Object.keys(previous).length && keys.every(key => Object.is(previous[key], next[key]));
+});

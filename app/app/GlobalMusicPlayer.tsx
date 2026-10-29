@@ -11,7 +11,9 @@ import { Music2, Pause, Play, SkipBack, SkipForward, X, Shuffle, Repeat, Share, 
 import { isSameProfileMusic, prepareProfileMusicMedia } from "@/lib/client/music-profile";
 import { requestMusicShare } from "@/lib/client/music-share";
 import { apiRequest } from "@/lib/client/http";
+import { useMediaPortalTarget } from "@/lib/client/media-portal-targets";
 import { showAppToast } from "@/lib/client/app-toast";
+import { CALL_PLAYBACK_CHANGED, isCallPlaybackActive } from "@/lib/client/call-playback";
 import { getChatHeaderVisualStyle } from "@/lib/client/panel-visual";
 import { LIVE_BACKGROUND_STORAGE_KEY, LIVE_BACKGROUND_UPDATED_EVENT, loadLiveBackgroundSettings } from "@/lib/client/live-background";
 
@@ -57,11 +59,29 @@ export default function GlobalMusicPlayer() {
   const [mobileChatOpen, setMobileChatOpen] = useState(false);
   const [isShuffle, setIsShuffle] = useState(false);
   const [isLoop, setIsLoop] = useState(false);
-  const [listTarget, setListTarget] = useState<HTMLElement | null>(null);
-  const [chatTarget, setChatTarget] = useState<HTMLElement | null>(null);
   const [transparentVisual, setTransparentVisual] = useState(true);
+  const [inCall, setInCall] = useState(isCallPlaybackActive);
   const isAppRoute = pathname?.startsWith("/app") ?? false;
+  const listTarget = useMediaPortalTarget("global-music-list-slot", isAppRoute);
+  const chatTarget = useMediaPortalTarget("global-music-chat-slot", isAppRoute);
   const miniPlayerStyle = useMemo(() => ({ ...getChatHeaderVisualStyle(transparentVisual), border: 0, borderRadius: 999 }), [transparentVisual]);
+
+  useEffect(() => {
+    const sync = () => {
+      const active = isCallPlaybackActive();
+      setInCall(active);
+      if (active) {
+        audioRef.current?.pause();
+        playingRef.current = false;
+        setPlaying(false);
+        setExpanded(false);
+        window.dispatchEvent(new CustomEvent("eclipse:voice-hide"));
+      }
+    };
+    sync();
+    window.addEventListener(CALL_PLAYBACK_CHANGED, sync);
+    return () => window.removeEventListener(CALL_PLAYBACK_CHANGED, sync);
+  }, []);
 
   useEffect(() => {
     const sync = () => setTransparentVisual(loadLiveBackgroundSettings().transparentVisual ?? true);
@@ -138,29 +158,6 @@ export default function GlobalMusicPlayer() {
   }, []);
 
   useEffect(() => {
-    if (!isAppRoute) {
-      setListTarget(null);
-      setChatTarget(null);
-      return;
-    }
-    let cancelled = false;
-    const syncTargets = () => {
-      if (cancelled) return;
-      setListTarget(document.getElementById("global-music-list-slot"));
-      setChatTarget(document.getElementById("global-music-chat-slot"));
-    };
-    syncTargets();
-    const observer = new MutationObserver(syncTargets);
-    observer.observe(document.body, { childList: true, subtree: true });
-    const interval = window.setInterval(syncTargets, 500);
-    return () => {
-      cancelled = true;
-      observer.disconnect();
-      window.clearInterval(interval);
-    };
-  }, [isAppRoute, mobileChatOpen]);
-
-  useEffect(() => {
     try {
       const raw = window.localStorage.getItem(HISTORY_KEY);
       if (!raw) return;
@@ -192,6 +189,10 @@ export default function GlobalMusicPlayer() {
 
   const handlePlayRequest = useCallback(
     (payload: { url?: string; label?: string; title?: string; author?: string; coverUrl?: string; userInitiated?: boolean }) => {
+      if (isCallPlaybackActive()) {
+        showAppToast({ type: "error", title: t("Вы сейчас в звонке.") });
+        return;
+      }
       const playSeq = ++playRequestSeqRef.current;
       const url = (payload.url ?? "").trim();
       if (!url) return;
@@ -282,6 +283,7 @@ export default function GlobalMusicPlayer() {
     };
     const handleEnded = () => {
       setPlaying(false);
+      if (isCallPlaybackActive()) return;
       const history = historyRef.current;
       if (history.length > 1) {
         const next = history[1];
@@ -384,6 +386,10 @@ export default function GlobalMusicPlayer() {
       return;
     }
     window.dispatchEvent(new CustomEvent("eclipse:voice-hide"));
+    if (isCallPlaybackActive()) {
+      showAppToast({ type: "error", title: t("Вы сейчас в звонке.") });
+      return;
+    }
     const playPromise = audio.play();
     if (playPromise?.catch) {
       playPromise.catch(() => {});
@@ -507,8 +513,8 @@ export default function GlobalMusicPlayer() {
     return `${minutes}:${seconds.toString().padStart(2, "0")}`;
   };
 
-  const shouldShowListPlayer = isAppRoute && visible && !!trackUrl && (!isMobile || !mobileChatOpen);
-  const shouldShowChatPlayer = isAppRoute && visible && !!trackUrl && isMobile && mobileChatOpen;
+  const shouldShowListPlayer = !inCall && isAppRoute && visible && !!trackUrl && (!isMobile || !mobileChatOpen);
+  const shouldShowChatPlayer = !inCall && isAppRoute && visible && !!trackUrl && isMobile && mobileChatOpen;
   const shouldMarquee = trackLabel.trim().length > 24;
 
   const renderMiniPlayer = (variant: "list" | "chat") => (

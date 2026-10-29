@@ -21,11 +21,13 @@
     "e2e:repair-identities": "node scripts/e2e-repair-identities.mjs",
     "test": "vitest run",
     "db:migrate": "prisma migrate deploy",
-    "predev": "node scripts/check-node-version.cjs && prisma generate",
+    "predev": "node scripts/check-node-version.cjs && node scripts/ensure-prisma-client.cjs",
     "prebuild": "node scripts/check-node-version.cjs",
     "prestart": "node scripts/check-node-version.cjs && npm run db:migrate",
     "pretest": "node scripts/check-node-version.cjs",
-    "setup:local": "node scripts/setup-local-env.cjs"
+    "setup:local": "node scripts/setup-local-env.cjs",
+    "calls:smoke": "node scripts/test-calls-livekit.mjs",
+    "calls:test-user": "node scripts/call-test-user.mjs"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1004.0",
@@ -61,7 +63,9 @@
     "sonner": "^2.0.7",
     "tailwind-merge": "^3.4.1",
     "undici": "^7.30.0",
-    "zod": "^4.1.12"
+    "zod": "^4.1.12",
+    "livekit-client": "^2.23.0",
+    "livekit-server-sdk": "^2.19.2"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",

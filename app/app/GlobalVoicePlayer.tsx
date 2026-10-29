@@ -5,6 +5,7 @@ import { useTranslation } from "@/components/LocaleProvider";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { usePlaybackWaveformLevels } from "@/lib/client/voice-waveform";
+import { useMediaPortalTarget } from "@/lib/client/media-portal-targets";
 import { createPortal } from "react-dom";
 import { usePathname } from "next/navigation";
 import { AnimatePresence, motion } from "framer-motion";
@@ -42,9 +43,9 @@ export default function GlobalVoicePlayer() {
   const [playbackRate, setPlaybackRate] = useState(1);
   const [isMobile, setIsMobile] = useState(false);
   const [mobileChatOpen, setMobileChatOpen] = useState(false);
-  const [listTarget, setListTarget] = useState<HTMLElement | null>(null);
-  const [chatTarget, setChatTarget] = useState<HTMLElement | null>(null);
   const isAppRoute = pathname?.startsWith("/app") ?? false;
+  const listTarget = useMediaPortalTarget("global-voice-list-slot", isAppRoute);
+  const chatTarget = useMediaPortalTarget("global-voice-chat-slot", isAppRoute);
   const playbackLevels = usePlaybackWaveformLevels(audioNode, playing, visible && Boolean(src));
 
   const progressPercent = useMemo(() => {
@@ -96,29 +97,6 @@ export default function GlobalVoicePlayer() {
     window.addEventListener("eclipse:mobile-chat-visibility", onMobileChatVisibility as EventListener);
     return () => window.removeEventListener("eclipse:mobile-chat-visibility", onMobileChatVisibility as EventListener);
   }, []);
-
-  useEffect(() => {
-    if (!isAppRoute) {
-      setListTarget(null);
-      setChatTarget(null);
-      return;
-    }
-    let cancelled = false;
-    const syncTargets = () => {
-      if (cancelled) return;
-      setListTarget(document.getElementById("global-voice-list-slot"));
-      setChatTarget(document.getElementById("global-voice-chat-slot"));
-    };
-    syncTargets();
-    const observer = new MutationObserver(syncTargets);
-    observer.observe(document.body, { childList: true, subtree: true });
-    const interval = window.setInterval(syncTargets, 500);
-    return () => {
-      cancelled = true;
-      observer.disconnect();
-      window.clearInterval(interval);
-    };
-  }, [isAppRoute, mobileChatOpen]);
 
   useEffect(() => {
     const audio = audioRef.current;

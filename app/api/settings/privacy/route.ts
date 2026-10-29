@@ -23,6 +23,9 @@ const patchSchema = z.object({
   allowProfileLink: z.boolean(),
   allowGroupAdd: z.boolean(),
   firstMessagePolicy: audienceSchema,
+  callPolicy: audienceSchema,
+  callAllowUserIds: z.array(z.string().trim().min(1).max(128)).max(200),
+  callDenyUserIds: z.array(z.string().trim().min(1).max(128)).max(200),
   newChatAutoDeleteDays: z.union([z.literal(1), z.literal(7), z.literal(30), z.null()]),
   autoDeleteReadMessages: z.boolean(),
   hideUsername: z.boolean(),
@@ -38,6 +41,7 @@ export async function GET(req: NextRequest) {
   try {
     const { user } = await requireUserFromRequest(req);
     const current = await getPrivacySettings(user.id);
+    const callExceptionUsers = await loadCallExceptions([...current.callAllowUserIds, ...current.callDenyUserIds], user.id);
     const exceptionUsers =
       current.presenceExceptionUserIds.length > 0
         ? await prisma.user.findMany({
@@ -48,6 +52,7 @@ export async function GET(req: NextRequest) {
     const res = jsonOk({
       ...toResponse(current),
       presenceExceptionUsers: exceptionUsers,
+      callExceptionUsers,
     });
     ensureCsrfCookie(req, res);
     return applyCors(req, res);
@@ -71,9 +76,14 @@ export async function PATCH(req: NextRequest) {
             select: { id: true, displayName: true, link: true, avatarUrl: true },
           })
         : [];
+    const callExceptionUsers = await loadCallExceptions([...body.callAllowUserIds, ...body.callDenyUserIds], user.id);
+    const callIds = new Set(callExceptionUsers.map(item => item.id));
+    const denied = new Set(body.callDenyUserIds.filter(id => callIds.has(id)));
     const updated = await savePrivacySettings(user.id, {
       ...body,
       presenceExceptionUserIds: allowedExceptions.map((item) => item.id),
+      callAllowUserIds: [...new Set(body.callAllowUserIds)].filter(id => callIds.has(id) && !denied.has(id)),
+      callDenyUserIds: [...denied],
     });
     try {
       await redis.del(profileCacheKey(updated.id));
@@ -126,7 +136,7 @@ export async function PATCH(req: NextRequest) {
     } catch {
       // best-effort cache invalidation
     }
-    const res = jsonOk({ ...updated, presenceExceptionUsers: allowedExceptions });
+    const res = jsonOk({ ...updated, presenceExceptionUsers: allowedExceptions, callExceptionUsers });
     ensureCsrfCookie(req, res);
     return applyCors(req, res);
   } catch (error) {
@@ -136,4 +146,9 @@ export async function PATCH(req: NextRequest) {
 
 export function OPTIONS(req: NextRequest) {
   return handleOptions(req);
+}
+
+async function loadCallExceptions(ids: string[], selfId: string) {
+  const unique = [...new Set(ids)].filter(id => id !== selfId);
+  return unique.length ? prisma.user.findMany({ where: { id: { in: unique } }, select: { id: true, displayName: true, link: true, avatarUrl: true } }) : [];
 }

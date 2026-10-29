@@ -3,6 +3,16 @@ import type Redis from "ioredis";
 import { createRemoteRedis } from "./redis-adapter";
 
 describe("shared Redis security state", () => {
+  it("reserves call slots atomically and only releases a reservation still owned by the same call", async () => {
+    const real = { set: vi.fn().mockResolvedValueOnce("OK").mockResolvedValueOnce(null), eval: vi.fn().mockResolvedValueOnce(0).mockResolvedValueOnce(1) } as unknown as Redis;
+    const client = createRemoteRedis(real);
+    expect(await client.setIfAbsent("slot", "call-one", 60)).toBe(true);
+    expect(await client.setIfAbsent("slot", "call-two", 60)).toBe(false);
+    expect(real.set).toHaveBeenCalledWith("slot", "call-one", "EX", 60, "NX");
+    expect(await client.compareAndDelete("slot", "call-two")).toBe(false);
+    expect(await client.compareAndDelete("slot", "call-one")).toBe(true);
+    expect(real.eval).toHaveBeenCalledWith(expect.stringContaining("redis.call('DEL'"), 1, "slot", "call-one");
+  });
   it("claims a QR token with an atomic compare-and-set instead of overwriting another approval", async () => {
     const real = { eval: vi.fn().mockResolvedValueOnce(1).mockResolvedValueOnce(0) } as unknown as Redis;
     const client = createRemoteRedis(real);

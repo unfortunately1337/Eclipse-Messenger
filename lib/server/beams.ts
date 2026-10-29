@@ -85,3 +85,13 @@ export async function publishBeamsMessageToUser(userId: string, payload: BeamsMe
     throw new Error(`Beams error: ${res.status} ${text.slice(0, 180)}`);
   }
 }
+export async function publishBeamsCallToUser(userId: string, data: { callId: string; state: "ringing" | "missed" | "closed"; expiresAt: number }) {
+  const cfg = getBeamsConfig();
+  if (!cfg) return;
+  const response = await fetch(`https://${cfg.instanceId}.pushnotifications.pusher.com/publish_api/v1/instances/${cfg.instanceId}/publishes/interests`, {
+    method: "POST", signal: AbortSignal.timeout(5000), cache: "no-store",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${cfg.secretKey}` },
+    body: JSON.stringify({ interests: [`user-${userId}`], web: { time_to_live: data.state === "ringing" ? Math.max(1, Math.ceil((data.expiresAt - Date.now()) / 1000)) : 600, data: { type: "call", recipientId: userId, ...data } } }),
+  });
+  if (!response.ok) throw new Error(`Call notification delivery failed (${response.status})`);
+}

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { memo, useEffect, useMemo, useRef, useState } from "react";
 import { cn } from "@/lib/utils";
 import { useAnimationVisibility } from "@/lib/client/use-animation-visibility";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -66,7 +66,7 @@ type MediaAvatarProps = {
   autoPlay?: boolean;
 };
 
-export function MediaAvatar({
+export const MediaAvatar = memo(function MediaAvatar({
   src,
   alt,
   className,
@@ -141,7 +141,7 @@ export function MediaAvatar({
       )}
     </Avatar>
   );
-}
+});
 
 type MediaBannerProps = {
   src?: string | null;
@@ -152,7 +152,7 @@ type MediaBannerProps = {
   alt?: string;
 };
 
-export function MediaBanner({
+export const MediaBanner = memo(function MediaBanner({
   src,
   className,
   mediaClassName,
@@ -191,4 +191,4 @@ export function MediaBanner({
       {overlayClassName ? <div className={cn("pointer-events-none absolute inset-0", overlayClassName)} /> : null}
     </div>
   );
-}
+});

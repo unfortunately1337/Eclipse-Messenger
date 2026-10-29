@@ -365,6 +365,14 @@ body:has(.h-\[100dvh\]) {
 
 
 /* Shared geometry for chat dates and service notices. */
+video[data-video-recorder-preview]::-webkit-media-controls,
+video[data-video-recorder-preview]::-webkit-media-controls-panel,
+video[data-video-recorder-preview]::-webkit-media-controls-play-button,
+video[data-video-recorder-preview]::-webkit-media-controls-start-playback-button {
+  display: none !important;
+  -webkit-appearance: none;
+}
+
 .chat-service-pill {
   display: inline-flex;
   align-items: center;
@@ -449,6 +457,14 @@ html[data-app-transparent-visual] [data-chat-context-menu].app-panel-surface {
   backdrop-filter: var(--app-panel-filter) !important;
 }
 @keyframes emoji-idle { 0%, 100% { transform: rotate(-4deg) scale(.96); } 50% { transform: rotate(4deg) scale(1.04); } }
+.call-volume-slider { appearance: none; -webkit-appearance: none; background: transparent; outline: none; touch-action: pan-y; }
+.call-volume-slider::-webkit-slider-runnable-track { height: 4px; border-radius: 99px; background: linear-gradient(to right,var(--ui-accent-solid,#d4d6da) var(--call-volume,100%),rgba(255,255,255,.14) var(--call-volume,100%)); }
+.call-volume-slider::-moz-range-track { height: 4px; border-radius: 99px; background: rgba(255,255,255,.14); }
+.call-volume-slider::-moz-range-progress { height: 4px; border-radius: 99px; background: var(--ui-accent-solid,#d4d6da); }
+.call-volume-slider::-webkit-slider-thumb { appearance: none; -webkit-appearance: none; height: 14px; width: 14px; margin-top: -5px; border: 0; border-radius: 50%; background: #f4f4f5; box-shadow: 0 1px 4px #0005; transition: transform .15s; }
+.call-volume-slider::-moz-range-thumb { height: 14px; width: 14px; border: 0; border-radius: 50%; background: #f4f4f5; box-shadow: 0 1px 4px #0005; }
+.call-volume-slider:active::-webkit-slider-thumb { transform: scale(1.15); }
+.call-volume-slider:focus-visible { outline: 2px solid var(--ui-accent-solid,#d4d6da); outline-offset: 3px; border-radius: 8px; }
 .animate-emoji-idle { animation: emoji-idle 1.8s ease-in-out infinite; }
 .text-zinc-950 [data-emoji-adaptive] { --inline-emoji-filter: brightness(0); }
 .text-zinc-950 [data-forwarded-message]:not([data-forwarded-detached]) [data-verification-badge],

@@ -7,6 +7,7 @@ import { Check, Info, ShieldAlert, ShieldCheck, ShieldX, Globe, GlobeOff, Laptop
 import { AnimatePresence, motion } from "framer-motion";
 import { APP_TOAST_EVENT, showAppToast, type AppToastPayload } from "@/lib/client/app-toast";
 import { cn } from "@/lib/utils";
+import { createNetworkMonitor, NETWORK_CHECK_EVENT } from "@/lib/client/network-monitor";
 import { getPanelVisualStyle } from "@/lib/client/panel-visual";
 import { LIVE_BACKGROUND_STORAGE_KEY, LIVE_BACKGROUND_UPDATED_EVENT, loadLiveBackgroundSettings } from "@/lib/client/live-background";
 
@@ -86,119 +87,37 @@ export default function AppToastViewport() {
   }, []);
 
   useEffect(() => {
-    let isChecking = false;
-    let checkPending = false;
-    let isOffline = false;
-
-    let consecutiveFailures = 0;
-    const REQUIRED_FAILURES = 2;
-
-    const checkIsReallyOffline = async (): Promise<boolean> => {
-      if (typeof navigator !== "undefined" && !navigator.onLine) {
-        consecutiveFailures = REQUIRED_FAILURES;
+    let controller: AbortController | null = null;
+    const monitor = createNetworkMonitor(async () => {
+      controller = new AbortController();
+      const timer = window.setTimeout(() => controller?.abort(), 3000);
+      try {
+        await fetch(`/api/connection-health?t=${Date.now()}`, { cache: "no-store", credentials: "omit", signal: controller.signal });
         return true;
-      }
-
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 8000);
-
-      try {
-        await fetch(`/manifest.json?_t=${Date.now()}`, {
-          method: "GET",
-          signal: controller.signal,
-          headers: {
-            "Cache-Control": "no-cache, no-store, must-revalidate",
-            "Pragma": "no-cache",
-            "Expires": "0",
-          },
-        });
-        clearTimeout(timeoutId);
-        consecutiveFailures = 0;
-        return false;
-      } catch {
-        clearTimeout(timeoutId);
-        consecutiveFailures += 1;
-        // Only report offline after 2 consecutive failures to avoid false positives
-        return consecutiveFailures >= REQUIRED_FAILURES;
-      }
-    };
-
-    const verifyConnection = async () => {
-      if (isChecking) {
-        checkPending = true;
-        return;
-      }
-      isChecking = true;
-
-      try {
-        const reallyOffline = await checkIsReallyOffline();
-
-        if (reallyOffline) {
-          if (!isOffline) {
-            isOffline = true;
-            showAppToast({
-              type: "error",
-              title: t("Мессенджер работает в оффлайн-режиме"),
-              description: t("Проверьте подключение к интернету."),
-              icon: "globe-x",
-              durationMs: 4000,
-            });
-          }
-        } else {
-          if (isOffline) {
-            isOffline = false;
-            showAppToast({
-              type: "success",
-              title: t("Соединение восстановлено"),
-              description: t("Вы снова онлайн."),
-              icon: "globe",
-              durationMs: 3000,
-            });
-          }
-        }
-      } finally {
-        isChecking = false;
-        if (checkPending) {
-          checkPending = false;
-          setTimeout(() => {
-            void verifyConnection();
-          }, 1000);
-        }
-      }
-    };
-
-    const handleOfflineEvent = () => {
-      setTimeout(() => {
-        void verifyConnection();
-      }, 800);
-    };
-
-    const handleOnlineEvent = () => {
-      // Reset failure count on browser online event to speed up recovery toast
-      consecutiveFailures = 0;
-      setTimeout(() => {
-        void verifyConnection();
-      }, 1000);
-    };
-
-    const handleFocusEvent = () => {
-      // Add delay on focus to avoid false positives when switching tabs
-      setTimeout(() => {
-        void verifyConnection();
-      }, 1500);
-    };
-
-    window.addEventListener("offline", handleOfflineEvent);
-    window.addEventListener("online", handleOnlineEvent);
-    window.addEventListener("focus", handleFocusEvent);
-
-    // Initial check on mount
-    void verifyConnection();
-
+      } finally { clearTimeout(timer); controller = null; }
+    }, offline => {
+      showAppToast(offline ? {
+        type: "error", title: t("Нестабильное соединение с интернетом"),
+        description: t("Проверьте подключение к интернету."), icon: "globe-x", durationMs: 4000,
+      } : {
+        type: "success", title: t("Соединение восстановлено"),
+        description: t("Вы снова онлайн."), icon: "globe", durationMs: 3000,
+      });
+    }, () => !document.hidden);
+    const check = () => { void monitor.verify(); };
+    window.addEventListener("offline", check);
+    window.addEventListener("online", check);
+    window.addEventListener("focus", check);
+    window.addEventListener(NETWORK_CHECK_EVENT, check);
+    document.addEventListener("visibilitychange", check);
+    check();
     return () => {
-      window.removeEventListener("offline", handleOfflineEvent);
-      window.removeEventListener("online", handleOnlineEvent);
-      window.removeEventListener("focus", handleFocusEvent);
+      monitor.stop(); controller?.abort();
+      window.removeEventListener("offline", check);
+      window.removeEventListener("online", check);
+      window.removeEventListener("focus", check);
+      window.removeEventListener(NETWORK_CHECK_EVENT, check);
+      document.removeEventListener("visibilitychange", check);
     };
   }, [t]);
 

@@ -5,6 +5,12 @@ import type { RedisLike } from "./redis";
 // a cached session after Redis has deleted it or become unavailable.
 export function createRemoteRedis(real: Redis): RedisLike {
   return {
+    async setIfAbsent(key, value, seconds) {
+      return (await real.set(key, value, "EX", seconds, "NX")) === "OK";
+    },
+    async compareAndDelete(key, expected) {
+      return (await real.eval("if redis.call('GET', KEYS[1]) == ARGV[1] then return redis.call('DEL', KEYS[1]); end; return 0", 1, key, expected)) === 1;
+    },
     async consumeRollingLimit(key, limit, seconds, now) {
       // All workers reserve quota atomically. Deleting a story does not erase
       // its timestamp, and the window does not reset at a fixed boundary.

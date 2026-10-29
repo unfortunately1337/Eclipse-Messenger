@@ -13,6 +13,8 @@ export type RedisLike = {
   consumeRollingLimit: (key: string, limit: number, seconds: number, now: number) => Promise<number>;
   setIfExists: (key: string, value: string, seconds: number) => Promise<boolean>;
   compareAndSet: (key: string, expected: string, value: string, seconds: number) => Promise<boolean>;
+  setIfAbsent: (key: string, value: string, seconds: number) => Promise<boolean>;
+  compareAndDelete: (key: string, expected: string) => Promise<boolean>;
   del: (...keys: string[]) => Promise<number>;
   expire: (key: string, seconds: number) => Promise<number>;
   rpush: (key: string, ...values: string[]) => Promise<number>;
@@ -61,6 +63,20 @@ function createMemoryRedis(): RedisLike {
   };
 
   return {
+    async setIfAbsent(key, value, seconds) {
+      cleanup(key);
+      if (store.has(key)) return false;
+      store.set(key, value);
+      expirations.set(key, Date.now() + seconds * 1000);
+      return true;
+    },
+    async compareAndDelete(key, expected) {
+      cleanup(key);
+      if (store.get(key) !== expected) return false;
+      store.delete(key);
+      expirations.delete(key);
+      return true;
+    },
     async consumeRollingLimit(key, limit, seconds, now) {
       cleanup(key);
       const cutoff = now - seconds * 1000;

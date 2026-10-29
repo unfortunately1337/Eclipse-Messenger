@@ -10,7 +10,8 @@ export type EclipseEventType =
   | "suspicious_activity"
   | "session_terminated"
   | "security_recommendation"
-  | "bot_management";
+  | "bot_management"
+  | "call";
 
 export type EclipseMessageActionType =
   | "not_me"
@@ -35,6 +36,7 @@ export type EclipseSystemPayload = {
   botToken?: string;
   actions?: EclipseMessageAction[];
   metadata?: {
+    call?: import("./call-history").CallMessageData;
     sessionId?: string;
     ip?: string | null;
     userAgent?: string | null;

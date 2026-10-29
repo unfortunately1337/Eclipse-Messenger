@@ -8,20 +8,55 @@ const pending = new Map<string, Promise<void>>();
 const failures = new Map<string, number>();
 const scopedUrls = new Map<string, Set<string>>();
 const legacyRestoredUrls = new Map<string, string>();
+const downloads = new Set<AbortController>();
+const waitingDownloads: Array<() => void> = [];
+const retryTimers = new Map<string, ReturnType<typeof setTimeout>>();
+const retryCounts = new Map<string, number>();
 let generation = 0;
 
 async function fetchAttachment(url: string, requestedGeneration: number) {
   for (let attempt = 0; ; attempt += 1) {
     if (requestedGeneration !== generation) throw new Error("Account changed");
+    while (downloads.size >= 3) {
+      await new Promise<void>(resolve => waitingDownloads.push(resolve));
+      if (requestedGeneration !== generation) throw new Error("Account changed");
+    }
     const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 45_000);
+    downloads.add(controller);
+    let timer = setTimeout(() => controller.abort(), 45_000);
+    const maximum = setTimeout(() => controller.abort(), 10 * 60_000);
     try {
       const response = await fetch(url, { credentials: "same-origin", cache: "no-store", signal: controller.signal });
-      if (response.ok) return await response.arrayBuffer();
+      if (response.ok) {
+        clearTimeout(timer);
+        timer = setTimeout(() => controller.abort(), 45_000);
+        const limit = 100 * 1024 * 1024 + 32;
+        if (Number(response.headers.get("content-length")) > limit) throw new Error("Attachment too large");
+        if (!response.body) return await response.arrayBuffer();
+        const reader = response.body.getReader();
+        const chunks: Uint8Array[] = [];
+        let length = 0;
+        try {
+          for (;;) {
+            const chunk = await reader.read();
+            if (chunk.done) break;
+            length += chunk.value.byteLength;
+            if (length > limit) throw new Error("Attachment too large");
+            chunks.push(chunk.value);
+            // This is an inactivity deadline, not a 45-second cap on a large video.
+            clearTimeout(timer);
+            timer = setTimeout(() => controller.abort(), 45_000);
+          }
+        } finally { await reader.cancel().catch(() => {}); reader.releaseLock(); }
+        const bytes = new Uint8Array(length);
+        let offset = 0;
+        for (const chunk of chunks) { bytes.set(chunk, offset); offset += chunk.byteLength; }
+        return bytes.buffer;
+      }
       if (attempt >= 2 || (response.status < 500 && response.status !== 429)) throw new Error("Attachment unavailable");
     } catch (error) {
-      if (attempt >= 2 || (error instanceof Error && error.message === "Attachment unavailable")) throw error;
-    } finally { clearTimeout(timer); }
+      if (requestedGeneration !== generation || attempt >= 2 || (error instanceof Error && ["Attachment unavailable", "Attachment too large"].includes(error.message))) throw error;
+    } finally { clearTimeout(timer); clearTimeout(maximum); controller.abort(); downloads.delete(controller); waitingDownloads.shift()?.(); }
     await new Promise(resolve => setTimeout(resolve, 250 * 2 ** attempt));
   }
 }
@@ -31,15 +66,21 @@ function decode(value: string) { return Uint8Array.from(atob(value), c => c.char
 type Envelope = { v: 1; k: string; i: string; m: string; s: string; e: number | null };
 
 export async function encryptMediaBlob(blob: Blob) {
+  const uploadGeneration = generation;
   const rawKey = crypto.getRandomValues(new Uint8Array(32));
   const iv = crypto.getRandomValues(new Uint8Array(12));
   const key = await crypto.subtle.importKey("raw", rawKey, "AES-GCM", false, ["encrypt"]);
   const ciphertext = await crypto.subtle.encrypt({ name: "AES-GCM", iv, additionalData: aad }, key, await blob.arrayBuffer());
   return {
     blob: new Blob([ciphertext], { type: "application/octet-stream" }),
-    protectUrl(url: string, scope: string, expiresAt?: string | null) {
+    protectUrl(url: string, scope: string, expiresAt?: string | null, options?: { cacheOriginal?: boolean }) {
       const envelope: Envelope = { v: 1, k: encode(rawKey), i: encode(iv), m: blob.type || "application/octet-stream", s: scope, e: expiresAt ? Date.parse(expiresAt) : null };
-      return url + PREFIX + encodeURIComponent(JSON.stringify(envelope));
+      const protectedUrl = url + PREFIX + encodeURIComponent(JSON.stringify(envelope));
+      if (options?.cacheOriginal && uploadGeneration === generation && (envelope.e === null || envelope.e > Date.now())) {
+        const urls = scopedUrls.get(scope) ?? new Set<string>(); urls.add(protectedUrl); scopedUrls.set(scope, urls);
+        cacheMediaBlobUrl(protectedUrl, URL.createObjectURL(blob));
+      }
+      return protectedUrl;
     },
   };
 }
@@ -73,8 +114,23 @@ export function resolveEncryptedMediaUrl(src: string): string {
       if (currentGeneration !== generation || (envelope.e !== null && envelope.e <= Date.now())) return;
       const url = URL.createObjectURL(new Blob([plaintext], { type: envelope.m }));
       cacheMediaBlobUrl(src, url);
+      retryCounts.delete(src);
       window.dispatchEvent(new Event("eclipse:media-ready"));
-    })().catch(() => { failures.set(src, Date.now()); }).finally(() => { pending.delete(src); });
+    })().catch(() => {
+      if (currentGeneration !== generation) return;
+      failures.set(src, Date.now());
+      // Recover a failed download even when nothing else causes React to rerender.
+      const count = retryCounts.get(src) ?? 0;
+      if (count < 1 && !retryTimers.has(src)) {
+        retryCounts.set(src, count + 1);
+        retryTimers.set(src, setTimeout(() => {
+          retryTimers.delete(src);
+          if (currentGeneration !== generation || hasCachedMediaUrl(src)) return;
+          failures.delete(src);
+          resolveEncryptedMediaUrl(src);
+        }, 15_100));
+      }
+    }).finally(() => { if (pending.get(src) === run) pending.delete(src); });
     pending.set(src, run);
   }
   return "";
@@ -82,6 +138,11 @@ export function resolveEncryptedMediaUrl(src: string): string {
 
 export function clearEncryptedMedia(scope?: string) {
   generation += 1;
+  downloads.forEach(controller => controller.abort());
+  downloads.clear();
+  waitingDownloads.splice(0).forEach(release => release());
+  retryTimers.forEach(timer => clearTimeout(timer)); retryTimers.clear(); retryCounts.clear();
+  pending.clear();
   if (scope) {
     for (const src of scopedUrls.get(scope) ?? []) invalidateCachedMediaUrl(src);
     scopedUrls.delete(scope);

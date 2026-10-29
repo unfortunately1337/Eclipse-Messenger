@@ -24,9 +24,11 @@ export type LiveBackgroundSettings = {
   customThemeEnabled?: boolean;
 };
 
-export const LIVE_BACKGROUND_STORAGE_KEY = "eclipse:settings:live-background:v1";
+// Keep the new authoritative record away from writes by older open tabs.
+export const LIVE_BACKGROUND_STORAGE_KEY = "eclipse:settings:appearance:v2";
+export const LEGACY_LIVE_BACKGROUND_STORAGE_KEY = "eclipse:settings:live-background:v1";
 export const CHAT_THEME_SESSION_KEY = "eclipse:settings:chat-theme:session:v1";
-// Invite links can open in a fresh tab, where the chat's session storage is absent.
+// Legacy invitation preview: also used to recover themes from older versions.
 export const CHAT_THEME_PREVIEW_KEY = "eclipse:settings:chat-theme:preview:v1";
 export const LIVE_BACKGROUND_UPDATED_EVENT = "eclipse:live-background:updated";
 
@@ -81,29 +83,72 @@ export function normalizeLiveBackgroundSettings(
   };
 }
 
-export function loadLiveBackgroundSettings(options?: { previewLastTheme?: boolean }): LiveBackgroundSettings {
+// Version 2 stores the complete appearance atomically, including custom themes.
+const STORAGE_VERSION = 2;
+
+export function loadLiveBackgroundSettings(_options?: { previewLastTheme?: boolean }): LiveBackgroundSettings {
+  // Preserve the old invite-call signature; all callers now restore durable themes.
+  void _options;
   if (typeof window === "undefined") return DEFAULT_LIVE_BACKGROUND_SETTINGS;
-  const read = (storage: () => Storage, key: string): Partial<LiveBackgroundSettings> => {
+  const read = (storage: () => Storage, key: string): Record<string, unknown> => {
     try {
       const raw = storage().getItem(key);
       const parsed = raw ? JSON.parse(raw) : null;
       return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : {};
     } catch { return {}; }
   };
-  // A damaged session theme must not reset the independent device preferences.
-  const appearance = read(() => window.localStorage, LIVE_BACKGROUND_STORAGE_KEY);
-  const previewTheme = options?.previewLastTheme ? read(() => window.localStorage, CHAT_THEME_PREVIEW_KEY) : {};
-  const sessionTheme = read(() => window.sessionStorage, CHAT_THEME_SESSION_KEY);
-  return normalizeLiveBackgroundSettings({ ...appearance, neatPreset: "none", customTheme: null, customThemeEnabled: false, ...previewTheme, ...sessionTheme });
+  const appearance = {
+    ...read(() => window.localStorage, LEGACY_LIVE_BACKGROUND_STORAGE_KEY),
+    ...read(() => window.localStorage, LIVE_BACKGROUND_STORAGE_KEY),
+  };
+  // An old tab's session must never overwrite a new persistent save or deletion.
+  if (appearance.storageVersion === STORAGE_VERSION) return normalizeLiveBackgroundSettings(appearance);
+
+  const preview = read(() => window.localStorage, CHAT_THEME_PREVIEW_KEY);
+  const session = read(() => window.sessionStorage, CHAT_THEME_SESSION_KEY);
+  const recoveredTheme = normalizeCustomChatTheme(session.customTheme)
+    ?? normalizeCustomChatTheme(appearance.customTheme)
+    ?? normalizeCustomChatTheme(preview.customTheme);
+  // Recover saved definitions even if a newer, empty tab has a null session theme.
+  const recovered = normalizeLiveBackgroundSettings({ ...appearance, ...preview, ...session, customTheme: recoveredTheme } as Partial<LiveBackgroundSettings>);
+  if (recoveredTheme) {
+    try { persistLiveBackgroundSettings(recovered); } catch { /* Keep legacy data readable when persistent storage is unavailable. */ }
+  }
+  return recovered;
+}
+
+function persistLiveBackgroundSettings(normalized: LiveBackgroundSettings) {
+  const storage = window.localStorage;
+  const serialized = JSON.stringify({ ...normalized, storageVersion: STORAGE_VERSION });
+  try {
+    storage.setItem(LIVE_BACKGROUND_STORAGE_KEY, serialized);
+  } catch (failure) {
+    // Old image themes were duplicated in the preview key and could exhaust quota.
+    const quota = failure && typeof failure === "object" && "name" in failure && failure.name === "QuotaExceededError";
+    const backup = quota ? storage.getItem(CHAT_THEME_PREVIEW_KEY) : null;
+    if (!backup) throw failure;
+    storage.removeItem(CHAT_THEME_PREVIEW_KEY);
+    try { storage.setItem(LIVE_BACKGROUND_STORAGE_KEY, serialized); }
+    catch (retryFailure) {
+      try { storage.setItem(CHAT_THEME_PREVIEW_KEY, backup); } catch { /* Preserve the original failure. */ }
+      throw retryFailure;
+    }
+  }
+  // Only discard legacy copies after the authoritative write has succeeded.
+  try { storage.removeItem(CHAT_THEME_PREVIEW_KEY); } catch { /* Persistent save is already committed. */ }
+  try { window.sessionStorage.removeItem(CHAT_THEME_SESSION_KEY); } catch { /* Session storage is optional. */ }
 }
 
 export function saveLiveBackgroundSettings(next: LiveBackgroundSettings) {
   if (typeof window === "undefined") return;
-  const { neatPreset, customTheme, customThemeEnabled, ...appearance } = next;
-  window.sessionStorage.setItem(CHAT_THEME_SESSION_KEY, JSON.stringify({ neatPreset, customTheme, customThemeEnabled }));
-  window.localStorage.setItem(LIVE_BACKGROUND_STORAGE_KEY, JSON.stringify(appearance));
-  try {
-    window.localStorage.setItem(CHAT_THEME_PREVIEW_KEY, JSON.stringify({ neatPreset, customTheme, customThemeEnabled }));
-  } catch { /* A full local store must not prevent selecting a theme in this tab. */ }
-  window.dispatchEvent(new CustomEvent(LIVE_BACKGROUND_UPDATED_EVENT, { detail: next }));
+  const normalized = normalizeLiveBackgroundSettings(next);
+  persistLiveBackgroundSettings(normalized);
+  window.dispatchEvent(new CustomEvent(LIVE_BACKGROUND_UPDATED_EVENT, { detail: normalized }));
+}
+
+export function updateLiveBackgroundSettings(patch: Partial<LiveBackgroundSettings>) {
+  // Read the latest stored state, not a potentially stale React render or tab.
+  const next = normalizeLiveBackgroundSettings({ ...loadLiveBackgroundSettings(), ...patch });
+  saveLiveBackgroundSettings(next);
+  return next;
 }

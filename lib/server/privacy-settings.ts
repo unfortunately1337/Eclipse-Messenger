@@ -18,6 +18,9 @@ export type PrivacySettings = {
   allowProfileLink: boolean;
   allowGroupAdd: boolean;
   firstMessagePolicy: FirstMessagePolicy;
+  callPolicy: PrivacyAudience;
+  callAllowUserIds: string[];
+  callDenyUserIds: string[];
   newChatAutoDeleteDays: AutoDeleteDays;
   autoDeleteReadMessages: boolean;
   hideUsername: boolean;
@@ -43,6 +46,9 @@ export const DEFAULT_PRIVACY_SETTINGS: PrivacySettingsInput = {
   allowProfileLink: true,
   allowGroupAdd: true,
   firstMessagePolicy: "all",
+  callPolicy: "all",
+  callAllowUserIds: [],
+  callDenyUserIds: [],
   newChatAutoDeleteDays: null,
   autoDeleteReadMessages: false,
   hideUsername: false,
@@ -158,6 +164,8 @@ export async function getPrivacySettings(userId: string): Promise<PrivacySetting
     showMediaActivity: stored.showMediaActivity ?? !legacyHideActivity,
     presenceExceptionUserIds: parseStringArray(stored.presenceExceptionUserIds ?? legacyExceptions),
     contactUserIds: contacts.map((contact) => contact.peerId),
+    callAllowUserIds: parseStringArray(stored.callAllowUserIds),
+    callDenyUserIds: parseStringArray(stored.callDenyUserIds),
   };
 }
 
@@ -216,6 +224,8 @@ export async function getPrivacySettingsBatch(userIds: string[]): Promise<Map<st
       showMediaActivity: stored.showMediaActivity ?? !legacyHideActivity,
       presenceExceptionUserIds: parseStringArray(stored.presenceExceptionUserIds ?? legacyExceptions),
       contactUserIds: contactsByOwner.get(userId) ?? [],
+      callAllowUserIds: parseStringArray(stored.callAllowUserIds),
+      callDenyUserIds: parseStringArray(stored.callDenyUserIds),
     });
   });
 
@@ -227,6 +237,8 @@ export async function savePrivacySettings(userId: string, settings: PrivacySetti
     ...DEFAULT_PRIVACY_SETTINGS,
     ...settings,
     presenceExceptionUserIds: parseStringArray(settings.presenceExceptionUserIds),
+    callAllowUserIds: parseStringArray(settings.callAllowUserIds),
+    callDenyUserIds: parseStringArray(settings.callDenyUserIds),
   };
   const [updated] = await Promise.all([
     prisma.user.update({
@@ -306,4 +318,11 @@ export function canUserStartConversation(senderUserId: string, recipientUserId: 
 // Compatibility for older callers while activity routes are migrated separately.
 export function canViewerSeeActivityStatus(viewerUserId: string | null | undefined, subjectUserId: string, settings: PrivacySettings) {
   return canViewerSeeTypingStatus(viewerUserId, subjectUserId, settings);
+}
+
+export function canUserCall(senderId: string, recipientId: string, settings: PrivacySettings) {
+  if (senderId === recipientId) return false;
+  if (settings.callDenyUserIds.includes(senderId)) return false;
+  if (settings.callPolicy === "none") return settings.callAllowUserIds.includes(senderId);
+  return settings.callPolicy === "all" || (settings.callPolicy === "contacts" && settings.contactUserIds.includes(senderId));
 }
