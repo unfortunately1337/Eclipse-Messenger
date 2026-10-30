@@ -2025,5 +2025,8 @@
   "Камера не найдена. Подключите камеру и попробуйте ещё раз.": "No camera found. Connect a camera and try again.",
   "Камера занята другим приложением. Закройте его и попробуйте ещё раз.": "The camera is in use by another app. Close it and try again.",
   "Вы демонстрируете свой экран": "You are sharing your screen",
-  "Не удалось сохранить оформление. Проверьте свободное место и настройки хранилища браузера.": "Could not save appearance. Check available space and browser storage settings."
+  "Не удалось сохранить оформление. Проверьте свободное место и настройки хранилища браузера.": "Could not save appearance. Check available space and browser storage settings.",
+  "Другая камера недоступна на этом устройстве": "Another camera is not available on this device",
+  "Не удалось перевернуть камеру. Проверьте доступ к камере.": "Could not switch cameras. Check camera access.",
+  "Поворот": "Flip"
 }

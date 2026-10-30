@@ -47,7 +47,7 @@ function pickInitialsPalette(displayName: string, link: string) {
   return INITIALS_AVATAR_PALETTE[hash % INITIALS_AVATAR_PALETTE.length]!;
 }
 
-export function generateDefaultAvatarDataUrl(displayName: string, link: string) {
+export function generateDefaultAvatarDataUrl(displayName: string, link: string, shape: "circle" | "square" = "circle") {
   const initials = buildInitials(displayName);
   const [startColor, endColor] = pickInitialsPalette(displayName, link);
   const safeInitials = escapeXml(initials);
@@ -59,7 +59,7 @@ export function generateDefaultAvatarDataUrl(displayName: string, link: string) 
       <stop offset="1" stop-color="${endColor}" />
     </linearGradient>
   </defs>
-  <rect width="320" height="320" rx="160" fill="url(#bg)" />
+  <rect width="320" height="320" rx="${shape === "square" ? 0 : 160}" fill="url(#bg)" />
   <text
     x="160"
     y="172"

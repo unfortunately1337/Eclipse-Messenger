@@ -147,7 +147,21 @@ The small preview switches between the local and remote view; if only the local
 camera is available, it becomes the default main view. Screen shares keep their
 separate contain-fit presentation. Camera transitions use opacity/transform.
 
+When the local camera is enabled, a switch-camera control animates into the row
+immediately to the right of the camera button. It restarts the published video track using
+the other phone lens (or the next desktop webcam) without replacing the room or
+microphone. Rear-camera previews are not mirrored. If switching fails, the
+previous camera is restored and an error toast explains the failure. A camera
+acquired after hangup is stopped. The peer-avatar fallback fills the complete
+preview tile, including generated initials, with only the tile's outer rounding.
+
 On camera-off, the camera layer finishes its exit before the avatar returns. On
 call completion, green retraction waits for that avatar. Dismissal waits for the
 return effect if it takes longer than the normal result-label delay; parent
 presentation retention includes a margin for the exit animation.
+
+Connection fill takes about 1.1 seconds, with a smooth accelerating/decelerating
+curve rather than an immediate burst. Failure fill takes 0.85 seconds; a completed
+call retracts green into the avatar over 1.05 seconds. Short calls finish their
+entrance before reversing it. The result label remains visible before dismissal,
+and the presentation retention budget covers both effects and the window exit.

@@ -4,6 +4,7 @@ import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState, type 
 import { createPortal } from "react-dom";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { ChevronDown, MonitorUp, Phone, Volume2 } from "lucide-react";
+import { FaArrowsRotate } from "react-icons/fa6";
 import { IoMdMore, IoIosCall } from "react-icons/io";
 import { IoCall } from "react-icons/io5";
 import { FaMicrophone, FaMicrophoneSlash, FaVolumeMute } from "react-icons/fa";
@@ -12,7 +13,7 @@ import { MediaAvatar, MediaBanner } from "@/components/ui/media";
 import { useTranslation } from "@/components/LocaleProvider";
 import type { CallSignal } from "@/lib/client/call-connection-quality";
 import type { CallView } from "@/lib/calls";
-import { CALL_END_FEEDBACK_MS, CALL_END_EFFECT_MS, CALL_RETURN_SECONDS, CALL_EXIT_SECONDS } from "@/lib/client/call-window-motion";
+import { CALL_CONNECT_SECONDS, CALL_END_FEEDBACK_MS, CALL_END_EFFECT_MS, CALL_RETURN_SECONDS, CALL_EXIT_SECONDS } from "@/lib/client/call-window-motion";
 import { menuPopoverMotion } from "@/lib/client/panel-motion";
 import { getChatHeaderVisualStyle, getPanelVisualStyle } from "@/lib/client/panel-visual";
 import { watchMediaPortalTargets } from "@/lib/client/media-portal-targets";
@@ -34,6 +35,7 @@ type Props = {
   video?: ReactNode; localVideo?: ReactNode; secondaryVideo?: ReactNode; sharedPreview?: ReactNode; screenVideo?: boolean; localScreen?: boolean; screenOwner?: string; audioBlocked: boolean; canShare: boolean;
   onMinimize: () => void; onExpand: () => void; onAccept: () => void; onHangup: () => void;
   onMicrophone: () => void; onCamera: () => void; onSound: () => void; onShare: () => void; onEnableAudio: () => void;
+  onFlipCamera?: () => void; cameraSwitching?: boolean;
 };
 
 function AnimatedStatus({ text, timer }: { text: string; timer?: string | null }) {
@@ -83,6 +85,9 @@ export default function PersonalCallWindow(props: Props) {
   const failed = Boolean(props.endOutcome && props.endOutcome !== "completed");
   const completed = props.endOutcome === "completed";
   const terminal = Boolean(props.endOutcome);
+  // Complete an interrupted entrance before reversing it. This also prevents
+  // its completion callback from prematurely dismissing the return animation.
+  const returning = completed && avatarReady && waveComplete;
   const [terminalSettled, setTerminalSettled] = useState(false);
   const [closeRequested, setCloseRequested] = useState(false);
   const closingWindow = closeRequested && (!completed || terminalSettled);
@@ -92,10 +97,10 @@ export default function PersonalCallWindow(props: Props) {
     return () => clearTimeout(close);
   }, [terminal]);
   useEffect(() => {
-    if (!terminal || (completed && !avatarReady)) return;
+    if (!terminal || (completed && !returning)) return;
     const settle = window.setTimeout(() => setTerminalSettled(true), completed ? CALL_RETURN_SECONDS * 1000 + 30 : CALL_END_EFFECT_MS);
     return () => clearTimeout(settle);
-  }, [terminal, completed, avatarReady]);
+  }, [terminal, completed, returning]);
   const showWave = failed || ((wasConnected || connected) && !terminalSettled);
   const active = (props.active ?? connected) && !props.endOutcome;
   useLayoutEffect(() => {
@@ -211,7 +216,7 @@ export default function PersonalCallWindow(props: Props) {
             <div className="absolute inset-0 opacity-[0.06]" style={{ background }} />
             <CallAmbientRibbon glass={props.glass} connecting={connecting} reducedMotion={Boolean(reducedMotion)} />
           </div>}
-          {showWave && <motion.div ref={connectionWave} data-call-connected-wave={failed ? undefined : true} data-call-outcome-wave={failed ? "failed" : completed ? "completed" : "connected"} aria-hidden className="pointer-events-none absolute rounded-full" style={{ background: failed ? "radial-gradient(circle,rgba(152,48,56,0.68) 0%,rgba(116,34,43,0.76) 45%,rgba(75,23,31,0.86) 75%,rgba(49,19,25,0.92) 100%)" : "radial-gradient(circle,rgba(34,112,78,0.68) 0%,rgba(25,83,61,0.76) 45%,rgba(17,57,43,0.86) 75%,rgba(14,40,33,0.92) 100%)" }} initial={waveComplete || reducedMotion ? false : { scale: 0, opacity: 0 }} animate={{ scale: completed && avatarReady ? 0 : 1, opacity: 1 }} transition={{ duration: reducedMotion ? 0 : completed ? CALL_RETURN_SECONDS : failed ? 0.3 : 0.85, ease: completed ? [0.65, 0, 0.35, 1] : [0.16, 1, 0.3, 1] }} onAnimationComplete={() => { setWaveComplete(true); if (completed && avatarReady) setTerminalSettled(true); }} />}
+          {showWave && <motion.div ref={connectionWave} data-call-connected-wave={failed ? undefined : true} data-call-outcome-wave={failed ? "failed" : completed ? "completed" : "connected"} aria-hidden className="pointer-events-none absolute rounded-full" style={{ willChange: "transform", backfaceVisibility: "hidden", background: failed ? "radial-gradient(circle,rgba(152,48,56,0.68) 0%,rgba(116,34,43,0.76) 45%,rgba(75,23,31,0.86) 75%,rgba(49,19,25,0.92) 100%)" : "radial-gradient(circle,rgba(34,112,78,0.68) 0%,rgba(25,83,61,0.76) 45%,rgba(17,57,43,0.86) 75%,rgba(14,40,33,0.92) 100%)" }} initial={waveComplete || reducedMotion ? false : { scale: 0, opacity: 1 }} animate={{ scale: returning ? 0 : 1, opacity: 1 }} transition={{ duration: reducedMotion ? 0 : returning ? CALL_RETURN_SECONDS : failed ? CALL_END_EFFECT_MS / 1000 : CALL_CONNECT_SECONDS, ease: returning ? [0.4, 0, 0.6, 1] : [0.4, 0, 0.2, 1] }} onAnimationComplete={() => { if (returning) setTerminalSettled(true); else setWaveComplete(true); }} />}
           {!showWave && !terminal && props.glass && isMediaBackgroundUrl(backgroundUrl) && <div className="pointer-events-none absolute -inset-8 opacity-20 blur-2xl"><MediaBanner src={backgroundUrl} alt="" className="h-full w-full" mediaClassName="object-cover" autoPlay={false} /></div>}
           <AnimatePresence initial={false} onExitComplete={() => { if (!cameraMode) setCameraLayerVisible(false); }}>
             {cameraMode && <motion.div key={ownVideoExpanded ? "camera-local" : "camera-remote"} data-call-camera-layer data-call-main-video={ownVideoExpanded ? "local" : "remote"} className="pointer-events-none absolute inset-0 z-[5] overflow-hidden bg-black [&_video]:object-cover" initial={{ opacity: 0, scale: reducedMotion ? 1 : 1.025 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: reducedMotion ? 1 : 1.015 }} transition={{ duration: reducedMotion ? 0 : 0.24, ease: [0.22, 1, 0.36, 1] }}>
@@ -251,7 +256,7 @@ export default function PersonalCallWindow(props: Props) {
               {props.sharedPreview && <div aria-label={t("Вы демонстрируете свой экран")} className="aspect-video w-28 overflow-hidden rounded-[14px] bg-black/60 shadow-lg md:w-40">{props.sharedPreview}</div>}
               {props.secondaryVideo && <div aria-label={name} className="aspect-video w-28 overflow-hidden rounded-[14px] bg-black/60 shadow-lg md:w-40">{props.secondaryVideo}</div>}
               {props.localVideo && <motion.button type="button" data-call-video-swap aria-label={t(ownVideoExpanded ? "Вернуть видео собеседника" : "Развернуть своё видео")} aria-pressed={ownVideoExpanded} onClick={() => setOwnCameraFocused(!ownVideoExpanded)} whileTap={{ scale: 0.97 }} className="relative aspect-video w-28 overflow-hidden rounded-[14px] bg-black/60 shadow-lg focus-visible:outline-2 focus-visible:outline-white/80 md:w-40">
-                {ownVideoExpanded ? props.video ?? <MediaAvatar src={avatarUrl ?? undefined} alt={name} className="h-full w-full" fallbackText={name.slice(0, 1)} /> : props.localVideo}
+                {ownVideoExpanded ? props.video ?? <MediaAvatar src={avatarUrl ?? undefined} alt={name} className="h-full w-full" shape="square" fallbackText={name.slice(0, 1)} /> : props.localVideo}
                 <span className="absolute inset-x-0 bottom-0 truncate bg-black/40 px-2 py-1 text-left text-[10px] text-white">{ownVideoExpanded ? name : t("Вы")}</span>
               </motion.button>}
             </div>}
@@ -266,10 +271,11 @@ export default function PersonalCallWindow(props: Props) {
               <div className="flex flex-col items-center gap-2"><button type="button" disabled={busy} onClick={props.onHangup} aria-label={t("Отклонить")} className={`${control} h-16 w-16 text-red-400 hover:text-red-300`}><IoCall size={27} /></button><span className="text-[11px] text-zinc-400">{t("Отклонить")}</span></div>
               {minimizeControl}
               <div className="flex flex-col items-center gap-2"><button type="button" disabled={busy} onClick={props.onAccept} aria-label={t("Принять")} className={`${control} h-16 w-16 text-emerald-400 hover:text-emerald-300`}><IoCall size={27} /></button><span className="text-[11px] text-zinc-400">{t("Принять")}</span></div>
-            </div> : owned ? <div className="flex w-full items-start justify-center gap-3 sm:gap-4 md:gap-6">
+            </div> : owned ? <div data-call-controls className={`mx-auto flex w-full max-w-[480px] items-start justify-center gap-2 min-[360px]:gap-3 sm:gap-4 md:gap-6 ${props.camera && props.onFlipCamera ? "[--call-flip-width:40px] sm:[--call-flip-width:48px] [&>div]:w-10 [&>div]:shrink-0 [&>div>button]:h-10 [&>div>button]:w-10 [&>div>span]:text-[9px] min-[360px]:[&>div>span]:text-[10px] sm:[&>div]:w-auto sm:[&>div>button]:h-12 sm:[&>div>button]:w-12 md:[&>div>span]:text-[11px]" : ""}`}>
               {minimizeControl}
               <div className="flex flex-col items-center gap-2"><button type="button" disabled={controlsDisabled} onClick={props.onMicrophone} aria-label={t(props.microphone ? "Выключить микрофон" : "Включить микрофон")} aria-pressed={props.microphone} className={`${control} h-12 w-12 ${props.microphone ? "text-zinc-200" : "text-white"}`}>{props.microphone ? <FaMicrophone size={21} /> : <FaMicrophoneSlash size={21} />}</button><span className="text-[10px] text-zinc-400 md:text-[11px]">{t("Микрофон")}</span></div>
               <div className="flex flex-col items-center gap-2"><button type="button" disabled={controlsDisabled} onClick={() => { setOwnCameraFocused(null); props.onCamera(); }} aria-label={t(props.camera ? "Выключить камеру" : "Включить камеру")} aria-pressed={props.camera} className={`${control} h-12 w-12 ${props.camera ? "text-white" : "text-zinc-200"}`}>{props.camera ? <BsCameraVideoFill size={21} /> : <BsCameraVideoOffFill size={21} />}</button><span className="text-[10px] text-zinc-400">{t("Камера")}</span></div>
+              <AnimatePresence initial={false}>{props.camera && props.onFlipCamera && <motion.div key="flip-camera" initial={{ width: 0, opacity: 0, x: -8, scale: 0.8, marginLeft: -6 }} animate={{ width: "var(--call-flip-width,48px)", opacity: 1, x: 0, scale: 1, marginLeft: 0 }} exit={{ width: 0, opacity: 0, x: -8, scale: 0.8, marginLeft: -6 }} transition={{ duration: reducedMotion ? 0 : 0.24, ease: [0.22, 1, 0.36, 1] }} className="flex shrink-0 flex-col items-center gap-2"><button type="button" data-call-camera-flip onClick={props.onFlipCamera} disabled={controlsDisabled} aria-label={t("Перевернуть камеру")} aria-busy={props.cameraSwitching} className={`${control} h-12 w-12 text-zinc-200`}><motion.span animate={{ rotate: props.cameraSwitching ? 180 : 0 }} transition={{ duration: 0.25 }}><FaArrowsRotate size={18} /></motion.span></button><span className="whitespace-nowrap text-[10px] text-zinc-400">{t("Поворот")}</span></motion.div>}</AnimatePresence>
               <div className="flex flex-col items-center gap-2"><button type="button" disabled={controlsDisabled} onClick={props.onShare} aria-label={t(props.sharing ? "Остановить показ экрана" : "Показать экран")} aria-pressed={props.sharing} className={control + " h-12 w-12 " + (props.sharing ? "text-emerald-400" : "text-zinc-200")}><MonitorUp size={21} /></button><span className="text-[10px] text-zinc-400">{t("Экран")}</span></div>
               <div className="flex flex-col items-center gap-2"><button type="button" disabled={busy} onClick={props.onHangup} aria-label={t("Завершить звонок")} className={`${control} h-12 w-12 text-red-400 hover:text-red-300`}><IoIosCall size={23} /></button><span className="text-[10px] text-zinc-400">{t("Завершить")}</span></div>
             </div> : null}

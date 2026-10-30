@@ -16,8 +16,9 @@ import { useParticipantAudio } from "../../hooks/useParticipantAudio";
 import { selectCallVideo, visibleCallTrack, screenShareError } from "@/lib/client/call-screen-share";
 import { createCallRenderScheduler } from "@/lib/client/call-render-scheduler";
 import { callConnectionSignal } from "@/lib/client/call-connection-quality";
+import { switchCallCamera, type CallCameraFacing } from "@/lib/client/call-camera";
 
-const TrackElement = memo(function TrackElement({ track, local, audio, muted = false, volume = 1 }: { track: Track; local: boolean; audio: boolean; muted?: boolean; volume?: number }) {
+const TrackElement = memo(function TrackElement({ track, local, audio, muted = false, volume = 1, mirror = true }: { track: Track; local: boolean; audio: boolean; muted?: boolean; volume?: number; mirror?: boolean }) {
   const container = useRef<HTMLDivElement>(null);
   useEffect(() => {
     const element = track.attach();
@@ -26,6 +27,9 @@ const TrackElement = memo(function TrackElement({ track, local, audio, muted = f
     container.current?.appendChild(element);
     return () => { track.detach(element); element.remove(); };
   }, [track, local]);
+  useEffect(() => {
+    container.current?.querySelector("video")?.classList.toggle("-scale-x-100", local && track.source === "camera" && mirror);
+  }, [track, local, mirror]);
   useEffect(() => {
     const element = container.current?.querySelector("audio");
     if (element) { element.muted = muted; element.volume = volume; }
@@ -51,6 +55,8 @@ export const CallRoomPanel = memo(function CallRoomPanel({ call, selfId, glass, 
   }, [error, t]);
   const [minimized, setMinimized] = useState(false);
   const [mediaBusy, setMediaBusy] = useState(false);
+  const [cameraSwitching, setCameraSwitching] = useState(false);
+  const [cameraFacing, setCameraFacing] = useState<CallCameraFacing>("user");
   const mediaLock = useRef(false);
   const [elapsed, setElapsed] = useState(0);
   const [audioBlocked, setAudioBlocked] = useState(false);
@@ -142,7 +148,7 @@ export const CallRoomPanel = memo(function CallRoomPanel({ call, selfId, glass, 
     try {
       if (kind === "mic") await room.localParticipant.setMicrophoneEnabled(!room.localParticipant.isMicrophoneEnabled);
       if (kind === "camera") {
-        await room.localParticipant.setCameraEnabled(!room.localParticipant.isCameraEnabled);
+        await room.localParticipant.setCameraEnabled(!room.localParticipant.isCameraEnabled, { facingMode: cameraFacing });
         if (intentionalHangup.current || room.state !== "connected") await room.localParticipant.setCameraEnabled(false);
       }
       if (kind === "screen") {
@@ -166,7 +172,31 @@ export const CallRoomPanel = memo(function CallRoomPanel({ call, selfId, glass, 
           : "Не удалось включить камеру. Проверьте разрешения браузера.");
       } else setError("Не удалось переключить устройство. Проверьте разрешения браузера.");
     } finally { mediaLock.current = false; setMediaBusy(false); }
-  }, [room, callEnded, t]);
+  }, [room, callEnded, cameraFacing, t]);
+
+  const flipCamera = useCallback(async () => {
+    if (!room || room.state !== "connected" || mediaLock.current || callEnded || intentionalHangup.current || !room.localParticipant.isCameraEnabled) return;
+    const track = room.localParticipant.getTrackPublication("camera" as Track.Source)?.videoTrack;
+    if (!track) return;
+    mediaLock.current = true;
+    setMediaBusy(true);
+    setCameraSwitching(true);
+    setError(null);
+    const isCurrent = () => room.state === "connected" && !intentionalHangup.current && room.localParticipant.isCameraEnabled;
+    try {
+      const devices = await navigator.mediaDevices.enumerateDevices().catch(() => []);
+      const result = await switchCallCamera({ track, facing: cameraFacing, deviceIds: devices.filter(device => device.kind === "videoinput").map(device => device.deviceId), isCurrent });
+      if (!result || !isCurrent()) return;
+      setCameraFacing(result.facing);
+      if (!result.switched) setError("Другая камера недоступна на этом устройстве");
+      redraw(value => value + 1);
+    } catch {
+      if (isCurrent()) {
+        if (track.mediaStreamTrack.readyState === "ended") await room.localParticipant.setCameraEnabled(false).catch(() => {});
+        setError("Не удалось перевернуть камеру. Проверьте доступ к камере.");
+      }
+    } finally { mediaLock.current = false; setMediaBusy(false); setCameraSwitching(false); }
+  }, [room, callEnded, cameraFacing]);
 
   const hangup = (end = false) => {
     // Stop capture immediately even if the server request needs a retry.
@@ -224,11 +254,12 @@ export const CallRoomPanel = memo(function CallRoomPanel({ call, selfId, glass, 
       localScreen={presentation.local} screenVideo={presentation.screen} screenOwner={presentation.local ? t("Вы демонстрируете свой экран") : t("Демонстрация экрана")}
       secondaryVideo={!finished && presentation.secondary ? <TrackElement track={presentation.secondary} local={false} audio={false} /> : undefined}
       sharedPreview={!finished && presentation.localPreview ? <div className="grid h-full place-items-center bg-[#202326] text-zinc-300"><MonitorUp size={24} aria-label={t("Вы демонстрируете экран")} /></div> : undefined}
-      localVideo={!finished && localVideo ? <TrackElement track={localVideo} local audio={false} /> : undefined}
+      localVideo={!finished && localVideo ? <TrackElement track={localVideo} local audio={false} mirror={cameraFacing !== "environment"} /> : undefined}
       audioBlocked={audioBlocked} canShare={typeof navigator !== "undefined" && Boolean(navigator.mediaDevices?.getDisplayMedia)}
       onMinimize={minimize} onExpand={expand} onAccept={() => onJoin(call.id)} onHangup={() => hangup()}
       onMicrophone={() => void toggle("mic")} onCamera={() => void toggle("camera")} onSound={() => { if (peer) participantAudio.update(peer.id, { ...peerAudio, muted: !peerAudio.muted }); }} onShare={() => void toggle("screen")}
       onEnableAudio={() => void room?.startAudio().then(() => setAudioBlocked(false)).catch(() => setError("Разрешите воспроизведение звука в браузере"))}
+      onFlipCamera={() => void flipCamera()} cameraSwitching={cameraSwitching}
     /> : <AnimatePresence mode="wait">
       {minimized ? (
         <motion.div key="mini" initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="fixed bottom-24 left-1/2 z-[450] flex w-[min(360px,calc(100vw-24px))] -translate-x-1/2 items-center gap-3 rounded-full p-2 pl-4 text-white shadow-xl" style={material}>

@@ -64,6 +64,7 @@ type MediaAvatarProps = {
   imgClassName?: string;
   fallbackText?: string;
   autoPlay?: boolean;
+  shape?: "circle" | "square";
 };
 
 export const MediaAvatar = memo(function MediaAvatar({
@@ -74,8 +75,9 @@ export const MediaAvatar = memo(function MediaAvatar({
   imgClassName,
   fallbackText,
   autoPlay = true,
+  shape = "circle",
 }: MediaAvatarProps) {
-  const defaultAvatar = useMemo(() => !src ? generateDefaultAvatarDataUrl(alt, "") : null, [src, alt]);
+  const defaultAvatar = useMemo(() => !src ? generateDefaultAvatarDataUrl(alt, "", shape) : null, [src, alt, shape]);
   const isVideo = useMemo(() => isVideoUrl(src), [src]);
   const videoRef = useRef<HTMLVideoElement | null>(null);
   useAutoplayOnVisible(videoRef, Boolean(isVideo && autoPlay), src);
@@ -92,7 +94,7 @@ export const MediaAvatar = memo(function MediaAvatar({
   }, [src, isVideo]);
 
   return (
-    <Avatar className={className}>
+    <Avatar className={cn(className, shape === "square" && "rounded-none")}>
       {defaultAvatar ? (
         <img src={defaultAvatar} alt={alt} className={cn("aspect-square size-full object-cover select-none", imgClassName)} />
       ) : src && isVideo ? (
@@ -130,7 +132,7 @@ export const MediaAvatar = memo(function MediaAvatar({
       ) : null}
       {!defaultAvatar && !isCached && (
         <AvatarFallback
-          className={cn("text-[10px] font-semibold select-none", imgClassName)}
+          className={cn("text-[10px] font-semibold select-none", imgClassName, shape === "square" && "rounded-none")}
           style={{
             fontFamily: "'SF Pro Rounded', 'Segoe UI Variable Rounded', 'Nunito', 'Arial Rounded MT Bold', -apple-system, BlinkMacSystemFont, sans-serif",
             letterSpacing: "0.02em",
