@@ -1,5 +1,6 @@
 "use client";
 import { translate as t } from "@/lib/i18n/translate";
+import { apiRequest } from "@/lib/client/http";
 
 import {
   decryptMessageWithPrivateKeyBase64,
@@ -45,6 +46,7 @@ type HandleIncomingMessageContext = {
 type ShowNotificationOptions = {
   registration?: ServiceWorkerRegistration | null;
   buildChatUrl?: (chatId: string) => string;
+  shouldSuppress?: () => boolean;
 };
 
 const SW_FILE = "/service-worker.js";
@@ -206,6 +208,8 @@ export async function showMessageNotification(
   };
 
   const registration = options.registration ?? (await getServiceWorkerRegistration());
+  // Decryption/worker startup can finish after the user has opened the chat.
+  if (options.shouldSuppress?.()) return false;
   if (registration) {
     await registration.showNotification(title, {
       body,
@@ -276,7 +280,7 @@ function isChatVisibleInAnyTab(chatId: string): boolean {
         ts?: number;
       }>(localStorage.getItem(key));
       if (!state?.ts || now - state.ts > TAB_TTL_MS) continue;
-      if (state.activeChatId === chatId && state.visibility === "visible") {
+      if (state.activeChatId?.trim().toLowerCase() === chatId.trim().toLowerCase() && state.visibility === "visible") {
         return true;
       }
     }
@@ -332,7 +336,7 @@ function postStateToServiceWorker(registration: ServiceWorkerRegistration | null
 
 function isSameChatOpenAndVisible(message: MessageNotificationEvent, activeChatId: string | null): boolean {
   if (!activeChatId) return isChatVisibleInAnyTab(message.chatId);
-  if (activeChatId === message.chatId && document.visibilityState === "visible") {
+  if (activeChatId.trim().toLowerCase() === message.chatId.trim().toLowerCase() && document.visibilityState === "visible") {
     return true;
   }
   return isChatVisibleInAnyTab(message.chatId);
@@ -362,7 +366,10 @@ export async function handleIncomingMessage(
 
   if (!claimMessageLock(message.messageId, tabId)) return;
 
-  await showMessageNotification(message, { buildChatUrl: context.buildChatUrl });
+  await showMessageNotification(message, {
+    buildChatUrl: context.buildChatUrl,
+    shouldSuppress: () => isSameChatOpenAndVisible(message, context.getActiveChatId()),
+  });
 }
 
 export async function initMessageNotificationsRuntime(options: RuntimeOptions): Promise<Runtime> {
@@ -381,11 +388,31 @@ export async function initMessageNotificationsRuntime(options: RuntimeOptions): 
   let activeChatId = options.getActiveChatId();
   const registration: ServiceWorkerRegistration | null = await registerServiceWorker();
   let heartbeat: number | null = null;
+  let serverStateQueue = Promise.resolve();
+  const syncServerState = (chatId: string | null) => {
+    // Serialize changes so a slow old heartbeat cannot reopen a chat after leaving it.
+    serverStateQueue = serverStateQueue.catch(() => {}).then(async () => {
+      await apiRequest("/api/realtime/notification-state", {
+        method: "POST", body: JSON.stringify({ userId: options.currentUserId, tabId, chatId }),
+        signal: AbortSignal.timeout(4_000), keepalive: true,
+      });
+    }).catch(() => { /* Push suppression remains available locally if the network is down. */ });
+  };
 
   const refreshPresence = () => {
+    activeChatId = options.getActiveChatId();
     cleanupStaleTabs();
     touchTabState(tabId, activeChatId);
     postStateToServiceWorker(registration, activeChatId);
+    const visibleChatId = document.visibilityState === "visible" ? activeChatId : null;
+    syncServerState(visibleChatId);
+    if (visibleChatId && registration) {
+      void registration.getNotifications().then(notifications => {
+        for (const notification of notifications) {
+          if (notification.tag.startsWith("message:") && notification.data?.chatId?.trim().toLowerCase() === visibleChatId.trim().toLowerCase()) notification.close();
+        }
+      }).catch(() => {});
+    }
   };
 
   const swMessageHandler = (event: MessageEvent<{ type?: string; payload?: { chatId?: string; url?: string } }>) => {
@@ -415,7 +442,7 @@ export async function initMessageNotificationsRuntime(options: RuntimeOptions): 
     async handleIncomingMessage(message) {
       await handleIncomingMessage(message, {
         currentUserId: options.currentUserId,
-        getActiveChatId: () => activeChatId,
+        getActiveChatId: options.getActiveChatId,
         buildChatUrl: options.buildChatUrl,
       });
     },
@@ -424,6 +451,8 @@ export async function initMessageNotificationsRuntime(options: RuntimeOptions): 
       refreshPresence();
     },
     destroy() {
+      syncServerState(null);
+      postStateToServiceWorker(registration, null);
       if (heartbeat) {
         window.clearInterval(heartbeat);
       }

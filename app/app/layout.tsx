@@ -1,4 +1,4 @@
-import { ReactNode } from "react";
+import { Suspense, type ReactNode } from "react";
 import { redirect } from "next/navigation";
 import { getCurrentUser } from "@/lib/server/auth";
 import { redis } from "@/lib/server/redis";
@@ -10,6 +10,7 @@ import GlobalLiveBackground from "@/app/app/GlobalLiveBackground";
 import AppSecurityWatcher from "@/app/app/AppSecurityWatcher";
 import EmailMigrationGate from "@/app/app/EmailMigrationGate";
 import AppNotificationsBootstrap from "@/app/app/AppNotificationsBootstrap";
+import PackLibraryProvider from "@/components/PackLibraryProvider";
 
 export default async function AppLayout({ children }: { children: ReactNode }) {
   const user = await getCurrentUser();
@@ -27,7 +28,7 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
   }
 
   return (
-    <>
+    <PackLibraryProvider key={user.id} userId={user.id}>
       <GlobalLiveBackground />
       <div className="relative z-10">
       <E2EBootstrap />
@@ -35,10 +36,10 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
       <GlobalMusicPlayer />
       <GlobalVoicePlayer />
       <AppSecurityWatcher />
-      <AppNotificationsBootstrap userId={user.id} />
+      <Suspense fallback={null}><AppNotificationsBootstrap userId={user.id} /></Suspense>
       <EmailMigrationGate email={user.email} verified={user.verified} />
       <div>{children}</div>
       </div>
-    </>
+    </PackLibraryProvider>
   );
 }

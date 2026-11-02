@@ -1,5 +1,6 @@
 import { readJsonBody } from "@/lib/server/request-body";
 import { readBotContent } from "@/lib/server/bot-content";
+import { importerNoticePayload } from "@/lib/importer-notice";
 import { withSharedMessageEdit } from "@/lib/server/shared-message-write";
 import { writeSecretMessage } from "@/lib/server/secret-message-write";
 import { after, NextRequest } from "next/server";
@@ -374,6 +375,7 @@ function applyChatTypePreference<TPeer, TGroup, TChannel>(input: {
 
 async function resolveDirectPeer(currentUserId: string, link: string) {
   const normalized = normalizeLink(link);
+  if (normalized === "importbot") await (await import("@/lib/server/pack-importer-bot")).ensureImporterBotUser();
   let peer = await prisma.user.findFirst({
     where: { link: { equals: normalized, mode: "insensitive" } },
     select: {
@@ -1089,11 +1091,14 @@ export async function GET(req: NextRequest, { params }: Params) {
         wallpaperPosY: participant?.wallpaperPosY ?? null,
         readReceiptAt: peerReadRows[0]?.lastReadAt?.toISOString() ?? null,
         hasMoreBefore: hasMoreBeforeRaw || messages.length > limitedMessages.length,
-        messages: limitedMessages.map((message: (typeof limitedMessages)[number]) => ({
+        messages: limitedMessages.map((message: (typeof limitedMessages)[number]) => {
+          const botContent = peer.isBot ? readBotContent(message.botContentEnc) : null;
+          const systemPayload = message.systemPayload ?? (peer.id === "system:importbot" && message.senderId === peer.id ? importerNoticePayload(botContent?.text ?? "") : null);
+          return {
           id: message.id,
           senderId: message.senderId,
-          text: peer.isBot ? readBotContent(message.botContentEnc)?.text : undefined,
-          botReplyMarkup: peer.isBot ? readBotContent(message.botContentEnc)?.reply_markup : undefined,
+          text: botContent?.text,
+          botReplyMarkup: botContent?.reply_markup,
           cipherText: message.cipherText,
           iv: message.iv,
           encryptedKey:
@@ -1103,9 +1108,9 @@ export async function GET(req: NextRequest, { params }: Params) {
           replyToMessageId: message.replyToMessageId,
           createdAt: message.createdAt.toISOString(),
           reactions: reactionsMap.get(message.id) ?? [],
-          isSystemMessage: message.isSystemMessage,
-          systemPayload: message.systemPayload,
-        })),
+          isSystemMessage: message.isSystemMessage || Boolean(systemPayload),
+          systemPayload,
+        }; }),
       });
       res.headers.set("Cache-Control", "private, no-store");
       ensureCsrfCookie(req, res);

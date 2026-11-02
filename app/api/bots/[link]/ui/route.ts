@@ -1,3 +1,5 @@
+import { IMPORTER_BOT_LINK } from "@/lib/imported-packs";
+import { importerUi } from "@/lib/server/pack-importer-bot";
 import { NextRequest } from "next/server";
 import { z } from "zod";
 import { requireUserFromRequest } from "@/lib/server/auth";
@@ -20,6 +22,7 @@ async function findBot(link: string) {
 export async function GET(req: NextRequest, { params }: Params) {
   try {
     const { user } = await requireUserFromRequest(req);
+    if ((await params).link.toLowerCase() === IMPORTER_BOT_LINK) return jsonOk(await importerUi(user.id));
     const bot = await findBot((await params).link);
     const conversationId = req.nextUrl.searchParams.get("chat_id");
     const conversation = conversationId ? await prisma.conversation.findFirst({ where: { id: conversationId, type: "direct", isSystem: false, AND: [{ participants: { some: { userId: user.id } } }, { participants: { some: { userId: bot.profileId } } }] }, select: { botChatSettings: true } }) : null;

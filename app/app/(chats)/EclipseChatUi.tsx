@@ -3,7 +3,7 @@ import { localizeSystemText, translate as t } from "@/lib/i18n/translate";
 import { useLanguage, useTranslation } from "@/components/LocaleProvider";
 
 
-import { useEffect, useState, type CSSProperties } from "react";
+import { useEffect, useState, type CSSProperties, type ReactNode } from "react";
 import { MessageBubbleTail } from "./components/common/MessageBubbles";
 import { VscVerifiedFilled } from "react-icons/vsc";
 import { GiNestedEclipses } from "react-icons/gi";
@@ -13,6 +13,8 @@ import type { EclipseMessageAction, EclipseSystemPayload } from "@/lib/eclipse-s
 import { ECLIPSE_LIST_STATUS } from "@/lib/eclipse-system";
 import { cn } from "@/lib/utils";
 import { Popover } from "radix-ui";
+import ImportPackCard from "@/components/ImportPackCard";
+import TelegramImportConnect from "@/components/TelegramImportConnect";
 
 export const ECLIPSE_INLINE_ACTION_CLASS_NAME = "inline-flex min-h-[38px] w-full items-center justify-center rounded-[14px] bg-white/[0.06] hover:bg-white/[0.10] active:bg-white/[0.04] border border-white/[0.08] hover:border-white/[0.14] px-4 py-2.5 text-center text-[13px] font-medium text-zinc-100 hover:text-white backdrop-blur-[4px] active:scale-[0.985] transition-all duration-150 disabled:opacity-50 select-none cursor-pointer";
 
@@ -187,14 +189,26 @@ export function EclipseSystemMessageBubble({
     );
   }
 
+  const renderImporterBody = (body: ReactNode, { showTime = true } = {}) => (
+        <div data-importer-message-body className={cn("relative px-3 py-2 border-0", bubbleShapeClass ?? (isMine ? "rounded-[16px] rounded-br-none" : "rounded-[16px] rounded-bl-none"), bubbleClassName ?? (isMine ? "bg-white text-zinc-950" : "bg-[#212121] text-zinc-50"))} style={isMine ? mineGradientStyle : undefined}>
+          <MessageBubbleTail isMine={isMine} hasTail={hasTail} mineGradientStyle={mineGradientStyle} />
+          <div className="relative z-[2]">{body}{showTime && <span data-importer-message-time className="absolute bottom-[2px] right-0 text-[11px] leading-none opacity-75 select-none">{timeText}</span>}</div>
+        </div>
+      );
+  if (payload.metadata?.telegramImportConnect || payload.metadata?.packImport) return (
+    <div className="min-w-0 max-w-[86%] sm:max-w-[82%] md:max-w-[60%] xl:max-w-[56%] flex flex-col items-stretch">
+      {payload.metadata.telegramImportConnect ? <TelegramImportConnect actionClassName={ECLIPSE_INLINE_ACTION_CLASS_NAME} renderBody={renderImporterBody} /> : <ImportPackCard value={payload.metadata.packImport!} messageId={messageId} actionClassName={ECLIPSE_INLINE_ACTION_CLASS_NAME} renderBody={renderImporterBody} />}
+    </div>
+  );
+
   return (
     <div className="min-w-0 max-w-[86%] sm:max-w-[82%] md:max-w-[60%] xl:max-w-[56%] flex flex-col items-stretch">
       <div className={cn("relative px-3 py-2 border-0", bubbleShapeClass ?? (isMine ? "rounded-[16px] rounded-br-none" : "rounded-[16px] rounded-bl-none"), bubbleClassName ?? (isMine ? "bg-white text-zinc-950 shadow-[0_1px_2px_rgba(0,0,0,0.18)]" : "bg-[#212121] text-zinc-50 shadow-[0_1px_2px_rgba(0,0,0,0.24)]"))} style={isMine ? mineGradientStyle : undefined}>
         <MessageBubbleTail isMine={isMine} hasTail={hasTail} mineGradientStyle={mineGradientStyle} />
         <div className="relative z-[2]">
-          {payload.title && <div className="text-[14.5px] font-semibold leading-snug">{payload.botRole === "user" ? messageTitle : localizeSystemText(messageTitle ?? "")}{!payload.body && <span className="inline-block w-11" aria-hidden />}</div>}
-          {payload.body && (
-            <div className={cn("whitespace-pre-wrap break-words [overflow-wrap:anywhere] text-[15px] font-normal leading-[1.4]", payload.title && "mt-1")}>
+          {!payload.metadata?.importerNotice && payload.title && <div className="text-[14.5px] font-semibold leading-snug">{payload.botRole === "user" ? messageTitle : localizeSystemText(messageTitle ?? "")}{!payload.body && <span className="inline-block w-11" aria-hidden />}</div>}
+          {!payload.metadata?.packImport && !payload.metadata?.telegramImportConnect && payload.body && (
+            <div className={cn("whitespace-pre-wrap break-words [overflow-wrap:anywhere] text-[15px] font-normal leading-[1.4]", payload.title && !payload.metadata?.importerNotice && "mt-1")}>
               <span>{payload.botRole === "user" ? payload.body : localizeSystemText(payload.body)}</span><span className="inline-block w-11" aria-hidden />
             </div>
           )}

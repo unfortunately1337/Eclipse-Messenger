@@ -10,7 +10,7 @@ import { useCallRingtone } from "./useCallRingtone";
 
 const empty: CallsSnapshot = { enabled: false, current: null, groupCall: null };
 export const CALLS_CHANGED_EVENT = "eclipse:calls-changed";
-type Target = { kind: CallKind; link: string } | null;
+type Target = { kind: CallKind; link: string; title?: string; peer?: CallView["peer"] } | null;
 
 async function microphonePermission(video = false) {
   if (!navigator.mediaDevices?.getUserMedia) throw new Error("Микрофон недоступен. Откройте Eclipse по HTTPS в обычном браузере.");
@@ -21,6 +21,7 @@ async function microphonePermission(video = false) {
 }
 
 export function useCalls(userId: string | null, target: Target) {
+  const [launch, setLaunch] = useState<CallView | null>(null);
   const [stored, setStored] = useState<CallsSnapshot & { ownerId: string | null; closing: CallView | null; closingUntil: number }>({ ...empty, ownerId: userId, closing: null, closingUntil: 0 });
   const snapshot = stored.ownerId === userId ? stored : empty;
   const setSnapshot = useCallback((update: CallsSnapshot | ((previous: CallsSnapshot) => CallsSnapshot)) => {
@@ -35,11 +36,12 @@ export function useCalls(userId: string | null, target: Target) {
   }, [userId]);
   useEffect(() => {
     if (!stored.closing || stored.ownerId !== userId) return;
-    const timer = setTimeout(() => setStored(previous => ({ ...previous, closing: null })), Math.max(0, stored.closingUntil - Date.now()));
+    const timer = setTimeout(() => { setStored(previous => ({ ...previous, closing: null })); setLaunch(null); }, Math.max(0, stored.closingUntil - Date.now()));
     return () => clearTimeout(timer);
   }, [stored.closing, stored.closingUntil, stored.ownerId, userId]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [endingId, setEndingId] = useState<string | null>(null);
   const version = useRef(0);
   const owner = useRef(userId);
   useEffect(() => {
@@ -48,7 +50,7 @@ export function useCalls(userId: string | null, target: Target) {
     return () => { owner.current = null; };
   }, [userId]);
   const call = snapshot.current;
-  useCallRingtone(call?.status === "ringing" ? call.incoming ? "incoming" : call.onThisSession ? "outgoing" : null : null);
+  useCallRingtone(call?.status === "ringing" && endingId !== call.id ? call.incoming ? "incoming" : call.onThisSession ? "outgoing" : null : null);
   const callIdRef = useRef<string | null>(null);
   useEffect(() => { callIdRef.current = call?.id ?? null; }, [call?.id, userId]);
   const onThisSession = Boolean(call?.onThisSession);
@@ -147,12 +149,19 @@ export function useCalls(userId: string | null, target: Target) {
 
   const start = useCallback((mode: CallMode, destination: Target = target) => run(async () => {
     if (!destination || call) return;
+    const display = destination.link === target?.link ? target : destination;
+    setLaunch({ id: `request:${crypto.randomUUID()}`, requesting: true, kind: destination.kind, mode,
+      status: "ringing", link: destination.link, title: display?.title ?? destination.link, peer: display?.peer,
+      callerId: userId!, createdAt: Date.now(), startedAt: null, expiresAt: Date.now() + 45_000,
+      participantCount: 1, participants: [], incoming: false, onThisSession: true, canEnd: true });
     // Parse the media SDK while the permission prompt/API request is in progress.
     void import("livekit-client").catch(() => {});
-    await microphonePermission(mode === "video");
-    if (owner.current !== userId) return;
-    const result = await apiRequest<{ call: CallView }>("/api/calls", { method: "POST", body: JSON.stringify({ action: "start", ...destination, mode }) });
-    if (owner.current === userId) setSnapshot(previous => ({ ...previous, current: result.call }));
+    try {
+      await microphonePermission(mode === "video");
+      if (owner.current !== userId) return;
+      const result = await apiRequest<{ call: CallView }>("/api/calls", { method: "POST", body: JSON.stringify({ action: "start", kind: destination.kind, link: destination.link, mode }) });
+      if (owner.current === userId) setSnapshot(previous => ({ ...previous, current: result.call }));
+    } catch (failure) { setLaunch(null); throw failure; }
   }), [run, target, call, userId, setSnapshot]);
 
   const join = useCallback((id: string) => run(async () => {
@@ -165,11 +174,15 @@ export function useCalls(userId: string | null, target: Target) {
 
   const leave = useCallback((end = false) => run(async () => {
     if (!call) return;
+    // Silence ringback immediately, without waiting for the end request or poll.
+    setEndingId(call.id);
+    window.dispatchEvent(new Event("eclipse:call-silence"));
     const result = await apiRequest<{ outcome?: CallView["endOutcome"] }>("/api/calls", { method: "POST", body: JSON.stringify({ action: end ? "end" : "leave", id: call.id }), timeoutMs: 15_000 });
     if (owner.current === userId) setSnapshot(previous => ({ ...previous, current: null, groupCall: null,
       ended: { id: call.id, outcome: result.outcome ?? (call.startedAt ? "completed" : call.incoming ? "declined" : "cancelled") } }));
   }), [run, call, userId, setSnapshot]);
 
   const clearError = useCallback(() => setError(null), []);
-  return { ...snapshot, presentation: snapshot.current ?? (stored.ownerId === userId ? stored.closing : null), busy, error, clearError, start, join, leave, refresh };
+  const presentation = snapshot.current ?? (stored.ownerId === userId ? stored.closing : null) ?? (busy && launch?.callerId === userId ? launch : null);
+  return { ...snapshot, presentation, presentationKey: launch?.callerId === userId ? launch.id : presentation?.id, busy, error, clearError, start, join, leave, refresh };
 }

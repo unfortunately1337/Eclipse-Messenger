@@ -1,4 +1,7 @@
 "use client";
+import AccountPackPicker from "@/components/AccountPackPicker";
+import { ImportedSticker } from "@/components/PackMedia";
+import { importedItemIdFromSrc } from "@/lib/imported-packs";
 import { useInviteArrival } from "@/lib/client/invite-transition";
 import { PollOptionsEditor } from "@/components/PollOptionsEditor";
 import { dateLocale, localizeSystemText, plural, translate as t } from "@/lib/i18n/translate";
@@ -56,6 +59,7 @@ import { PINS_UPDATED_EVENT, pinScopeKey, type PinScope } from "@/lib/message-pi
 import { useMessagePins } from "./hooks/useMessagePins";
 import { replaceRecordingCamera, type RecordingCameraRequest } from "@/lib/client/recording-camera";
 import UserProfileActions from "./components/common/UserProfileActions";
+import { withoutChatLocation } from "@/lib/client/chat-location";
 import CommunityProfileActions from "./components/common/CommunityProfileActions";
 import { useMessageSearch } from "./hooks/useMessageSearch";
 import { MessageSearchBar, MessageSearchNavigation } from "./components/common/MessageSearchBar";
@@ -330,12 +334,13 @@ import {
   serializeVideoContent,
   serializeVoiceContent,
 } from "./chat-message-transport";
-import { appendAndSortMessages, compareMessagesByTime, finalizeOptimisticMessage, mergeMessageWindow } from "./chat-message-state";
+import { appendAndSortMessages, compareMessagesByTime, finalizeOptimisticMessage, getMessageSelectionNeighbors, mergeMessageWindow } from "./chat-message-state";
 import { fetchExactDirectMessage, fetchExactSharedMessage } from "./chat-message-hydration";
 import { applyRealtimeLinkActivityUpdate } from "./chat-realtime-activity";
 import {
   buildChatSummaryKey,
   deduplicateChatSummaries,
+  mergeSecretChatSummaries,
   parseChatTimestamp,
   shouldApplyChatPreviewByTimestamp,
   sortChatSummariesByLastMessageAt,
@@ -4103,15 +4108,24 @@ export default function ChatsPageClient() {
   const activeConversationRef = useRef<ConversationResponse | null>(null);
   const [messages, setMessages] = useState<DecryptedMessage[]>([]);
   useEffect(() => {
+    let refreshFrame: number | undefined;
     const refresh = () => {
-      chatListPreviewMetaCache.clear();
-      setMediaReadyVersion(version => version + 1);
-      setMessages(previous => [...previous]);
+      if (refreshFrame !== undefined) return;
+      refreshFrame = requestAnimationFrame(() => {
+        refreshFrame = undefined;
+        chatListPreviewMetaCache.clear();
+        setMediaReadyVersion(version => version + 1);
+        setMessages(previous => [...previous]);
+      });
     };
     const purge = () => { clearChatMemoryCaches(); setMessages([]); };
     window.addEventListener("eclipse:caches-cleared", purge);
     window.addEventListener("eclipse:media-ready", refresh);
-    return () => { window.removeEventListener("eclipse:caches-cleared", purge); window.removeEventListener("eclipse:media-ready", refresh); };
+    return () => {
+      if (refreshFrame !== undefined) cancelAnimationFrame(refreshFrame);
+      window.removeEventListener("eclipse:caches-cleared", purge);
+      window.removeEventListener("eclipse:media-ready", refresh);
+    };
   }, []);
   const [dragActive, setDragActive] = useState(false);
   const wallpaperFileInputRef = useRef<HTMLInputElement>(null);
@@ -4243,6 +4257,10 @@ export default function ChatsPageClient() {
   const [pollExpiresInHours, setPollExpiresInHours] = useState<number | null>(24);
   const [isDesktop, setIsDesktop] = useState(false);
   const [desktopDetailsPanelOpen, setDesktopDetailsPanelOpen] = useState(false);
+  const [desktopDetailsContentRetained, setDesktopDetailsContentRetained] = useState(false);
+  useEffect(() => {
+    if (desktopDetailsPanelOpen) setDesktopDetailsContentRetained(true);
+  }, [desktopDetailsPanelOpen]);
   const [inspectedDetailsEntity, setInspectedDetailsEntity] = useState<{
     type: "direct" | "group" | "channel";
     link: string;
@@ -6538,7 +6556,8 @@ export default function ChatsPageClient() {
   const callTarget = useMemo(() => {
     if (!activeChat || activeChat.isBot || activeChat.isSystem || activeChat.link.startsWith("secret-") || activeChat.canSendMessages === false) return null;
     if (activeChat.chatType === "group") return { kind: "group" as const, link: activeChat.link };
-    if ((!activeChat.chatType || activeChat.chatType === "direct") && activeChat.peerId !== selfId) return { kind: "direct" as const, link: activeChat.link };
+    if ((!activeChat.chatType || activeChat.chatType === "direct") && activeChat.peerId !== selfId) return { kind: "direct" as const, link: activeChat.link, title: activeChat.displayName,
+      peer: { id: activeChat.peerId, name: activeChat.displayName, avatarUrl: activeChat.avatarUrl ?? null, backgroundUrl: null } };
     return null;
   }, [activeChat, selfId]);
   const calls = useCalls(selfId, callTarget);
@@ -6638,7 +6657,7 @@ export default function ChatsPageClient() {
     if (!textarea) return;
     const maxHeight = Math.max(120, Math.floor(messagesViewportHeight * 0.3));
     textarea.style.maxHeight = `${maxHeight}px`;
-  }, [messageText, messagesViewportHeight, selectedLink, activeConversation?.chatType]);
+  }, [messagesViewportHeight, selectedLink, activeConversation?.chatType]);
 
   useEffect(() => {
     if (messagesAtBottomRef.current) {
@@ -7120,17 +7139,7 @@ export default function ChatsPageClient() {
           } as ChatSummary;
         });
 
-        setChats((prev) => {
-          const next = prev.filter((c) => !c.conversationId?.startsWith("secret:") && !c.link?.startsWith("secret-"));
-          secretChatSummaries.forEach((sc) => {
-            next.push(sc);
-          });
-          return deduplicateChatSummaries(next).sort((a, b) => {
-            const aTime = a.lastMessageAt ? Date.parse(a.lastMessageAt) : 0;
-            const bTime = b.lastMessageAt ? Date.parse(b.lastMessageAt) : 0;
-            return bTime - aTime;
-          });
-        });
+        setChats((prev) => mergeSecretChatSummaries(prev, secretChatSummaries));
       }
     } catch (err) {
       console.error("Failed to load secret chats from server:", err);
@@ -7831,15 +7840,14 @@ export default function ChatsPageClient() {
     if (freshIds.length === 0) return;
 
     try {
-      await apiRequest("/api/realtime/read", {
-        method: "POST",
-        body: JSON.stringify({
-          link,
-          chatType,
-          messageIds: freshIds,
-        }),
-      });
-      freshIds.forEach((id) => sentReadReceiptIdsRef.current.add(id));
+      for (let offset = 0; offset < freshIds.length; offset += 100) {
+        const batch = freshIds.slice(offset, offset + 100);
+        await apiRequest("/api/realtime/read", {
+          method: "POST",
+          body: JSON.stringify({ link, chatType, messageIds: batch }),
+        });
+        batch.forEach((id) => sentReadReceiptIdsRef.current.add(id));
+      }
       if (sentReadReceiptIdsRef.current.size > 5000) {
         const trimmed = Array.from(sentReadReceiptIdsRef.current).slice(-2500);
         sentReadReceiptIdsRef.current = new Set(trimmed);
@@ -8789,7 +8797,7 @@ export default function ChatsPageClient() {
           createdAt: message.createdAt, replyToMessageId: message.replyToMessageId, reactions: message.reactions ?? [],
           botReplyMarkup: message.botReplyMarkup, systemPayload: (message as any).systemPayload,
         }));
-        setMessages(sanitizeMessages(incoming.sort(compareMessagesByTime)));
+        setMessages(previous => sanitizeMessages(mergeMessageWindow(previous, incoming)));
         setDecryptingConversation(false);
         return;
       }
@@ -8986,6 +8994,11 @@ export default function ChatsPageClient() {
           : chatType === "group" ? t("Группа была заблокирована или удалена.")
           : isBot || chatType === "eclipse" ? t("Бот был заблокирован или удален.")
           : t("Пользователь был заблокирован или удален.");
+        // Stop URL synchronization before clearing selection; the old query otherwise reopens it.
+        suppressRequestedChatSyncRef.current = true;
+        if (selectedSearchTargetRef.current?.link === link) selectedSearchTargetRef.current = null;
+        const nextUrl = withoutChatLocation(window.location.pathname, window.location.search);
+        window.history.replaceState(null, "", nextUrl);
         showAppToast({ type: "error", title, durationMs: 4000 });
         clearConversationCaches(selfId ?? null, link, chatType);
         setSelectedLink(null);
@@ -8996,7 +9009,7 @@ export default function ChatsPageClient() {
         setChats((prev) => prev.filter((c) => c.link !== link && !c.conversationId?.startsWith(`temp:${link}`)));
         setActiveConversation(null);
         setMessages([]);
-        router.replace("/app", { scroll: false });
+        router.replace(nextUrl, { scroll: false });
       } else {
         setErrorText(errorMsg);
         setActiveConversation(null);
@@ -9193,6 +9206,22 @@ export default function ChatsPageClient() {
     if (readMarkersRef.current[selectedLink] === lastMessage.createdAt) return;
     setReadMarker(selectedLink, lastMessage.createdAt);
   }, [messages, selectedLink, setReadMarker]);
+
+  // Bot refreshes and system actions can deliver messages without message:new.
+  // Persist their read state too, including after returning to a hidden tab.
+  useEffect(() => {
+    const type = activeConversation?.chatType;
+    if (!selectedLink || !selfId || loadingConversation || !(type === "eclipse" || type === "direct" && activeConversation?.peer?.isBot)) return;
+    const mark = () => {
+      if (document.visibilityState !== "visible" || selectedLinkRef.current !== selectedLink) return;
+      const ids = messages.filter(message => !message.pending && message.senderId !== selfId).map(message => message.id);
+      if (ids.length) void sendReadReceipt(selectedLink, type, ids);
+    };
+    mark(); window.addEventListener("focus", mark); document.addEventListener("visibilitychange", mark);
+    return () => { window.removeEventListener("focus", mark); document.removeEventListener("visibilitychange", mark); };
+    // sendReadReceipt uses refs and does not carry any additional chat state.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeConversation?.chatType, activeConversation?.peer?.isBot, loadingConversation, messages, selectedLink, selfId]);
 
   useEffect(() => {
     const viewport = messagesViewportRef.current;
@@ -11740,7 +11769,11 @@ export default function ChatsPageClient() {
     };
 
     if (messagesViewportHeight <= 0) {
-      return messages.map((message, index) => {
+      // ResizeObserver has not measured the viewport yet. A cached conversation
+      // may contain hundreds of rows; mount only the latest screenful until then.
+      const start = Math.max(0, messages.length - 32);
+      return messages.slice(start).map((message, offset) => {
+        const index = start + offset;
         const previousMessage = getPreviousVisibleMessage(index);
         const nextMessage = index < messages.length - 1 ? messages[index + 1] : null;
         const dayKey = dayKeyFromIso(message.createdAt);
@@ -16857,7 +16890,7 @@ export default function ChatsPageClient() {
                 id: message.id, senderId: message.senderId, text: message.text ?? (message as EncryptedMessage & { systemPayload?: { title?: string } }).systemPayload?.title ?? "",
                 createdAt: message.createdAt, replyToMessageId: message.replyToMessageId, reactions: message.reactions ?? [], botReplyMarkup: message.botReplyMarkup, systemPayload: (message as any).systemPayload,
               }));
-              setMessages(previous => sanitizeMessages(mergeMessageWindow(previous.filter(message => message.id !== messageId), incoming).sort(compareMessagesByTime)));
+              setMessages(previous => sanitizeMessages(mergeMessageWindow(previous, incoming)));
             }).catch(() => {});
           }
           void loadChatPage(null, "replace");
@@ -21793,7 +21826,7 @@ export default function ChatsPageClient() {
       return (
         <div className="relative">
           {helperForwardHeader}
-          <LottieSticker src={helperParsed.src} className="h-[140px] w-[140px] md:h-[180px] md:w-[180px]" />
+          {importedItemIdFromSrc(helperParsed.src) ? <ImportedSticker src={helperParsed.src} className="h-[140px] w-[140px] md:h-[180px] md:w-[180px]" /> : <LottieSticker src={helperParsed.src} className="h-[140px] w-[140px] md:h-[180px] md:w-[180px]" />}
           <div className={`pointer-events-none absolute -bottom-2 ${helperIsMine ? "right-1" : "left-1"} z-[1]`}>{bubbleOverlayMeta}</div>
         </div>
       );
@@ -22108,7 +22141,7 @@ export default function ChatsPageClient() {
           e.target.value = "";
         }}
       />
-      {calls.presentation && selfId && <CallRoomPanel key={`${selfId}:${calls.presentation.id}`} call={calls.presentation} selfId={selfId} glass={transparentVisual} busy={calls.busy} onJoin={calls.join} onLeave={calls.leave}/>}
+      {calls.presentation && selfId && <CallRoomPanel key={`${selfId}:${calls.presentationKey}`} call={calls.presentation} selfId={selfId} glass={transparentVisual} busy={calls.busy} onJoin={calls.join} onLeave={calls.leave}/>}
       <div className="relative h-full min-h-0 w-full max-w-full overflow-hidden bg-[#0e0e10] dark:bg-[#0e0e10]">
         <TelegramDoodleWallpaper patternEnabled={activeCustomTheme?.backgroundMode !== "image"} backgroundOverride={activeCustomTheme ? customThemeChatBackground(activeCustomTheme) : undefined} presetColors={liveBgPresetColors} presetId={activeCustomTheme ? "none" : liveBackgroundPreset} opacity={liveBackgroundOpacity} />
         <AnimatePresence>{forwardPickerMessages && <ForwardRecipientPicker desktop={isDesktop} transparentVisual={transparentVisual} title={forwardPickerMode === "share" ? t("Отправить") : t("Переслать")} recipients={forwardRecipients} onClose={() => setForwardPickerMessages(null)} onSelect={chooseForwardRecipient}/>}</AnimatePresence>
@@ -23925,7 +23958,7 @@ export default function ChatsPageClient() {
                                         </span>
                                       </div>
                                     ) : null}
-                                    <div className={cn("flex px-1", (!message.systemPayload?.body || (message.systemPayload as any).eventType === "community_created" || (message.systemPayload as any).eventType === "service") ? "justify-center w-full" : "justify-start")}>
+                                    <div className={cn("flex px-1", ((!message.systemPayload?.body && !message.systemPayload?.metadata?.telegramImportConnect && !message.systemPayload?.metadata?.packImport) || (message.systemPayload as any).eventType === "community_created" || (message.systemPayload as any).eventType === "service") ? "justify-center w-full" : "justify-start")}>
                                       <EclipseSystemMessageBubble
                                         messageId={message.id}
                                         payload={message.systemPayload}
@@ -24114,8 +24147,10 @@ export default function ChatsPageClient() {
                             const replyPreviewBlock = forwardHeader || inlineReply ? <>{forwardHeader}{inlineReply}</> : null;
                             const reactions = message.reactions ?? [];
                             const isSelectedMessage = selectedMessageIdSet.has(message.id);
-                            const isPrevSelected = selectionMode && index > 0 && selectedMessageIdSet.has(renderedMessages[index - 1].message.id);
-                            const isNextSelected = selectionMode && index < renderedMessages.length - 1 && selectedMessageIdSet.has(renderedMessages[index + 1].message.id);
+                            // index belongs to the full history, not the virtual render window.
+                            const selectionNeighbors = selectionMode ? getMessageSelectionNeighbors(messages, index, selectedMessageIdSet) : null;
+                            const isPrevSelected = selectionNeighbors?.previous ?? false;
+                            const isNextSelected = selectionNeighbors?.next ?? false;
                             const selectionRoundingClass = !isPrevSelected && !isNextSelected
                               ? "rounded-2xl"
                               : !isPrevSelected && isNextSelected
@@ -24450,7 +24485,7 @@ export default function ChatsPageClient() {
                                                 <div
                                                   className={`relative ${reactions.length > 0 ? "pb-14" : "pb-6"} transition-opacity duration-75 ${stackedBubbleShapeClass} ${dissolveTargetClass}`}
                                                 >
-                                                  <LottieSticker src={parsed.src} className="h-[140px] w-[140px] md:h-[180px] md:w-[180px]" />
+                                                  {importedItemIdFromSrc(parsed.src) ? <ImportedSticker src={parsed.src} className="h-[140px] w-[140px] md:h-[180px] md:w-[180px]" /> : <LottieSticker src={parsed.src} className="h-[140px] w-[140px] md:h-[180px] md:w-[180px]" />}
                                                   <div className={`pointer-events-none absolute ${reactions.length > 0 ? "bottom-8" : "bottom-0"} ${isMine ? "right-2" : "left-2"}`}>
                                                     {renderBubbleMeta({
                                                       timeText,
@@ -26625,15 +26660,14 @@ export default function ChatsPageClient() {
                               style={{...composerInputThemeStyle, border:0}}
                             >
                               <div className="relative flex h-full flex-col">
-                                <div className="min-h-0 flex-1 overflow-hidden px-3 pt-2.5 no-scrollbar md:px-4 md:pt-3">
+                                <div className="min-h-0 flex-1 overflow-hidden px-3 pt-1.5 no-scrollbar md:px-4">
                                   {composerPickerTab === "emoji" ? (
                                     <TextEmojiPicker mobile={!isDesktop} onSelect={value => {
                                       preventPickerCloseOnFocusRef.current = true;
                                       messageInputRef.current?.insertText(value, isDesktop);
                                     }} />
                                   ) : composerPickerTab === "stickers" ? (
-                                    <div className="flex h-full min-h-[150px] items-center justify-center text-[14px] font-medium text-zinc-500">
-                                      {t("Стикеры появятся позже")}</div>
+                                    <AccountPackPicker kind="sticker" showRecent mobile={!isDesktop} onSticker={item => void sendStickerFromPicker(item.src, item.emoji)} />
                                   ) : (
                                     <div className="flex h-full min-h-[150px] items-center justify-center text-[14px] font-medium text-zinc-500">
                                       {t("GIF появятся позже")}</div>
@@ -27330,7 +27364,11 @@ export default function ChatsPageClient() {
                 transitionEnd: { visibility: desktopDetailsPanelOpen ? "visible" : "hidden" },
               }}
               transition={PANEL_TRANSITION}
+              onAnimationComplete={() => {
+                if (!desktopDetailsPanelOpen) setDesktopDetailsContentRetained(false);
+              }}
             >
+              {(desktopDetailsPanelOpen || desktopDetailsContentRetained) && <>
               {(() => {
                 if (profileSubView === "qrcode" || groupSubView === "qrcode" || channelSubView === "qrcode") {
                   return null;
@@ -27708,7 +27746,7 @@ export default function ChatsPageClient() {
 
                             return (
                               <div
-                                className={cn("relative flex flex-col items-center pt-14 pb-0 text-center transition-all duration-300 overflow-hidden", profileData.backgroundUrl || profileData.musicUrl ? "mb-3" : "mb-2")}
+                                className={cn("relative flex flex-col items-center pt-14 pb-0 text-center transition-all duration-300 overflow-hidden", effectiveGradient || isMediaBg || profileData.musicUrl?.trim() ? "mb-3" : "mb-2")}
                                 style={{
                                   background: effectiveGradient || "transparent",
                                 }}
@@ -27725,7 +27763,7 @@ export default function ChatsPageClient() {
                                     <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-black/35 to-black/25 pointer-events-none" />
                                   </>
                                 ) : null}
-                                <div className={cn("relative z-10 flex flex-col items-center px-5", profileData.backgroundUrl || profileData.musicUrl ? "pb-6 sm:pb-7" : "pb-2")}>
+                                <div className={cn("relative z-10 flex flex-col items-center px-5", effectiveGradient || isMediaBg || profileData.musicUrl?.trim() ? "pb-6 sm:pb-7" : "pb-2")}>
                                   <div className="relative">
                                     <div className="relative w-[124px] h-[124px] flex items-center justify-center">
                                       {/* Subtle soft white ambient halo behind avatar like in Telegram */}
@@ -27946,7 +27984,7 @@ export default function ChatsPageClient() {
                                 </span>
                                 <span className="min-w-0 flex-1">
                                   <span className="block whitespace-pre-wrap text-[15px] font-semibold text-white leading-snug">
-                                    {profileData.description.trim()}
+                                    {profileData.id === "system:importbot" ? t(profileData.description.trim()) : profileData.description.trim()}
                                   </span>
                                   <span className="mt-0.5 block text-[12.5px] text-zinc-400">{t("О себе")}</span>
                                 </span>
@@ -29205,6 +29243,7 @@ export default function ChatsPageClient() {
                   ) : null}
                 </div>
               </div>
+              </>}
             </motion.aside>
             </div>
           ) : null}
@@ -29722,7 +29761,7 @@ export default function ChatsPageClient() {
 
                         return (
                           <div
-                            className={cn("relative flex flex-col items-center pt-14 pb-0 text-center transition-all duration-300 overflow-hidden", profileData.backgroundUrl || profileData.musicUrl ? "mb-3" : "mb-2")}
+                            className={cn("relative flex flex-col items-center pt-14 pb-0 text-center transition-all duration-300 overflow-hidden", effectiveGradient || isMediaBg || profileData.musicUrl?.trim() ? "mb-3" : "mb-2")}
                             style={{
                               background: effectiveGradient || "transparent",
                             }}
@@ -29739,7 +29778,7 @@ export default function ChatsPageClient() {
                                 <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-black/35 to-black/25 pointer-events-none" />
                               </>
                             ) : null}
-                            <div className={cn("relative z-10 flex flex-col items-center px-5", profileData.backgroundUrl || profileData.musicUrl ? "pb-3" : "pb-2")}>
+                            <div className={cn("relative z-10 flex flex-col items-center px-5", effectiveGradient || isMediaBg || profileData.musicUrl?.trim() ? "pb-3" : "pb-2")}>
                               <div className="relative">
                                 <div className="relative w-[112px] h-[112px] flex items-center justify-center">
                                   {/* Subtle soft white ambient halo behind avatar like in Telegram */}
@@ -29960,7 +29999,7 @@ export default function ChatsPageClient() {
                             </span>
                             <span className="min-w-0 flex-1">
                               <span className="block whitespace-pre-wrap text-[15px] font-semibold text-white leading-snug">
-                                {profileData.description.trim()}
+                                {profileData.id === "system:importbot" ? t(profileData.description.trim()) : profileData.description.trim()}
                               </span>
                               <span className="mt-0.5 block text-[12.5px] text-zinc-400">{t("О себе")}</span>
                             </span>
@@ -32564,121 +32603,22 @@ export default function ChatsPageClient() {
         ) : null}
 
         {externalLinkPrompt ? (
-          <div className="fixed inset-0 z-[300]">
-            {/* Backdrop (click to close) */}
-            <motion.button
-              type="button"
-              className="fixed inset-0 bg-black/65 backdrop-blur-[4px] cursor-pointer w-full h-full border-0 p-0"
-              onClick={() => setExternalLinkPrompt(null)}
-              aria-label={t("Закрыть")}
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              transition={{ duration: 0.2, ease: "easeOut" }}
-            />
-
-            {/* Desktop Center Modal (hidden on mobile, visible on md+) */}
-            <div className="hidden md:flex fixed inset-0 items-center justify-center p-4 pointer-events-none">
-              <motion.div
-                className="app-panel-surface pointer-events-auto relative w-full max-w-[420px] overflow-hidden rounded-[28px] bg-[#1e1e20] p-6 text-white shadow-[0_26px_90px_rgba(0,0,0,0.6)] ring-1 ring-white/[0.06] backdrop-blur-xl"
-                initial={{ opacity: 0, scale: 0.96, y: 12 }}
-                animate={{ opacity: 1, scale: 1, y: 0 }}
-                exit={{ opacity: 0, scale: 0.98, y: 8 }}
-                transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
-                onClick={(e) => e.stopPropagation()}
-              >
-                <button
-                  type="button"
-                  onClick={() => setExternalLinkPrompt(null)}
-                  className="absolute right-4 top-4 z-10 grid h-8 w-8 place-items-center rounded-full text-zinc-400 transition-colors hover:bg-white/[0.08] hover:text-white cursor-pointer"
-                  aria-label={t("Закрыть")}
-                >
-                  <X size={17} />
-                </button>
-
-                {/* Authentic Telegram UtyanLinks Icon Centered */}
-                <div className="flex justify-center mb-3">
-                  <LottieSticker src="/stickers/UtyanLinks.json" className="h-28 w-28 drop-shadow-[0_8px_24px_rgba(0,0,0,0.3)]" />
-                </div>
-
-                <h3 className="text-[18px] font-semibold text-center text-white tracking-tight">
-                  {t("Возможный риск перехода")}</h3>
-
-                <p className="mt-2 text-[14.5px] leading-[1.5] text-zinc-300/80 text-center px-1">
-                  {t("Ссылка ведет на внешний сайт")}{" "}
-                  <span className="font-semibold text-zinc-100">{externalLinkPrompt.host}</span>{t(". Это может быть мошеннический ресурс. Не вводите пароль, коды подтверждения и данные карты, если не уверены в сайте.")}</p>
-
-                <div className="mt-6 grid grid-cols-2 gap-3">
-                  <Button
-                    variant="ghost"
-                    className="h-12 rounded-2xl bg-white/[0.07] text-zinc-100 shadow-none ring-0 transition-all hover:bg-white/[0.12] hover:text-white cursor-pointer font-medium text-[15px]"
-                    onClick={() => setExternalLinkPrompt(null)}
-                  >
-                    {t("Отмена")}</Button>
-                  <Button
-                    className="h-12 rounded-2xl bg-white text-zinc-950 font-semibold text-[15px] shadow-md transition-all hover:bg-white/90 active:scale-[0.98] cursor-pointer"
-                    onClick={() => {
-                      const safeUrl = sanitizeExternalUrl(externalLinkPrompt.url);
-                      if (safeUrl) {
-                        window.open(safeUrl, "_blank", "noopener,noreferrer");
-                      } else {
-                        toast.error(t("Недопустимая или небезопасная ссылка"));
-                      }
-                      setExternalLinkPrompt(null);
-                    }}
-                  >
-                    {t("Перейти")}</Button>
-                </div>
-              </motion.div>
-            </div>
-
-            {/* Mobile Bottom Sheet (visible on mobile, hidden on md+) */}
-            <div className="flex md:hidden fixed inset-x-0 bottom-0 pointer-events-none justify-center">
-              <motion.div
-                className="app-panel-surface pointer-events-auto w-full max-w-lg rounded-t-[32px] bg-[#1e1e20] px-6 pt-6 pb-[max(env(safe-area-inset-bottom),24px)] text-white shadow-[0_-16px_50px_rgba(0,0,0,0.6)] ring-1 ring-white/[0.06] backdrop-blur-2xl"
-                initial={{ y: "100%" }}
-                animate={{ y: 0 }}
-                exit={{ y: "100%" }}
-                transition={{ type: "spring", damping: 28, stiffness: 280 }}
-                drag="y"
-                dragConstraints={{ top: 0 }}
-                dragElastic={0.2}
-                onDragEnd={(_, info) => {
-                  if (info.offset.y > 100) {
-                    setExternalLinkPrompt(null);
-                  }
-                }}
-                onClick={(e) => e.stopPropagation()}
-              >
-                {/* Authentic Telegram UtyanLinks Icon Centered */}
-                <div className="flex justify-center mb-3.5">
-                  <LottieSticker src="/stickers/UtyanLinks.json" className="h-28 w-28 drop-shadow-[0_8px_24px_rgba(0,0,0,0.3)]" />
-                </div>
-
-                <h3 className="text-[19px] font-semibold text-center text-white tracking-tight">
-                  {t("Возможный риск перехода")}</h3>
-
-                <p className="mt-2.5 text-[14.5px] leading-[1.5] text-zinc-300/80 text-center px-1">
-                  {t("Ссылка ведет на внешний сайт")}{" "}
-                  <span className="font-semibold text-zinc-100">{externalLinkPrompt.host}</span>{t(". Это может быть мошеннический ресурс. Не вводите пароль, коды подтверждения и данные карты, если не уверены в сайте.")}</p>
-
-                {/* Single Primary Action Button on Mobile */}
-                <Button
-                  className="mt-6 w-full h-[52px] rounded-2xl bg-white text-zinc-950 font-semibold text-[16px] shadow-lg transition-all hover:bg-white/90 active:scale-[0.98] cursor-pointer"
-                  onClick={() => {
-                    const safeUrl = sanitizeExternalUrl(externalLinkPrompt.url);
-                    if (safeUrl) {
-                      window.open(safeUrl, "_blank", "noopener,noreferrer");
-                    } else {
-                      toast.error(t("Недопустимая или небезопасная ссылка"));
-                    }
-                    setExternalLinkPrompt(null);
-                  }}
-                >
-                  {t("Перейти")}</Button>
-              </motion.div>
-            </div>
-          </div>
+          <ConfirmationSheet
+            open
+            onOpenChange={(open) => { if (!open) setExternalLinkPrompt(null); }}
+            title={t("Возможный риск перехода")}
+            description={<>{t("Ссылка ведет на внешний сайт")}{" "}<span className="font-semibold">{externalLinkPrompt.host}</span>{t(". Это может быть мошеннический ресурс. Не вводите пароль, коды подтверждения и данные карты, если не уверены в сайте.")}</>}
+            actionLabel={t("Перейти")}
+            actionIcon={LinkIcon}
+            actionClassName="text-[var(--ui-accent-solid,#c4b5fd)] hover:text-[var(--ui-accent-solid,#c4b5fd)]"
+            zIndex={300}
+            onAction={() => {
+              const safeUrl = sanitizeExternalUrl(externalLinkPrompt.url);
+              if (safeUrl) window.open(safeUrl, "_blank", "noopener,noreferrer");
+              else toast.error(t("Недопустимая или небезопасная ссылка"));
+              setExternalLinkPrompt(null);
+            }}
+          />
         ) : null}
       </AnimatePresence>
 

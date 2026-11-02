@@ -10,6 +10,7 @@ vi.mock("@/lib/server/chat", () => ({ findDirectConversation: mock.conversation,
 vi.mock("@/lib/server/chat-list", () => ({ invalidateChatListPayloadCache: vi.fn() }));
 vi.mock("@/lib/server/chat-read-state", () => ({ setGroupReadMarker: vi.fn(), setChannelReadMarker: vi.fn() }));
 vi.mock("@/lib/server/realtime", () => ({ triggerRealtimeEvent: vi.fn(), userPrivateChannel: (id: string) => id }));
+import { triggerRealtimeEvent } from "@/lib/server/realtime";
 import { POST } from "./route";
 const request = () => new NextRequest("http://localhost/api/realtime/read", { method: "POST", body: JSON.stringify({ link: "sender", chatType: "direct", messageIds: ["message"] }) });
 beforeEach(() => {
@@ -29,7 +30,8 @@ it("does not prolong presence by replaying an already-read message", async () =>
 });
 it("does not indirectly reveal reading when read receipts are disabled", async () => {
   mock.privacy.mockResolvedValue({ showReadReceipts: false }); expect((await POST(request())).status).toBe(200);
-  expect(mock.messages).not.toHaveBeenCalled(); expect(mock.grant).not.toHaveBeenCalled();
+  expect(mock.messages).toHaveBeenCalled(); expect(mock.update).toHaveBeenCalled();
+  expect(mock.grant).not.toHaveBeenCalled(); expect(triggerRealtimeEvent).not.toHaveBeenCalled();
 });
 it("does not grant status without an authorized conversation", async () => {
   mock.conversation.mockResolvedValue(null); expect((await POST(request())).status).toBe(200);

@@ -22,6 +22,8 @@ type RawMessageEvent = {
   conversationId?: unknown;
   fromLink?: unknown;
   groupLink?: unknown;
+  channelLink?: unknown;
+  peerLink?: unknown;
   senderId?: unknown;
   senderName?: unknown;
   fromDisplayName?: unknown;
@@ -60,9 +62,11 @@ function normalizeIncomingMessage(raw: unknown): MessageNotificationEvent | null
   const messageId = readString(payload.messageId) ?? readString(payload.id);
   const chatId =
     readString(payload.chatId) ??
-    readString(payload.conversationId) ??
     readString(payload.groupLink) ??
-    readString(payload.fromLink);
+    readString(payload.channelLink) ??
+    readString(payload.peerLink) ??
+    readString(payload.fromLink) ??
+    readString(payload.conversationId);
 
   if (!messageId || !chatId) {
     return null;

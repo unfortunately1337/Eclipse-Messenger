@@ -1,7 +1,7 @@
 "use client";
 import React from "react";
 import { splitCustomEmoji } from "@/lib/custom-emoji";
-import { getEmojiStatus } from "@/lib/emoji-status";
+import { useEmojiEntry } from "@/lib/client/pack-items";
 function renderStaticUnicode(
   text: string,
   options?: { size?: number; className?: string }
@@ -67,7 +67,11 @@ function renderStaticUnicode(
 export function renderStaticEmojiText(text: string, options?: {size?:number;className?:string}): React.ReactNode[] {
   return splitCustomEmoji(text).flatMap<React.ReactNode>((part,index) => {
     if (!part.id) return renderStaticUnicode(part.text, options);
-    const entry = getEmojiStatus(part.id)!;
-    return [<img key={index} src={entry.thumbnail} alt={entry.emoji} draggable={false} className={options?.className || "inline-block align-[-0.15em] object-contain"} style={{width:options?.size??"1.15em",height:options?.size??"1.15em",filter:entry.adaptive?"var(--inline-emoji-filter, brightness(0) invert(1))":undefined}} />];
+    return [<StaticCustomEmoji key={index} id={part.id} {...options} />];
   });
+}
+function StaticCustomEmoji({ id, size, className }: { id: string; size?: number; className?: string }) {
+  const entry = useEmojiEntry(id);
+  if (!entry) return <span>❔</span>;
+  return <img src={entry.thumbnail} alt={entry.emoji} draggable={false} className={className || "inline-block align-[-0.15em] object-contain"} style={{ width: size ?? "1.15em", height: size ?? "1.15em", filter: entry.adaptive ? "var(--inline-emoji-filter, brightness(0) invert(1))" : undefined }} />;
 }

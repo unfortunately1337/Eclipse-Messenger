@@ -21,11 +21,12 @@ import { CallVoiceWaves, type CallVoiceLevels } from "./CallVoiceWaves";
 import { CallAvatarVoiceHalo } from "./CallAvatarVoiceHalo";
 import CallVideoStage from "./CallVideoStage";
 import { CallAmbientRibbon } from "./CallAmbientRibbon";
+import { CallElapsed } from "./CallElapsed";
 import { getEffectiveProfileGradient, isMediaBackgroundUrl } from "@/lib/profile-gradients";
 
 type Props = {
   name: string; avatarUrl: string | null; backgroundUrl: string | null;
-  status: string; duration: string | null; incoming: boolean; owned: boolean;
+  status: string; startedAt: number | null; incoming: boolean; owned: boolean;
   minimized: boolean; glass: boolean; busy: boolean; controlsDisabled: boolean;
   microphone: boolean; camera: boolean; sound: boolean; volume: number; onVolume: (value: number) => void; sharing: boolean; speaking: boolean;
   signal?: CallSignal;
@@ -38,9 +39,10 @@ type Props = {
   onFlipCamera?: () => void; cameraSwitching?: boolean;
 };
 
-function AnimatedStatus({ text, timer }: { text: string; timer?: string | null }) {
+function AnimatedStatus({ text, startedAt }: { text: string; startedAt: number | null }) {
+  const timer = startedAt !== null;
   return <div role={timer ? "timer" : "status"} aria-live={timer ? "off" : "polite"} className="relative flex h-6 w-full items-center justify-center overflow-hidden text-[14px] leading-5 text-zinc-400">
-    <AnimatePresence initial={false} mode="wait"><motion.span key={timer ? "timer" : text} className="max-w-full truncate tabular-nums" initial={{ opacity: 0, y: 5 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -5 }} transition={{ duration: 0.18 }}>{timer ?? text}</motion.span></AnimatePresence>
+    <AnimatePresence initial={false} mode="wait"><motion.span key={timer ? "timer" : text} className="max-w-full truncate tabular-nums" initial={{ opacity: 0, y: 5 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -5 }} transition={{ duration: 0.18 }}>{startedAt !== null ? <CallElapsed startedAt={startedAt} /> : text}</motion.span></AnimatePresence>
   </div>;
 }
 
@@ -78,8 +80,8 @@ export default function PersonalCallWindow(props: Props) {
   }, []);
   const connectionWave = useRef<HTMLDivElement>(null);
   const [waveComplete, setWaveComplete] = useState(false);
-  const connecting = !props.duration && props.status === "Соединение…";
-  const connected = Boolean(props.duration);
+  const connecting = props.startedAt === null && props.status === "Соединение…";
+  const connected = props.startedAt !== null;
   const [wasConnected, setWasConnected] = useState(connected);
   if (connected && !wasConnected) setWasConnected(true);
   const failed = Boolean(props.endOutcome && props.endOutcome !== "completed");
@@ -202,7 +204,7 @@ export default function PersonalCallWindow(props: Props) {
         <button type="button" onClick={props.onExpand} aria-label={t("Развернуть звонок")} className="flex h-full min-w-0 flex-1 items-center gap-2 text-left focus-visible:outline-2 focus-visible:outline-white/60">
           <Phone size={16} className="shrink-0 text-zinc-300" />
           <span className="min-w-0 flex-1 truncate text-[13px] font-semibold">{name}</span>
-          <span className="shrink-0 text-[11px] tabular-nums text-zinc-400">{props.duration ?? t(props.status)}</span>
+          <span className="shrink-0 text-[11px] tabular-nums text-zinc-400">{props.startedAt !== null ? <CallElapsed startedAt={props.startedAt} /> : t(props.status)}</span>
         </button>
         {incoming ? <button type="button" onClick={props.onAccept} disabled={busy} aria-label={t("Принять")} className={control + " h-7 w-7 text-emerald-400"}><IoCall size={16} /></button>
           : owned && <button type="button" onClick={props.onMicrophone} disabled={controlsDisabled} aria-label={t(props.microphone ? "Выключить микрофон" : "Включить микрофон")} aria-pressed={props.microphone} className={control + " h-7 w-7 " + (props.microphone ? "text-zinc-300" : "text-red-400")}>{props.microphone ? <FaMicrophone size={16} /> : <FaMicrophoneSlash size={16} />}</button>}
@@ -211,7 +213,7 @@ export default function PersonalCallWindow(props: Props) {
     </AnimatePresence>, miniTarget) : null}
     <AnimatePresence mode="wait">{!minimized && !closingWindow && (
       <motion.div ref={overlay} key="personal-full" data-call-visual={props.glass ? "glass" : "plain"} style={{ backgroundColor: props.glass ? "transparent" : "#18181c" }} className="fixed inset-0 z-[450] flex overflow-hidden bg-[#18181c] md:inset-y-3 md:right-3 md:left-[var(--call-panel-left,362px)] md:rounded-[28px] lg:left-[var(--call-panel-left,382px)]" initial={{ opacity: 0, y: reducedMotion ? 0 : 18 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: reducedMotion ? 0 : 18, transition: { duration: reducedMotion ? 0 : CALL_EXIT_SECONDS, ease: [0.4, 0, 1, 1] } }} transition={{ duration: reducedMotion ? 0 : 0.32, ease: [0.22, 1, 0.36, 1] }}>
-        <motion.section ref={dialog} tabIndex={-1} role="dialog" aria-modal="true" aria-label={`${t("Звонок")}: ${name}`} initial={{ y: 8, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ y: 8, opacity: 0 }} transition={{ duration: 0.22 }} className="relative flex h-full w-full flex-col overflow-hidden text-white outline-none" style={windowMaterial}>
+        <motion.section ref={dialog} tabIndex={-1} role="dialog" aria-modal="true" aria-label={`${t("Звонок")}: ${name}`} initial={false} className="relative flex h-full w-full flex-col overflow-hidden text-white outline-none" style={windowMaterial}>
           {!showWave && !terminal && <div data-call-ambient aria-hidden className="pointer-events-none absolute inset-0 overflow-hidden">
             <div className="absolute inset-0 opacity-[0.06]" style={{ background }} />
             <CallAmbientRibbon glass={props.glass} connecting={connecting} reducedMotion={Boolean(reducedMotion)} />
@@ -262,7 +264,7 @@ export default function PersonalCallWindow(props: Props) {
             </div>}
             <AnimatePresence initial={false}>{!hideIdentity && <motion.div data-call-identity key="identity" className="w-full shrink-0" initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 4 }} transition={{ duration: reducedMotion ? 0 : 0.18 }}>
             <h2 className="w-full shrink-0 truncate text-center text-[23px] font-semibold leading-8 tracking-tight md:text-[24px]">{name}</h2>
-            <div className="mt-1 w-full shrink-0"><AnimatedStatus text={t(props.status)} timer={props.duration} /></div>
+            <div className="mt-1 w-full shrink-0"><AnimatedStatus text={t(props.status)} startedAt={props.startedAt} /></div>
             </motion.div>}</AnimatePresence>
           </div>
           <footer className={`relative z-30 flex shrink-0 flex-col items-center gap-3 px-5 pb-[calc(env(safe-area-inset-bottom)+28px)] pt-3 md:gap-2 md:px-8 md:pb-10 md:pt-5 ${incomingLayout ? "min-h-[128px] md:min-h-[148px]" : "min-h-[112px] md:min-h-[132px]"}`}>

@@ -1,17 +1,21 @@
 "use client";
-import { translate as t } from "@/lib/i18n/translate";
-import { useTranslation } from "@/components/LocaleProvider";
+import { useLanguage, useTranslation } from "@/components/LocaleProvider";
 
 
-import { useEffect, useState, type CSSProperties } from "react";
+import { useEffect, useMemo, useState, type CSSProperties } from "react";
 import { CgMenuRound } from "react-icons/cg";
 import { AnimatePresence, motion } from "framer-motion";
 import { apiRequest } from "@/lib/client/http";
 import { DEFAULT_BOT_CHAT_SETTINGS, type BotChatSettings, type BotMenuButton } from "@/lib/bot-chat-settings";
 import { toast } from "sonner";
+import { IMPORTER_BOT_LINK } from "@/lib/imported-packs";
+import { IMPORTER_EMPTY_TEXT } from "@/lib/importer-copy";
+import { localizeSystemText } from "@/lib/i18n/translate";
 
 type Snapshot = { profileId: string; settings: BotChatSettings; commands: { command: string; description: string }[] };
 export function useBotChatSettings({ enabled, link, chatId, userId }: { enabled: boolean; link: string | null; chatId?: string | null; userId?: string | null }) {
+  const t = useTranslation();
+  const { locale } = useLanguage();
   const key = enabled && link ? `${userId}:${link}:${chatId ?? ""}` : "";
   const [snapshot, setSnapshot] = useState<(Snapshot & { key: string }) | null>(null);
   const [opening, setOpening] = useState<{ key: string; open: boolean } | null>(null);
@@ -34,7 +38,11 @@ export function useBotChatSettings({ enabled, link, chatId, userId }: { enabled:
     return () => { live = false; window.clearInterval(interval); window.removeEventListener("eclipse:bot-ui-updated", refresh); window.removeEventListener("focus", visible); document.removeEventListener("visibilitychange", visible); };
   }, [key, link, chatId]);
   const current = key && snapshot?.key === key ? snapshot : null;
-  const settings = current?.settings ?? DEFAULT_BOT_CHAT_SETTINGS;
+  const settings = useMemo(() => {
+    const base = current?.settings ?? DEFAULT_BOT_CHAT_SETTINGS;
+    if (link?.toLowerCase() !== IMPORTER_BOT_LINK) return base;
+    return { ...base, empty_text: localizeSystemText(IMPORTER_EMPTY_TEXT, locale), input_placeholder: t(base.input_placeholder), menu: base.menu.type === "keyboard" ? { ...base.menu, button_text: t(base.menu.button_text ?? "Меню"), keyboard: base.menu.keyboard.map(row => row.map(button => ({ ...button, text: t(button.text) }))) } : base.menu };
+  }, [current, link, t, locale]);
   const commands = current?.commands ?? [];
   const openingKey = `${key}:${JSON.stringify(settings.menu)}`;
   const menuOpen = opening?.key === openingKey ? opening.open : settings.menu.type === "keyboard" && settings.menu.open_by_default !== false;

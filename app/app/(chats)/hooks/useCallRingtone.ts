@@ -22,15 +22,18 @@ export function useCallRingtone(mode: "incoming" | "outgoing" | null) {
   }, []);
   useEffect(() => {
     if (!mode) return;
+    let cancelled = false;
     let stop: (() => void) | undefined;
     const ring = () => {
       const audio = context.current;
-      if (!audio || audio.state !== "running") return;
+      if (cancelled || !audio || audio.state !== "running") return;
       stop?.(); stop = playCallTone(audio, mode);
     };
     ringNow.current = ring;
     ring();
     const timer = window.setInterval(ring, mode === "incoming" ? 3200 : 4000);
-    return () => { clearInterval(timer); ringNow.current = null; stop?.(); };
+    const silence = () => { cancelled = true; clearInterval(timer); ringNow.current = null; stop?.(); };
+    window.addEventListener("eclipse:call-silence", silence);
+    return () => { silence(); window.removeEventListener("eclipse:call-silence", silence); };
   }, [mode]);
 }

@@ -147,3 +147,10 @@ Dependencies and third-party resources retain their own licenses. See
 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
 
 <p align="center"><a href="https://eclpse.ru"><strong>eclpse.ru</strong></a></p>
+
+### Sticker and emoji imports
+
+The built-in `@importbot` can import Telegram sticker and custom emoji packs into
+a user’s Eclipse account, including updates to existing packs. An optional Telegram
+bot bridge lets users send a sticker or custom emoji without copying a pack link.
+See [importer setup and architecture](docs/EMOJI_IMPORTER.md).

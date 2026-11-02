@@ -44,6 +44,62 @@ export function sortChatSummariesByLastMessageAt<T extends { lastMessageAt: stri
   return [...items].sort((a, b) => parseChatTimestamp(b.lastMessageAt) - parseChatTimestamp(a.lastMessageAt));
 }
 
+/** Reconcile the metadata-only secret-chat snapshot without resetting live previews. */
+export function mergeSecretChatSummaries<T extends RealtimeChatListItem & {
+  isApproved?: boolean;
+  unreadCount?: number;
+  expiresAt?: string | null;
+}>(previous: T[], incoming: T[]): T[] {
+  const isSecret = (chat: T) => chat.conversationId.startsWith("secret:") || chat.link.startsWith("secret-");
+  const current = new Map<string, T>();
+  for (const chat of previous) if (isSecret(chat)) current.set(buildChatSummaryKey(chat), chat);
+  if (!current.size && !incoming.length) return previous;
+
+  const updates = new Map<string, T>();
+  let added = false;
+  for (const source of incoming) {
+    const key = buildChatSummaryKey(source);
+    const id = key.slice("secret:".length);
+    const existing = current.get(key);
+    const sameApproval = existing?.isApproved === source.isApproved;
+    const preservePreview = existing && sameApproval && existing.isApproved;
+    const merged: T = {
+      ...existing,
+      ...source,
+      conversationId: `secret:${id}`,
+      link: `secret-${id}`,
+      // Pending chats have no expiry and the server has no message timestamp.
+      // Their first insertion time must not advance on each polling response.
+      lastMessageAt: existing?.lastMessageAt || source.lastMessageAt,
+      ...(existing && sameApproval ? { unreadCount: existing.unreadCount ?? source.unreadCount } : {}),
+      ...(preservePreview ? {
+        lastMessage: existing.lastMessage,
+        lastMessageMine: existing.lastMessageMine,
+        lastMessageCipherText: existing.lastMessageCipherText,
+        lastMessageIv: existing.lastMessageIv,
+        lastMessageEncryptedKey: existing.lastMessageEncryptedKey,
+        lastMessageKeyVersion: existing.lastMessageKeyVersion,
+        lastMessageSenderId: existing.lastMessageSenderId,
+        lastMessageSenderAlias: existing.lastMessageSenderAlias,
+      } : {}),
+    };
+    const unchanged = existing && Object.keys(merged).every(key => Object.is(existing[key as keyof T], merged[key as keyof T]));
+    updates.set(key, unchanged ? existing : merged);
+    if (!existing) added = true;
+  }
+
+  const next: T[] = [];
+  for (const chat of previous) {
+    if (!isSecret(chat)) { next.push(chat); continue; }
+    const key = buildChatSummaryKey(chat), updated = updates.get(key);
+    if (updated) { next.push(updated); updates.delete(key); }
+  }
+  next.push(...updates.values());
+  if (next.length === previous.length && next.every((chat, index) => chat === previous[index])) return previous;
+  // Metadata edits and removals do not change chronology. Only new chats need sorting.
+  return added ? sortChatSummariesByLastMessageAt(next) : next;
+}
+
 export function buildChatSummaryKey(chat: {
   chatType?: string | null;
   link?: string | null;

@@ -1,10 +1,11 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { subscribeToUserMessageEvents } from "@/lib/client/realtime/pusher";
 import { initMessageNotificationsRuntime } from "@/lib/client/realtime/notifications";
 import { registerBeamsDeviceForUser } from "@/lib/client/realtime/beams";
+import { chatIdFromLocation } from "@/lib/client/chat-location";
 
 type AppNotificationsBootstrapProps = {
   userId: string;
@@ -14,12 +15,6 @@ const NOTIFICATIONS_PERMISSION_ASKED_KEY_PREFIX = "eclipse:notifications:permiss
 
 function notificationsPermissionAskedKey(userId: string) {
   return `${NOTIFICATIONS_PERMISSION_ASKED_KEY_PREFIX}${userId}`;
-}
-
-function extractChatId(pathname: string): string | null {
-  const match = pathname.match(/^\/chat\/([^/]+)$/);
-  if (!match) return null;
-  return decodeURIComponent(match[1]);
 }
 
 function canAskNotificationPermission() {
@@ -44,6 +39,7 @@ function markPermissionAsked(userId: string) {
 
 export default function AppNotificationsBootstrap({ userId }: AppNotificationsBootstrapProps) {
   const pathname = usePathname();
+  const searchParams = useSearchParams();
   const router = useRouter();
   const runtimeRef = useRef<Awaited<ReturnType<typeof initMessageNotificationsRuntime>> | null>(null);
 
@@ -54,7 +50,7 @@ export default function AppNotificationsBootstrap({ userId }: AppNotificationsBo
     async function setup() {
       const runtime = await initMessageNotificationsRuntime({
         currentUserId: userId,
-        getActiveChatId: () => extractChatId(window.location.pathname),
+        getActiveChatId: () => chatIdFromLocation(window.location.pathname, window.location.search),
         buildChatUrl: (chatId) => `/chat/${encodeURIComponent(chatId)}`,
         onOpenChat: ({ url }) => {
           router.push(url);
@@ -67,7 +63,7 @@ export default function AppNotificationsBootstrap({ userId }: AppNotificationsBo
       }
 
       runtimeRef.current = runtime;
-      runtime.updateActiveChat(extractChatId(window.location.pathname));
+      runtime.updateActiveChat(chatIdFromLocation(window.location.pathname, window.location.search));
 
       if (typeof window !== "undefined" && "Notification" in window && Notification.permission === "granted") {
         await registerBeamsDeviceForUser(userId).catch(error => console.warn("Push registration unavailable", error));
@@ -94,8 +90,8 @@ export default function AppNotificationsBootstrap({ userId }: AppNotificationsBo
   }, [router, userId]);
 
   useEffect(() => {
-    runtimeRef.current?.updateActiveChat(extractChatId(pathname));
-  }, [pathname]);
+    runtimeRef.current?.updateActiveChat(chatIdFromLocation(pathname, searchParams.toString()));
+  }, [pathname, searchParams]);
 
   useEffect(() => {
     if (!canAskNotificationPermission() || wasPermissionAsked(userId)) return;

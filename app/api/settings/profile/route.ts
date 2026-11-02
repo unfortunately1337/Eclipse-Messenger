@@ -61,7 +61,7 @@ const musicTextSchema = z.preprocess(
 
 const patchSchema = z.object({
   displayName: z.string().trim().min(1).max(60).optional(),
-  emojiStatusId: z.string().max(100).refine(id => getEmojiStatus(id) !== null, "Unknown emoji status").nullable().optional(),
+  emojiStatusId: z.string().regex(/^tg-[a-f0-9]{24}$/).nullable().optional(),
   link: z.string().transform(normalizeLink).optional(),
   description: z.string().trim().max(280).optional().nullable(),
   avatarUrl: mediaUrlSchema.optional().nullable(),
@@ -136,6 +136,10 @@ export async function PATCH(req: NextRequest) {
     verifyCsrf(req);
     const { user } = await requireUserFromRequest(req);
     const body = patchSchema.parse(await readJsonBody(req, 16 * 1024 * 1024));
+    if (body.emojiStatusId && !getEmojiStatus(body.emojiStatusId) && body.emojiStatusId !== user.emojiStatusId) {
+      const imported = await prisma.importedPackItem.findFirst({ where: { id: body.emojiStatusId, published: true, pack: { kind: "emoji", ready: true, users: { some: { userId: user.id } } } }, select: { id: true } });
+      if (!imported) throw new HttpError(400, "Unknown emoji status");
+    }
 
     // Fetch existing user fields from database so no field is lost
     const currentUserData = await prisma.user.findUnique({

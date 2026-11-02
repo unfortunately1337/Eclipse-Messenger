@@ -8,8 +8,8 @@ export function splitCustomEmoji(text: string): EmojiTextPart[] {
   const parts: EmojiTextPart[] = [];
   let start = 0;
   for (const match of text.matchAll(tokenPattern)) {
-    if (!getEmojiStatus(match[1])) continue;
     if (match.index! > start) parts.push({ text: text.slice(start, match.index) });
+    // Unknown IDs can belong to a shared pack; the renderer resolves them lazily.
     parts.push({ text: match[0], id: match[1] });
     start = match.index! + match[0].length;
   }
@@ -17,7 +17,7 @@ export function splitCustomEmoji(text: string): EmojiTextPart[] {
   return parts;
 }
 export function emojiPlainText(text: string) {
-  return splitCustomEmoji(text).map(part => part.id ? getEmojiStatus(part.id)?.emoji ?? "" : part.text).join("");
+  return splitCustomEmoji(text).map(part => part.id ? getEmojiStatus(part.id)?.emoji ?? "❔" : part.text).join("");
 }
 
 /** Truncate visible characters without cutting a serialized emoji or grapheme in half. */

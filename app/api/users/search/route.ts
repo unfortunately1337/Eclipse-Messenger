@@ -1,3 +1,4 @@
+import { ensureImporterBotUser, matchesImporterQuery } from "@/lib/server/pack-importer-bot";
 import { NextRequest } from "next/server";
 import { z } from "zod";
 import { requireUserFromRequest } from "@/lib/server/auth";
@@ -21,7 +22,7 @@ const SEARCH_PRIVACY_TIMEOUT_MS = 220;
 
 
 function searchResultCacheKey(userId: string, query: string) {
-  return `search:users:v10:${userId}:${query}`;
+  return `search:users:v11:${userId}:${query}`;
 }
 
 function withTimeout<T>(promise: Promise<T>, timeoutMs: number, fallback: T) {
@@ -405,6 +406,10 @@ export async function GET(req: NextRequest) {
     const eclipse = matchesEclipseDialogQuery(rawQuery)
       ? [{ id: `eclipse:${user.id}`, link: ECLIPSE_DIALOG_LINK, title: ECLIPSE_DIALOG_TITLE, avatarUrl: null, isSystem: true, isVerified: true }]
       : [];
+    if (matchesImporterQuery(rawQuery)) {
+      const importer = await ensureImporterBotUser();
+      users.unshift({ id: importer.id, isBot: true, link: importer.link, secondaryLinks: [], displayName: importer.displayName, avatarUrl: importer.avatarUrl });
+    }
     const payload = { users, groups, channels, saved, eclipse };
     try {
       // A transient privacy timeout must not poison the result cache for 30 seconds.

@@ -1,3 +1,5 @@
+import { IMPORTER_BOT_LINK } from "@/lib/imported-packs";
+import { handleImporterCallback } from "@/lib/server/pack-importer-bot";
 import { NextRequest } from "next/server";
 import { z } from "zod";
 import { requireUserFromRequest } from "@/lib/server/auth";
@@ -9,6 +11,7 @@ import { enforceRateLimit } from "@/lib/server/rate-limit";
 import { readBotRequestBody } from "@/lib/server/bot-request-body";
 export async function POST(req: NextRequest, { params }: { params: Promise<{ link: string }> }) {
   try {
+    if ((await params).link.toLowerCase() === IMPORTER_BOT_LINK) return await handleImporterCallback(req);
     verifyCsrf(req); const { user } = await requireUserFromRequest(req);
     await enforceRateLimit({ key: `bot-callback:${user.id}`, limit: 60, windowSeconds: 60 });
     const args = z.object({ messageId: z.string().max(128), data: z.string().max(64), requestId: z.string().uuid() }).strict().parse(JSON.parse(new TextDecoder().decode(await readBotRequestBody(req, 1024))));

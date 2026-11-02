@@ -7,6 +7,8 @@ import { getTelegramEmojiGifUrl } from "@/lib/client/telegram-emoji-gifs";
 import assets from "@/lib/client/inline-emoji-assets.json";
 import { watchAnimationVisibility } from "@/lib/client/use-animation-visibility";
 import { EMOJI_CLIPBOARD_TYPE as MIME, emojiClipboardHtml, readEmojiClipboard } from "@/lib/client/emoji-clipboard";
+import { createRoot } from "react-dom/client";
+import { InlineEmoji } from "./InlineEmoji";
 
 const segmenter = new Intl.Segmenter("en", {granularity:"grapheme"});
 const isEmoji = /[\p{Emoji_Presentation}\p{Extended_Pictographic}]|\u20E3/u;
@@ -64,8 +66,9 @@ export const EmojiComposer=forwardRef<EmojiComposerHandle,{value:string;onValueC
    const flush=()=>{if(plain){const lines=plain.split('\n');lines.forEach((line,index)=>{if(index){const br=document.createElement('br');br.dataset.editorNewline='true';fragment.append(br);}if(line)fragment.append(document.createTextNode(line));});plain='';}};
    for(const part of splitCustomEmoji(source))for(const token of part.id?[{segment:part.text}]:segmenter.segment(part.text)){
    const text=token.segment,entry=part.id?getEmojiStatus(part.id):null;
-   if(!entry&&!isEmoji.test(text)){plain+=text;continue;}
+   if(!part.id&&!entry&&!isEmoji.test(text)){plain+=text;continue;}
    flush();const span=document.createElement('span');span.contentEditable='false';span.dataset.emojiToken=text;span.dataset.composerEmoji=entry?.id??text;span.className='inline-block mx-[0.025em]';span.style.cssText='width:1.125em;height:1.125em;vertical-align:-.125em;user-select:all;line-height:1;';
+   if(part.id&&(!entry||entry.packId)){fragment.append(span);const player=createRoot(span);const size=parseFloat(getComputedStyle(root).fontSize)*1.125;player.render(<InlineEmoji id={part.id} size={size} className="block"/>);cleanups.current.set(span,()=>player.unmount());continue;}
    const filename=getTelegramEmojiGifUrl(text)?.split('/').pop(),asset=filename?(assets as Record<string,{preview:string;still:string}>)[filename]:null;
    const still=entry?.thumbnail??asset?.still,animation=entry?.preview??asset?.preview;
    if(still&&animation){const img=document.createElement('img');img.alt=entry?.emoji??text;img.draggable=false;img.decoding='async';img.src=still;img.style.cssText='width:100%;height:100%;object-fit:contain;display:block;';if(entry?.adaptive)img.style.filter='brightness(0) invert(1)';span.append(img);fragment.append(span);cleanups.current.set(span,watchAnimationVisibility(span,visible=>{const src=visible&&!reduced?animation:still;if(img.getAttribute('src')!==src)img.src=src;span.dataset.emojiPlaying=String(visible&&!reduced);}));}

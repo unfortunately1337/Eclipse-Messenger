@@ -7,7 +7,7 @@ import sharp from "sharp";
 it.skipIf(!existsSync(`public${EMOJI_STATUS_CATALOG[0].animation}`))("bundles unique custom emoji IDs with local animations and thumbnails", () => {
   expect(new Set(EMOJI_STATUS_CATALOG.map(entry => entry.id)).size).toBe(EMOJI_STATUS_CATALOG.length);
   expect(new Set(EMOJI_STATUS_CATALOG.map(entry => entry.category))).toEqual(new Set([
-    "Halloween", "GameEmoji", "MasksEmoji", "DuckEmoji", "NewsEmoji", "FinanceEmoji", "CursedMoji",
+    "GameEmoji", "MasksEmoji", "DuckEmoji", "NewsEmoji", "FinanceEmoji", "CursedMoji",
   ]));
   for (const entry of EMOJI_STATUS_CATALOG) {
     expect(entry.id).toMatch(/^tg-[a-f0-9]{24}$/);
@@ -33,12 +33,8 @@ it.skipIf(!existsSync(`public${EMOJI_STATUS_CATALOG[0].preview}`))("has complete
 }, 15_000);
 
 it("excludes removed packs and paints Masks white", () => {
-  expect(EMOJI_STATUS_CATALOG.slice(0, 40).every(entry => entry.category === "Halloween")).toBe(true);
-  expect(EMOJI_STATUS_CATALOG[40].category).not.toBe("Halloween");
   expect(EMOJI_STATUS_CATALOG.some(entry => ["EmojiStatus", "NeonEmoji", "AdaptiveEmojiStatus"].includes(entry.category))).toBe(false);
   expect(EMOJI_STATUS_CATALOG.filter(entry => entry.category === "MasksEmoji").every(entry => entry.adaptive)).toBe(true);
   expect(EMOJI_STATUS_CATALOG.filter(entry => entry.animation.includes("/GameIcons/")).every(entry => entry.category === "GameEmoji" && entry.adaptive)).toBe(true);
-  expect(EMOJI_STATUS_CATALOG.filter(entry => entry.animation.includes("/GhostEmoji/")).every(entry => entry.category === "Halloween")).toBe(true);
   expect(EMOJI_STATUS_CATALOG.filter(entry => entry.animation.includes("/CreepyEmoji/")).every(entry => entry.category === "CursedMoji")).toBe(true);
-  expect(EMOJI_STATUS_CATALOG.some(entry => entry.animation.includes("/HalloweenIcons/"))).toBe(false);
 });

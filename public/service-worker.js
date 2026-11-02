@@ -124,10 +124,12 @@ async function hasVisibleClientForChat(chatId) {
   if (!target) return false;
   const windows = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
   for (const client of windows) {
+    if (client.visibilityState !== "visible") continue;
     const state = clientStates.get(client.id);
     if (state && state.visibility === "visible" && state.activeChatId && state.activeChatId.trim().toLowerCase() === target) {
       return true;
     }
+    if (state) continue;
     const urlChatId = extractChatIdFromUrl(client.url);
     if (urlChatId && urlChatId.trim().toLowerCase() === target && client.visibilityState === "visible") {
       return true;
@@ -292,7 +294,8 @@ async function fetchSecurePayload(messageId, chatId) {
   try {
     const res = await fetch(`/api/chats/notifications/payload?messageId=${encodeURIComponent(messageId)}&chatId=${encodeURIComponent(chatId)}`);
     if (res.ok) {
-      return await res.json();
+      const result = await res.json();
+      return result.ok === true && result.data ? result.data : result;
     }
   } catch (e) {
     // ignore
@@ -340,6 +343,8 @@ self.addEventListener("push", (event) => {
       displayBody = defaultBody;
     }
 
+    // The chat may have opened while the payload was fetched or decrypted.
+    if (await hasVisibleClientForChat(payload.chatId)) return;
     await self.registration.showNotification(payload.senderName, {
       body: displayBody,
       icon: payload.icon,

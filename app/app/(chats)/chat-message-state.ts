@@ -23,9 +23,9 @@ export function appendAndSortMessages<T extends { id: string; createdAt: string;
   }
 
   // If nextMessage is a confirmed message (not pending), check if an optimistic pending message matches it
-  if (!nextMessage.pending && (nextMessage as any).senderId && (nextMessage as any).text) {
+  if (!nextMessage.pending && nextMessage.senderId && nextMessage.text) {
     const pendingIndex = prev.findIndex(
-      (m) => m.pending && (m as any).senderId === (nextMessage as any).senderId && (m as any).text === (nextMessage as any).text,
+      (m) => m.pending && m.senderId === nextMessage.senderId && m.text === nextMessage.text,
     );
     if (pendingIndex >= 0) {
       const pendingMsg = prev[pendingIndex];
@@ -121,7 +121,7 @@ export function getEcliStreamRevealIndex(elapsedMs: number, textLength: number, 
   return Math.min(textLength, Math.floor(eased * textLength));
 }
 
-export function mergeMessageWindow<T extends { id: string; createdAt: string; localId?: string | null }>(baseMessages: T[], nextWindow: T[]) {
+export function mergeMessageWindow<T extends { id: string; createdAt: string; localId?: string | null; pending?: boolean; text?: string | null; senderId?: string | null }>(baseMessages: T[], nextWindow: T[]) {
   if (baseMessages.length === 0) {
     return nextWindow.slice().sort(compareMessagesByTime);
   }
@@ -130,21 +130,44 @@ export function mergeMessageWindow<T extends { id: string; createdAt: string; lo
   }
 
   const baseById = new Map(baseMessages.map((message) => [message.id, message]));
+  const replacedPending = new Set<string>();
   const nextById = new Map(
     nextWindow.map((message) => {
-      const existing = baseById.get(message.id);
+      // Bot refreshes can arrive before the HTTP send response. Reconcile that
+      // echo with one pending row instead of briefly displaying both bubbles.
+      const pending = !baseById.has(message.id) && !message.pending && message.senderId && message.text
+        ? baseMessages.find(value => value.pending && !replacedPending.has(value.id) && value.senderId === message.senderId && value.text === message.text && Math.abs(Date.parse(value.createdAt) - Date.parse(message.createdAt)) < 30_000)
+        : undefined;
+      if (pending) replacedPending.add(pending.id);
+      const existing = baseById.get(message.id) ?? pending;
       const stableMessage =
-        existing?.localId
+        existing?.localId || pending
           ? {
               ...message,
-              localId: existing.localId,
-              createdAt: existing.createdAt || message.createdAt,
+              localId: existing?.localId ?? pending?.id,
+              createdAt: existing?.createdAt || message.createdAt,
+              pending: false,
             }
           : message;
       return [message.id, stableMessage as T];
     }),
   );
-  const merged = baseMessages.filter((message) => !nextById.has(message.id));
+  const merged = baseMessages.filter((message) => !nextById.has(message.id) && !replacedPending.has(message.id));
   merged.push(...nextById.values());
   return merged.sort(compareMessagesByTime);
 }
+
+/** The row index is absolute even when only a slice of the chat is mounted. */
+export function getMessageSelectionNeighbors(
+  messages: readonly { id: string }[],
+  index: number,
+  selected: ReadonlySet<string>,
+) {
+  const previousId = messages[index - 1]?.id;
+  const nextId = messages[index + 1]?.id;
+  return {
+    previous: previousId !== undefined && selected.has(previousId),
+    next: nextId !== undefined && selected.has(nextId),
+  };
+}
+

@@ -431,6 +431,16 @@ html[data-app-transparent-visual] :is([data-app-panel], .app-panel-surface) * {
   backdrop-filter: none !important;
 }
 
+/* Confirmation dialogs share one compact layout in both material modes. */
+html[data-app-transparent-visual="true"] [data-confirmation-dialog] {
+  --app-panel-background: rgba(32, 32, 36, 0.9);
+  --app-panel-filter: blur(18px) saturate(1.12);
+  --app-panel-highlight: inset 0 1px 0 rgba(255,255,255,0.07), 0 12px 40px rgba(0,0,0,0.2);
+}
+html[data-app-transparent-visual="false"] [data-confirmation-dialog] {
+  --app-panel-background: #212121;
+}
+
 /* Skip covered chat/sidebar layers instead of compositing glass behind a full panel. */
 [data-panel-covered="true"],
 html[data-app-transparent-visual] [data-panel-covered="true"] {

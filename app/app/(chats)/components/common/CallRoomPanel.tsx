@@ -11,6 +11,7 @@ import { showAppToast } from "@/lib/client/app-toast";
 import type { CallConnection, CallView, CallsSnapshot } from "@/lib/calls";
 import { getChatHeaderVisualStyle } from "@/lib/client/panel-visual";
 import PersonalCallWindow from "./PersonalCallWindow";
+import { CallElapsed } from "./CallElapsed";
 import { useCallAudioLevels } from "../../hooks/useCallAudioLevels";
 import { useParticipantAudio } from "../../hooks/useParticipantAudio";
 import { selectCallVideo, visibleCallTrack, screenShareError } from "@/lib/client/call-screen-share";
@@ -58,7 +59,6 @@ export const CallRoomPanel = memo(function CallRoomPanel({ call, selfId, glass, 
   const [cameraSwitching, setCameraSwitching] = useState(false);
   const [cameraFacing, setCameraFacing] = useState<CallCameraFacing>("user");
   const mediaLock = useRef(false);
-  const [elapsed, setElapsed] = useState(0);
   const [audioBlocked, setAudioBlocked] = useState(false);
   const participantAudio = useParticipantAudio(call);
   const intentionalHangup = useRef(false);
@@ -70,7 +70,7 @@ export const CallRoomPanel = memo(function CallRoomPanel({ call, selfId, glass, 
   const callEnded = call.status === "ended";
 
   useEffect(() => {
-    if (!call.onThisSession || callEnded) return;
+    if (!call.onThisSession || callEnded || call.requesting) return;
     let cancelled = false;
     let active: Room | null = null;
     const rendering = createCallRenderScheduler(() => { if (!cancelled) redraw(value => value + 1); });
@@ -96,6 +96,7 @@ export const CallRoomPanel = memo(function CallRoomPanel({ call, selfId, glass, 
         session.on(RoomEvent.Reconnected, () => { if (!cancelled) setState("На связи"); });
         session.on(RoomEvent.AudioPlaybackStatusChanged, () => { if (!cancelled) setAudioBlocked(!session.canPlaybackAudio); });
         session.on(RoomEvent.Disconnected, () => {
+          window.dispatchEvent(new Event("eclipse:call-silence"));
           if (!cancelled && !intentionalHangup.current) {
             setState("Звонок завершён");
             void apiRequest<CallsSnapshot>(`/api/calls?previous=${encodeURIComponent(call.id)}`).then(snapshot => {
@@ -126,14 +127,7 @@ export const CallRoomPanel = memo(function CallRoomPanel({ call, selfId, glass, 
     };
     void connect();
     return () => { cancelled = true; rendering.dispose(); if (active) { active.removeAllListeners(); void active.disconnect(true); } };
-  }, [call.id, call.kind, call.onThisSession, callEnded, initialVideo]);
-
-  useEffect(() => {
-    const update = () => setElapsed(call.startedAt ? Math.max(0, Math.floor((Date.now() - call.startedAt) / 1000)) : 0);
-    update();
-    const timer = window.setInterval(update, 1000);
-    return () => clearInterval(timer);
-  }, [call.startedAt]);
+  }, [call.id, call.kind, call.onThisSession, call.requesting, callEnded, initialVideo]);
 
   const toggle = useCallback(async (kind: "mic" | "camera" | "screen") => {
     if (!room || mediaLock.current || room.state !== "connected" || callEnded || intentionalHangup.current) return;
@@ -211,8 +205,7 @@ export const CallRoomPanel = memo(function CallRoomPanel({ call, selfId, glass, 
   const microphone = room?.localParticipant.isMicrophoneEnabled ?? false;
   const camera = room?.localParticipant.isCameraEnabled ?? false;
   const screen = room?.localParticipant.isScreenShareEnabled ?? false;
-  const duration = `${String(Math.floor(elapsed / 60)).padStart(2, "0")}:${String(elapsed % 60).padStart(2, "0")}`;
-  const status = call.incoming ? t("Входящий звонок") : call.status === "ringing" ? t("Ожидаем ответа…") : !call.onThisSession ? t("Звонок открыт на другом устройстве") : `${t(state)}${call.startedAt ? ` · ${duration}` : ""}`;
+  const status = call.incoming ? t("Входящий звонок") : call.status === "ringing" ? t("Ожидаем ответа…") : !call.onThisSession ? t("Звонок открыт на другом устройстве") : <>{t(state)}{call.startedAt ? <> · <CallElapsed startedAt={call.startedAt} /></> : null}</>;
   const finished = call.status === "ended" || Boolean(localEndOutcome) || state === "Звонок завершён";
   const endOutcome = call.endOutcome ?? localEndOutcome;
   const controlsDisabled = !connected || mediaBusy || busy || finished;
@@ -247,7 +240,7 @@ export const CallRoomPanel = memo(function CallRoomPanel({ call, selfId, glass, 
       active={!finished && call.status === "active" && call.onThisSession} endOutcome={finished ? endOutcome ?? "completed" : undefined}
       signal={callConnectionSignal(room?.state, [room?.localParticipant.connectionQuality ?? "unknown", remote?.connectionQuality ?? "unknown"], finished)}
       name={call.title} avatarUrl={peer?.avatarUrl ?? null} backgroundUrl={call.peer?.backgroundUrl ?? null}
-      status={personalStatus} duration={!finished && call.status === "active" && call.startedAt && call.onThisSession && connected && remote ? duration : null}
+      status={personalStatus} startedAt={!finished && call.status === "active" && call.startedAt && call.onThisSession && connected && remote ? call.startedAt : null}
       incoming={call.incoming && !finished} owned={call.onThisSession && !finished} minimized={minimized} glass={glass} busy={busy} controlsDisabled={controlsDisabled}
       microphone={microphone} camera={camera} sound={!peerAudio.muted} volume={peerAudio.volume} onVolume={value => { if (peer) participantAudio.update(peer.id, { volume: value, muted: value === 0 }); }} sharing={screen} speaking={remote?.isSpeaking ?? false} readVoiceLevels={readVoiceLevels}
       video={!finished && mainVideo ? <TrackElement track={mainVideo} local={presentation.local} audio={false} /> : undefined}

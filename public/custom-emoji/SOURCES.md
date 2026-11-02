@@ -1,13 +1,12 @@
 # Custom emoji status assets
 
-**Source-edition notice:** this document records provenance of the production
-catalog. Original pack binaries are not included in this repository. Local
-system-emoji fallbacks are used instead; see `docs/ARTWORK.md`.
+**Source-edition notice:** original production pack binaries are not included.
+See `docs/ARTWORK.md`. Account-imported packs are retrieved at runtime with the
+operator’s own Telegram bot and media storage configuration; see `docs/EMOJI_IMPORTER.md`.
 
 Original Telegram custom emoji artwork belongs to the respective pack authors.
-The active catalog contains 633 entries, grouped as follows:
+The active catalog contains 593 entries, grouped as follows:
 
-- Halloween: https://t.me/addemoji/GhostEmoji — 40 animations; first in All.
 - Games: https://t.me/addemoji/GameEmoji — 100 animations, and https://t.me/addemoji/GameIcons — 100 animations rendered white.
 - Masks: https://t.me/addemoji/MasksEmoji — 30 animations rendered white.
 - Ducks: https://t.me/addemoji/DuckEmoji — 104 animations.
@@ -15,7 +14,7 @@ The active catalog contains 633 entries, grouped as follows:
 - Finance: https://t.me/addemoji/FinanceEmoji — 60 animations.
 - CursedMoji: https://t.me/addemoji/CreepyEmoji — 100 animations.
 
-Status, Neon, Adaptive and the former HalloweenIcons pack are excluded.
+Status, Neon and Adaptive packs are excluded.
 Original files were exported through https://boosts.tg/en/tools/telegram-emoji-pack-downloader.
 Russian search descriptions, where matched by pack position and Unicode fallback,
 come from https://github.com/Zulut30/premium-telegram-emoji.

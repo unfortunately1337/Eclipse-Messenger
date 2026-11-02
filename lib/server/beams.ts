@@ -1,3 +1,5 @@
+import { isNotificationChatVisible } from "./notification-view";
+
 type BeamsMessagePayload = {
   messageId: string;
   chatId: string;
@@ -37,6 +39,8 @@ function normalizeText(text: string): string {
 export async function publishBeamsMessageToUser(userId: string, payload: BeamsMessagePayload): Promise<void> {
   const cfg = getBeamsConfig();
   if (!cfg) return;
+  // Reading on another device also suppresses pushes; public presence is unrelated.
+  if (await isNotificationChatVisible(userId, payload.chatId).catch(() => false)) return;
 
   const deepLink = payload.deepLink ?? `/chat/${encodeURIComponent(payload.chatId)}`;
   const endpoint =

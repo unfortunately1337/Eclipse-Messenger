@@ -26,11 +26,8 @@ export async function POST(req: NextRequest) {
     const { user } = await requireUserFromRequest(req);
     const body = bodySchema.parse(await readJsonBody(req, 128 * 1024));
     const privacy = await getPrivacySettings(user.id);
-    if (!privacy.showReadReceipts) {
-      const res = jsonOk({ ok: true, count: 0, hidden: true });
-      ensureCsrfCookie(req, res);
-      return applyCors(req, res);
-    }
+    // Private unread markers belong to the reader. Hiding read receipts only
+    // suppresses disclosure to senders; it must not leave chats unread forever.
     if (body.chatType === "saved" || body.link === SAVED_DIALOG_LINK) {
       const res = jsonOk({ ok: true, count: 0 });
       ensureCsrfCookie(req, res);
@@ -106,7 +103,7 @@ export async function POST(req: NextRequest) {
         await invalidateChatListPayloadCache(user.id);
       }
 
-      if (validMessageIds.length > 0) {
+      if (validMessageIds.length > 0 && privacy.showReadReceipts) {
         const messagesBySender = new Map<string, string[]>();
         for (const message of validMessages) {
           const ids = messagesBySender.get(message.senderId) ?? [];
@@ -237,7 +234,7 @@ export async function POST(req: NextRequest) {
       advancedReadMarker = updated > 0;
     }
 
-    if (validMessageIds.length > 0) {
+    if (validMessageIds.length > 0 && privacy.showReadReceipts) {
       if (advancedReadMarker) await grantInteractionPresence(user.id, [peer.id]);
       try {
         await triggerRealtimeEvent({

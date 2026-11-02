@@ -1,3 +1,5 @@
+import { IMPORTER_BOT_LINK, importedItemIdFromSrc } from "@/lib/imported-packs";
+import { handleImporterMessage } from "@/lib/server/pack-importer-bot";
 import { NextRequest } from "next/server";
 import { z } from "zod";
 import { requireUserFromRequest } from "@/lib/server/auth";
@@ -25,6 +27,11 @@ async function validateBotMedia(text: string, conversationId: string) {
   for (const src of sources) {
     if (typeof src !== "string") throw new HttpError(400, "Некорректное вложение.");
     if (media.type === "sticker" && /^\/stickers\/[A-Za-z0-9_./-]+$/.test(src) && !src.includes("..")) continue;
+    const importedId = media.type === "sticker" ? importedItemIdFromSrc(src) : null;
+    if (importedId && src.endsWith("/original")) {
+      if (!await prisma.importedPackItem.findFirst({ where: { id: importedId, published: true, pack: { ready: true, kind: "sticker" } }, select: { id: true } })) throw new HttpError(400, "Набор стикеров недоступен.");
+      continue;
+    }
     if (!src.startsWith("/media/") || src.includes("#")) throw new HttpError(400, "Вложение должно быть загружено в чат бота.");
     const asset = await prisma.mediaAsset.findFirst({ where: { objectKey: decodeURIComponent(src.slice(7)), scopeType: "conversation", scopeId: conversationId, status: "ready", clientEncrypted: false } });
     if (!asset) throw new HttpError(403, "Вложение принадлежит другому чату.");
@@ -32,6 +39,7 @@ async function validateBotMedia(text: string, conversationId: string) {
 }
 async function handle(req: NextRequest, { params }: { params: Promise<{ link: string }> }) {
   try {
+    if ((await params).link.toLowerCase() === IMPORTER_BOT_LINK) return await handleImporterMessage(req);
     verifyCsrf(req); const { user } = await requireUserFromRequest(req);
     await enforceRateLimit({ key: `bot-user-message:${user.id}`, limit: 60, windowSeconds: 60 });
     const bot = await prisma.managedBot.findFirst({ where: { profile: { link: { equals: (await params).link, mode: "insensitive" }, isBot: true, isSystemAccount: false } }, include: { profile: true } });

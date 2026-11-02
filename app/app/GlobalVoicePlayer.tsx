@@ -1,10 +1,8 @@
 "use client";
-import { translate as t } from "@/lib/i18n/translate";
 import { useTranslation } from "@/components/LocaleProvider";
 
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { usePlaybackWaveformLevels } from "@/lib/client/voice-waveform";
 import { useMediaPortalTarget } from "@/lib/client/media-portal-targets";
 import { createPortal } from "react-dom";
 import { usePathname } from "next/navigation";
@@ -31,7 +29,6 @@ export default function GlobalVoicePlayer() {
   const t = useTranslation();
   const pathname = usePathname();
   const audioRef = useRef<HTMLAudioElement | null>(null);
-  const [audioNode, setAudioNode] = useState<HTMLAudioElement | null>(null);
   const srcRef = useRef("");
   const playingRef = useRef(false);
   const [src, setSrc] = useState("");
@@ -46,7 +43,6 @@ export default function GlobalVoicePlayer() {
   const isAppRoute = pathname?.startsWith("/app") ?? false;
   const listTarget = useMediaPortalTarget("global-voice-list-slot", isAppRoute);
   const chatTarget = useMediaPortalTarget("global-voice-chat-slot", isAppRoute);
-  const playbackLevels = usePlaybackWaveformLevels(audioNode, playing, visible && Boolean(src));
 
   const progressPercent = useMemo(() => {
     if (!durationMs) return 0;
@@ -63,11 +59,11 @@ export default function GlobalVoicePlayer() {
           visible,
           durationMs,
           positionMs,
-          levels: playbackLevels,
+          levels: null,
         },
       }),
     );
-  }, [author, durationMs, playbackLevels, positionMs, visible]);
+  }, [author, durationMs, positionMs, visible]);
 
   useEffect(() => {
     srcRef.current = src;
@@ -315,10 +311,7 @@ export default function GlobalVoicePlayer() {
   return (
     <>
       <audio
-        ref={(node) => {
-          audioRef.current = node;
-          setAudioNode(node);
-        }}
+        ref={audioRef}
         preload="metadata"
       />
       {listTarget

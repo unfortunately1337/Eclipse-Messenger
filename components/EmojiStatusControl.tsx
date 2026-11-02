@@ -5,7 +5,7 @@ import dynamic from "next/dynamic";
 import { SmilePlus as FaceSlightlySmilingPlus } from "lucide-react";
 import { useReducedMotion } from "framer-motion";
 import { useTranslation } from "@/components/LocaleProvider";
-import { getEmojiStatus } from "@/lib/emoji-status";
+import { useEmojiEntry } from "@/lib/client/pack-items";
 import { EmojiStatusIcon } from "./EmojiStatusIcon";
 
 const Picker = dynamic(() => import("./EmojiStatusPicker"), { ssr: false });
@@ -21,7 +21,7 @@ export function EmojiStatusControl({ value, glass, onChange }: {
   const [error, setError] = useState<string | null>(null);
   const inFlight = useRef(false);
   const triggerRef = useRef<HTMLButtonElement>(null);
-  const entry = getEmojiStatus(value);
+  const entry = useEmojiEntry(value);
   const select = async (id: string | null) => {
     if (inFlight.current) return;
     inFlight.current = true; setSaving(true); setError(null);

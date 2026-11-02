@@ -69,6 +69,102 @@ model User {
   hiddenChatMessages HiddenChatMessage[]
   secretChatParticipants SecretChatParticipant[]
   secretChatMessages     SecretChatMessage[]
+  importedPacks UserImportedPack[]
+  packImportJobs PackImportJob[]
+  packImporterState PackImporterState?
+  telegramImportTickets TelegramImportTicket[]
+}
+
+model ImportedPack {
+  id String @id
+  sourceName String @unique
+  title String
+  kind String
+  count Int
+  ready Boolean @default(false)
+  sourceSnapshot Json
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  items ImportedPackItem[]
+  users UserImportedPack[]
+  jobs PackImportJob[]
+}
+
+model ImportedPackItem {
+  id String @id
+  packId String
+  sourceUniqueId String
+  ordinal Int
+  emoji String
+  format String
+  adaptive Boolean @default(false)
+  published Boolean @default(false)
+  bucket String
+  objectKey String
+  thumbnailKey String
+  pack ImportedPack @relation(fields: [packId], references: [id], onDelete: Cascade)
+  @@unique([packId, sourceUniqueId])
+  @@index([packId, ordinal])
+}
+
+model UserImportedPack {
+  userId String
+  packId String
+  createdAt DateTime @default(now())
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  pack ImportedPack @relation(fields: [packId], references: [id], onDelete: Cascade)
+  @@id([userId, packId])
+  @@index([userId, createdAt])
+}
+
+model PackImportJob {
+  id String @id @default(uuid())
+  userId String
+  packId String
+  messageId String @unique
+  conversationId String
+  status String @default("queued")
+  completed Int @default(0)
+  sourceSnapshot Json?
+  leaseId String?
+  leasedUntil DateTime?
+  error String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  pack ImportedPack @relation(fields: [packId], references: [id], onDelete: Cascade)
+  @@index([status, leasedUntil, createdAt])
+  @@index([userId, packId])
+}
+
+model PackImporterState {
+  userId String @id
+  kind String?
+  telegramAccount String? @unique
+  telegramLinkedAt DateTime?
+  updatedAt DateTime @updatedAt
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model TelegramImportTicket {
+  tokenHash String @id
+  userId String
+  expiresAt DateTime
+  consumedUpdateId String?
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  @@index([userId])
+  @@index([expiresAt])
+}
+
+model TelegramImportUpdate {
+  id String @id
+  payloadEnc String
+  status String @default("queued")
+  attempts Int @default(0)
+  leaseId String?
+  leasedUntil DateTime?
+  createdAt DateTime @default(now())
+  @@index([status, leasedUntil, createdAt])
 }
 
 model ManagedBot {

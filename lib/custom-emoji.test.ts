@@ -11,7 +11,9 @@ it("preserves mixed text, repeats and custom emoji identity across forwarding",(
 it("never resolves an unknown ID or a supplied URL into an asset",()=>{
  const unknown='\uE000tg-000000000000000000000000\uE001';
  expect(customEmojiToken('https://untrusted.invalid/asset')).toBe('');
- expect(splitCustomEmoji(unknown)).toEqual([{text:unknown}]);
+ expect(splitCustomEmoji(unknown)).toEqual([{text:unknown,id:'tg-000000000000000000000000'}]);
+ expect(emojiPlainText(`before ${unknown} after`)).toBe('before ❔ after');
+ expect(emojiPlainText(truncateEmojiText(unknown+'after',1))).toBe('❔...');
 });
 it("truncates reply previews by visible characters without exposing partial emoji tokens",()=>{
  const token=customEmojiToken(EMOJI_STATUS_CATALOG[0].id);

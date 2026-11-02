@@ -1,7 +1,6 @@
 "use client";
 
 import { translate as t } from "@/lib/i18n/translate";
-import { useTranslation } from "@/components/LocaleProvider";
 import React, { memo, useEffect, useRef } from "react";
 import type { AnimationItem, LottiePlayer } from "lottie-web";
 import { fetchStickerAnimationData } from "@/lib/client/stickers";
@@ -25,8 +24,7 @@ export async function preloadLottieSticker(src: string): Promise<void> {
   await Promise.all([ensureLottieScript(), fetchStickerAnimationData(src)]);
 }
 
-export const LottieSticker = memo(function LottieSticker({ src, className, renderer = "svg", playing = true, style }: { src: string; className?: string; renderer?: "svg" | "canvas"; playing?: boolean; style?: React.CSSProperties }) {
-  const t = useTranslation();
+export const LottieSticker = memo(function LottieSticker({ src, className, renderer = "svg", playing = true, deferUntilPlaying = false, style }: { src: string; className?: string; renderer?: "svg" | "canvas"; playing?: boolean; deferUntilPlaying?: boolean; style?: React.CSSProperties }) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const animationRef = useRef<AnimationItem | null>(null);
   const visible = useAnimationVisibility(containerRef);
@@ -42,7 +40,9 @@ export const LottieSticker = memo(function LottieSticker({ src, className, rende
       else animationRef.current.pause();
       return;
     }
-    if (!visible) return;
+    // Keep an initialized renderer paused instead of rebuilding it after every
+    // scroll. Picker previews can defer the first load until they actually play.
+    if (!visible || (deferUntilPlaying && !playing)) return;
     let cancelled = false;
     void Promise.all([ensureLottieScript(), fetchStickerAnimationData(src)]).then(([lottie, animationData]) => {
       if (cancelled || !containerRef.current) return;
@@ -52,7 +52,7 @@ export const LottieSticker = memo(function LottieSticker({ src, className, rende
       });
     }).catch(() => { /* An unavailable sticker must not interrupt the chat. */ });
     return () => { cancelled = true; };
-  }, [src, visible, renderer, playing]);
+  }, [src, visible, renderer, playing, deferUntilPlaying]);
 
   return <div ref={containerRef} className={className} style={style} />;
 });

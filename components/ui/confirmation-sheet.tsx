@@ -3,11 +3,11 @@ import { translate as t } from "@/lib/i18n/translate";
 import { useTranslation } from "@/components/LocaleProvider";
 
 
-import { ReactNode } from "react";
+import { ReactNode, useId, useRef, useEffect } from "react";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import type { LucideIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { PANEL_TRANSITION, panelOverlayMotion } from "@/lib/client/panel-motion";
+import { PANEL_EASE } from "@/lib/client/panel-motion";
 
 type ConfirmationSheetProps = {
   open: boolean;
@@ -45,9 +45,18 @@ export function ConfirmationSheet({
   const t = useTranslation();
   const reducedMotion = useReducedMotion();
   const hasIcon = Boolean(iconClassName);
+  const titleId = useId();
+  const descriptionId = useId();
+  const dialogRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!open) return;
+    const previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    dialogRef.current?.focus({ preventScroll: true });
+    return () => { if (previousFocus?.isConnected) previousFocus.focus({ preventScroll: true }); };
+  }, [open]);
 
   return (
-    <AnimatePresence>
+    <AnimatePresence propagate>
       {open ? (
         <motion.div
           className="fixed inset-0 flex items-center justify-center p-4"
@@ -55,19 +64,35 @@ export function ConfirmationSheet({
         >
           <motion.button
             type="button"
-            className={cn("absolute inset-0 bg-black/64 backdrop-blur-[3px]", backdropClassName)}
+            className={cn("absolute inset-0 bg-black/40", backdropClassName)}
             onClick={() => onOpenChange(false)}
             aria-label={t("Закрыть")}
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            transition={{ ...PANEL_TRANSITION, duration: reducedMotion ? 0 : PANEL_TRANSITION.duration }}
+            transition={{ duration: reducedMotion ? 0 : 0.16, ease: PANEL_EASE }}
           />
           <motion.div
             role="dialog"
             aria-modal="true"
-            className="app-panel-surface relative w-full max-w-[382px] rounded-[28px] bg-[#202020] px-7 py-6 text-left text-white shadow-[0_24px_80px_rgba(0,0,0,0.48)] ring-1 ring-white/[0.035] backdrop-blur-xl"
-            {...panelOverlayMotion(reducedMotion, "bottom")}
+            aria-labelledby={titleId}
+            aria-describedby={description ? descriptionId : undefined}
+            ref={dialogRef}
+            tabIndex={-1}
+            data-confirmation-dialog
+            className="app-panel-surface relative w-full max-w-[384px] rounded-[26px] bg-[#212121] p-6 text-left text-white outline-none"
+            initial={{ opacity: 0, scale: reducedMotion ? 1 : 0.97 }}
+            animate={{ opacity: 1, scale: 1, transition: { duration: reducedMotion ? 0 : 0.18, ease: PANEL_EASE } }}
+            exit={{ opacity: 0, scale: reducedMotion ? 1 : 0.98, transition: { duration: reducedMotion ? 0 : 0.13, ease: PANEL_EASE } }}
+            onKeyDown={(event) => {
+              if (event.key === "Escape") { event.stopPropagation(); onOpenChange(false); }
+              if (event.key !== "Tab") return;
+              const controls = dialogRef.current?.querySelectorAll<HTMLElement>('button:not(:disabled), input:not(:disabled), [tabindex="0"]');
+              if (!controls?.length) { event.preventDefault(); return; }
+              const first = controls[0], last = controls[controls.length - 1];
+              if (event.shiftKey && (document.activeElement === first || document.activeElement === dialogRef.current)) { event.preventDefault(); last.focus(); }
+              else if (!event.shiftKey && (document.activeElement === last || document.activeElement === dialogRef.current)) { event.preventDefault(); first.focus(); }
+            }}
             onClick={(event) => event.stopPropagation()}
           >
             {hasIcon ? (
@@ -81,16 +106,16 @@ export function ConfirmationSheet({
               </span>
             ) : null}
 
-            <h3 className="text-[20px] font-semibold leading-[1.22] tracking-[-0.01em] text-white">{title}</h3>
-            {description ? <div className="mt-5 max-w-[30ch] text-[15px] font-normal leading-[1.48] text-white/70">{description}</div> : null}
+            <h3 id={titleId} className="text-[20px] font-semibold leading-6 tracking-[-0.01em] text-white">{title}</h3>
+            {description ? <div id={descriptionId} className="mt-5 text-[16px] font-normal leading-6 text-white/90">{description}</div> : null}
 
             {details ? <div className="mt-4">{details}</div> : null}
 
-            <div className="mt-7 flex items-center justify-end gap-6">
+            <div className="mt-5 -mr-2 -mb-2 flex flex-wrap items-center justify-end gap-2">
               <button
                 type="button"
                 onClick={() => onOpenChange(false)}
-                className="text-[14px] font-semibold uppercase tracking-[0.01em] text-zinc-300 transition-colors hover:text-white"
+                className="min-h-10 rounded-xl px-3 text-[14px] font-semibold uppercase tracking-[0.01em] text-[var(--ui-accent-solid,#c4b5fd)] transition-colors hover:bg-white/[0.05] focus-visible:outline-2 focus-visible:outline-offset-2"
               >
                 {cancelLabel}
               </button>
@@ -99,7 +124,7 @@ export function ConfirmationSheet({
                 onClick={onAction}
                 disabled={actionDisabled}
                 className={cn(
-                  "text-[14px] font-semibold uppercase tracking-[0.01em] text-red-400 transition-colors hover:text-red-300 disabled:cursor-not-allowed disabled:opacity-55",
+                  "min-h-10 rounded-xl px-3 text-[14px] font-semibold uppercase tracking-[0.01em] text-red-400 transition-colors hover:bg-white/[0.05] hover:text-red-300 focus-visible:outline-2 focus-visible:outline-offset-2 disabled:cursor-not-allowed disabled:opacity-55",
                   actionClassName,
                 )}
               >

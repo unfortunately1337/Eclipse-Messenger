@@ -1,4 +1,5 @@
 import { readBotContent } from "./bot-content";
+import { importerNoticePayload } from "@/lib/importer-notice";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/server/prisma";
 import { redis } from "@/lib/server/redis";
@@ -587,9 +588,11 @@ export async function getChatListPayload(userId: string, limit: number, cursor: 
       if (autoDeletedIds.has(conversation.id)) return null;
       const peerParticipant = conversation.participants.find((item) => item.user.id !== userId);
       const peer = peerParticipant?.user;
-      if (!peer || (peer.isBot && peer.isSystemAccount)) return null;
+      if (!peer || (peer.isBot && peer.isSystemAccount && peer.link !== "importbot")) return null;
       const lastMessage = conversation.messages[0] ?? null;
       if (!lastMessage) return null;
+      const botText = readBotContent(lastMessage.botContentEnc)?.text ?? "";
+      const previewPayload = lastMessage.isSystemMessage ? lastMessage.systemPayload : peer.id === "system:importbot" && lastMessage.senderId === peer.id ? importerNoticePayload(botText) : null;
       const previewEncryptedKey =
         (lastMessage.senderId === userId ? lastMessage.encryptedKeyForSender : lastMessage.encryptedKeyForRecipient) ?? "";
       const includeEncryptedPreview = Boolean(
@@ -607,7 +610,7 @@ export async function getChatListPayload(userId: string, limit: number, cursor: 
         contactTag: null,
         contactTagVariant: "outline",
         avatarUrl: peer.avatarUrl,
-        lastMessage: lastMessage?.isSystemMessage ? (lastMessage.systemPayload as { title?: string } | null)?.title || "" : readBotContent(lastMessage?.botContentEnc)?.text ?? "",
+        lastMessage: previewPayload ? (previewPayload as { title?: string }).title || "" : botText,
         lastMessageAt: (lastMessage?.createdAt ?? conversation.updatedAt).toISOString(),
         lastMessageMine: lastMessage ? lastMessage.senderId === userId : false,
         lastMessageCipherText: includeEncryptedPreview ? lastMessage?.cipherText ?? null : null,
@@ -615,7 +618,7 @@ export async function getChatListPayload(userId: string, limit: number, cursor: 
         lastMessageEncryptedKey: includeEncryptedPreview && lastMessage ? previewEncryptedKey : null,
         peerReadAt: peerReadAtByConversationId.get(conversation.id) ?? null,
         unreadCount: unreadCountByConversationId.get(conversation.id) ?? 0,
-        systemPayload: lastMessage?.isSystemMessage ? lastMessage.systemPayload : null,
+        systemPayload: previewPayload,
         wallpaperUrl: wallpaperByConversationId.get(conversation.id)?.wallpaperUrl ?? null,
         wallpaperPosY: wallpaperByConversationId.get(conversation.id)?.wallpaperPosY ?? null,
       };

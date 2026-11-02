@@ -3,6 +3,7 @@ export type CallMode = "audio" | "video";
 export type CallStatus = "ringing" | "active" | "ended";
 
 export type CallView = {
+  requesting?: boolean;
   id: string;
   kind: CallKind;
   mode: CallMode;

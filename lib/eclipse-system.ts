@@ -11,7 +11,8 @@ export type EclipseEventType =
   | "session_terminated"
   | "security_recommendation"
   | "bot_management"
-  | "call";
+  | "call"
+  | "pack_import";
 
 export type EclipseMessageActionType =
   | "not_me"
@@ -36,6 +37,9 @@ export type EclipseSystemPayload = {
   botToken?: string;
   actions?: EclipseMessageAction[];
   metadata?: {
+    packImport?: import("./imported-packs").ImportCard;
+    telegramImportConnect?: boolean;
+    importerNotice?: boolean;
     call?: import("./call-history").CallMessageData;
     sessionId?: string;
     ip?: string | null;
