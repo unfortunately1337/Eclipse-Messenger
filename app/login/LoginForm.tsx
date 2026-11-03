@@ -7,9 +7,7 @@ import type { FormEvent } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { Eye, EyeOff, Mail } from "lucide-react";
 import { useMemo, useState, useEffect, useRef, useCallback } from "react";
-import { useIsMobile } from "@/hooks/use-mobile";
 import Link from "next/link";
-import QRCode from "qrcode";
 import { apiRequest } from "@/lib/client/http";
 import { showAppToast } from "@/lib/client/app-toast";
 import {
@@ -21,7 +19,6 @@ import {
   storePasswordMasterKey,
   storePendingPassword,
 } from "@/lib/client/e2e";
-import { createQrKeySecret, restoreQrKeyTransfer } from "@/lib/client/e2e-qr-transfer";
 import type { QrKeyTransfer } from "@/lib/qr-key-transfer";
 import { invalidateE2EServerStateCache } from "@/lib/client/e2e-server-sync";
 import {
@@ -45,8 +42,10 @@ type Step = "qr" | "email" | "password" | "mfa" | "forgot-email" | "forgot-code"
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const QR_EXPIRY_MS = 30000; // 30 seconds auto-refresh matching Telegram Web
 
-function renderQrToCanvas(canvas: HTMLCanvasElement, token: string): boolean {
+async function renderQrToCanvas(canvas: HTMLCanvasElement, token: string): Promise<boolean> {
   try {
+    const QRCode = (await import("qrcode")).default;
+    if (!canvas.isConnected) return false;
     const context = canvas.getContext("2d");
     if (!context) return false;
     const canvasSize = 512;
@@ -134,11 +133,9 @@ function renderQrToCanvas(canvas: HTMLCanvasElement, token: string): boolean {
   }
 }
 
-export default function LoginForm({ isAddingAccount = false }: { isAddingAccount?: boolean }) {
+export default function LoginForm({ isAddingAccount = false, initialStep = "email" }: { isAddingAccount?: boolean; initialStep?: "email" | "qr" }) {
   const t = useTranslation();
-  const isMobile = useIsMobile();
-  const [step, setStep] = useState<Step>("email");
-  const initialViewportChosen = useRef(false);
+  const [step, setStep] = useState<Step>(initialStep);
   const [qrToken, setQrToken] = useState<string | null>(null);
   const [qrVisible, setQrVisible] = useState(false);
   const qrCanvasRef = useRef<HTMLCanvasElement>(null);
@@ -155,10 +152,13 @@ export default function LoginForm({ isAddingAccount = false }: { isAddingAccount
   };
 
   useEffect(() => {
-    if (initialViewportChosen.current || isMobile === undefined) return;
-    initialViewportChosen.current = true;
-    setStep(isMobile ? "email" : "qr");
-  }, [isMobile]);
+    // Read the actual viewport once; the generic hook returns false before
+    // its first measurement and used to switch mobile visitors to QR login.
+    const measuredStep = window.matchMedia("(max-width: 767px)").matches ? "email" : "qr";
+    if (measuredStep === initialStep) return;
+    const frame = requestAnimationFrame(() => setStep(measuredStep));
+    return () => cancelAnimationFrame(frame);
+  }, [initialStep]);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -196,19 +196,19 @@ export default function LoginForm({ isAddingAccount = false }: { isAddingAccount
     let currentSecret: string | null = null;
     let completing = false;
 
-    const drawToken = (token: string): boolean => {
+    const drawToken = async (token: string): Promise<boolean> => {
       const canvas = qrCanvasRef.current;
       if (!canvas) return false;
-      const ok = renderQrToCanvas(canvas, token);
+      const ok = await renderQrToCanvas(canvas, token);
       if (ok && active) {
         setQrVisible(true);
       }
       return ok;
     };
 
-    const drawWithRetry = (token: string, attempts = 0) => {
+    const drawWithRetry = async (token: string, attempts = 0) => {
       if (!active) return;
-      if (drawToken(token)) return;
+      if (await drawToken(token) || !active) return;
       if (attempts < 25) {
         retryFrameId = requestAnimationFrame(() => {
           setTimeout(() => drawWithRetry(token, attempts + 1), 25);
@@ -233,6 +233,7 @@ export default function LoginForm({ isAddingAccount = false }: { isAddingAccount
           const me = await apiRequest<{ id: string }>("/api/auth/me", { method: "GET" });
           if (statusData.userId && me.id !== statusData.userId) throw new Error("QR account mismatch");
           if (statusData.keyTransfer && transferSecret) {
+            const { restoreQrKeyTransfer } = await import("@/lib/client/e2e-qr-transfer");
             await restoreQrKeyTransfer(token, transferSecret, statusData.keyTransfer, me.id);
           } else {
             setActiveE2EUserId(me.id);
@@ -280,7 +281,10 @@ export default function LoginForm({ isAddingAccount = false }: { isAddingAccount
 
         if (completing) return;
         currentToken = data.qrToken;
-        currentSecret = createQrKeySecret();
+        // Creating the fragment secret does not require loading the key
+        // transfer/validation bundle before somebody approves the QR code.
+        currentSecret = btoa(String.fromCharCode(...crypto.getRandomValues(new Uint8Array(32))))
+          .replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
         setQrToken(data.qrToken);
 
         drawWithRetry(`eclipse://login?token=${data.qrToken}#key=${currentSecret}`);
@@ -465,7 +469,7 @@ export default function LoginForm({ isAddingAccount = false }: { isAddingAccount
   return (
     <AuthScreen>
       {isAddingAccount && <AuthAddAccountBanner onCancel={handleCancelAddAccount} />}
-      <AnimatePresence mode="wait">
+      <AnimatePresence initial={false} mode="wait">
         {step === "qr" ? (
           <motion.div key="login-qr" {...authStepMotion} className="w-full">
             <AuthCard
@@ -537,8 +541,7 @@ export default function LoginForm({ isAddingAccount = false }: { isAddingAccount
               subtitle={t("Введите адрес электронной почты для продолжения")}
               footer={
                 <div className="space-y-1.5 sm:space-y-2">
-                  {!isMobile && (
-                    <p>
+                    <p className="hidden md:block">
                       {t("Войти по")}{" "}
                       <button
                         type="button"
@@ -547,7 +550,6 @@ export default function LoginForm({ isAddingAccount = false }: { isAddingAccount
                       >
                         {t("QR-коду")}</button>
                     </p>
-                  )}
                   <p>
                     {t("Нет аккаунта?")}{" "}
                     <Link href={signUpHref} className="font-semibold text-white hover:underline transition-colors">

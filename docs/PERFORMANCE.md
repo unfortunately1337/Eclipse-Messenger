@@ -138,3 +138,30 @@ Its render-blocking stylesheet and unused image preloads informed the auth fixes
 It does not measure authenticated-chat scrolling. Local PostgreSQL/Redis/Docker
 were unavailable in this run, so no new complete encrypted-chat end-to-end
 benchmark or physical-device call performance result is claimed.
+
+## Mobile authentication follow-up — 2026-11-03
+
+The user's new mobile PageSpeed report (`6dikn464py`) scored 69 on `/login`:
+LCP 4.7 s, TBT 350 ms and CLS 0.122. The earlier desktop score did not establish
+that this mobile entry screen was fast.
+
+- Initial auth content now stays visible in server HTML. Motion still animates
+  subsequent steps, without a second nested card entrance.
+- The initial login step uses request device hints, with a one-time viewport
+  correction. The previous mobile hook returned `false` before measurement and
+  incorrectly started QR login/polling on phones. Responsive QR-link visibility
+  is handled by CSS instead of changing card height after hydration.
+- The typing subtitle reserves its complete line layout. Story font loading
+  only mounts inside the authenticated app, preventing a delayed font swap on
+  the entry screens.
+- QR generation and key-transfer validation load on demand. The idle monkey
+  keeps its original 69 frames in a 50,454-byte native clip and 7,054-byte poster,
+  replacing a 501,350-byte initial animated image. Poster loading has high
+  priority. Autoplay/decoder failure uses an animated WebP fallback; entering
+  text still loads the vector gaze animation, and password poses are preserved.
+
+Production compilation, TypeScript and the existing 658-test suite passed.
+Browser checks covered SSR visibility without JavaScript, mobile email login,
+desktop QR rendering, native playback, vector tracking after typing, and
+password visibility. These are browser/emulated-device checks, not physical
+iPhone measurements. Follow-up Lighthouse artifacts are kept outside Git.

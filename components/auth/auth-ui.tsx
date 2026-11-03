@@ -96,8 +96,10 @@ export function TypingText({
   }, [text, onComplete, startEmpty]);
 
   return (
-    <span className="font-mono tracking-normal">
-      {displayedText}
+    <span className="relative inline-grid align-top font-mono tracking-normal">
+      {/* Reserve the final lines while the overlaid text is being typed. */}
+      <span className="invisible [grid-area:1/1]" aria-hidden="true">{text}<span className="inline-block w-[8px]" /></span>
+      <span className="[grid-area:1/1]" aria-hidden="true">{displayedText}
       {mounted && (
         <motion.span
           animate={blinkCursor ? { opacity: [1, 0] } : undefined}
@@ -108,7 +110,8 @@ export function TypingText({
           } : undefined}
           className="inline-block w-[6px] h-[12px] bg-white ml-0.5 align-middle"
         />
-      )}
+      )}</span>
+      <span className="sr-only">{text}</span>
     </span>
   );
 }
@@ -136,10 +139,7 @@ export function AuthCard({
 }) {
   const t = useTranslation();
   return (
-    <motion.section
-      initial={{ opacity: 0, y: 14, scale: 0.98 }}
-      animate={{ opacity: 1, y: 0, scale: 1 }}
-      transition={{ duration: 0.32, ease: [0.16, 1, 0.3, 1] }}
+    <section
       className={cn(
         "w-full rounded-[22px] bg-[#14151b] p-5 sm:p-6 text-center flex flex-col items-center relative overflow-hidden",
         className
@@ -185,7 +185,7 @@ export function AuthCard({
       {footer ? (
         <div className="mt-4 text-[12.5px] text-zinc-400">{footer}</div>
       ) : null}
-    </motion.section>
+    </section>
   );
 }
 

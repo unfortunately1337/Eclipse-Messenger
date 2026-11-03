@@ -3444,5 +3444,8 @@
   "/tgs/two-factor-setup-done.json": "🔐",
   "/tgs/two-factor-setup-done.tgs": "🔐",
   "/tgs/two-factor-setup-intro.json": "🔐",
-  "/tgs/two-factor-setup-intro.tgs": "🔐"
+  "/tgs/two-factor-setup-intro.tgs": "🔐",
+  "/gifs/auth-monkey/idle-v2.webp": "🐵",
+  "/gifs/auth-monkey/idle-poster-v3.webp": "🐵",
+  "/gifs/auth-lock-key.webp": "🔐"
 }

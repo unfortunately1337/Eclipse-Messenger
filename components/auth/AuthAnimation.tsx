@@ -120,9 +120,12 @@ export function MonkeyTrackingAnimation({
   const containerRef = useRef<HTMLDivElement>(null);
   const animRef = useRef<AnimationItem | null>(null);
   const [ready, setReady] = useState(false);
+  const tracking = value.length > 0;
+  const [trackingStarted, setTrackingStarted] = useState(false);
+  if (tracking && !trackingStarted) setTrackingStarted(true);
 
   useEffect(() => {
-    if (!containerRef.current) return;
+    if (!containerRef.current || !trackingStarted) return;
 
     let isCancelled = false;
 
@@ -156,7 +159,7 @@ export function MonkeyTrackingAnimation({
         animRef.current = null;
       }
     };
-  }, []);
+  }, [trackingStarted]);
 
   // Update gaze frame smoothly as text is entered
   useEffect(() => {
@@ -177,8 +180,8 @@ export function MonkeyTrackingAnimation({
       style={{ width: size, height: size }}
       className={cn("relative select-none pointer-events-none flex items-center justify-center shrink-0 -my-2", className)}
     >
-      {!ready && <TrackingMonkeyFallback value={value} />}
-      <div ref={containerRef} className="absolute inset-0" />
+      {(!ready || !tracking) && <TrackingMonkeyFallback value={value} />}
+      <div ref={containerRef} className={cn("absolute inset-0", !tracking && "hidden")} />
     </div>
   );
 }

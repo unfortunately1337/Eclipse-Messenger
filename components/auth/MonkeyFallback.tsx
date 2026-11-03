@@ -7,9 +7,26 @@ const base = "/gifs/auth-monkey/";
 type Pose = "idle" | "close" | "peek";
 type Clip = Pose | "open" | "unpeek";
 
+/** Small native clip: identical idle frames, without a vector player or a large animated image. */
+function IdleMonkeyVideo() {
+  const [fallback, setFallback] = useState(false);
+  preload(`${base}idle-poster-v3.webp`, { as: "image", fetchPriority: "high" });
+  if (fallback) return <MonkeyImage />;
+  return <video
+    data-auth-monkey-idle
+    src={`${base}idle-v3.mp4`}
+    poster={`${base}idle-poster-v3.webp`}
+    width={256} height={256}
+    autoPlay muted loop playsInline preload="auto" aria-hidden
+    onError={() => setFallback(true)}
+    onCanPlay={event => { void event.currentTarget.play().catch(() => setFallback(true)); }}
+    className="absolute inset-0 h-full w-full object-contain"
+  />;
+}
+
 /** Native image decoding keeps the monkey available without a Canvas context or player chunk. */
 export function MonkeyImage({ clip = "idle" }: { clip?: Clip }) {
-  const src = `${base}${clip}.webp`;
+  const src = `${base}${clip === "idle" ? "idle-v2" : clip}.webp`;
   preload(src, { as: "image" });
   return (
     <img
@@ -26,7 +43,7 @@ export function MonkeyImage({ clip = "idle" }: { clip?: Clip }) {
 }
 
 export function TrackingMonkeyFallback({ value }: { value: string }) {
-  if (!value) return <MonkeyImage />;
+  if (!value) return <IdleMonkeyVideo />;
   // The 25 gaze positions match the vector animation's input-length progression.
   const frame = Math.min(value.length, 24);
   return (

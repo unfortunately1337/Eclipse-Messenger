@@ -11,6 +11,7 @@ import AppSecurityWatcher from "@/app/app/AppSecurityWatcher";
 import EmailMigrationGate from "@/app/app/EmailMigrationGate";
 import AppNotificationsBootstrap from "@/app/app/AppNotificationsBootstrap";
 import PackLibraryProvider from "@/components/PackLibraryProvider";
+import DeferredFonts from "@/components/DeferredFonts";
 
 export default async function AppLayout({ children }: { children: ReactNode }) {
   const user = await getCurrentUser();
@@ -29,6 +30,7 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
 
   return (
     <PackLibraryProvider key={user.id} userId={user.id}>
+      <DeferredFonts />
       <GlobalLiveBackground />
       <div className="relative z-10">
       <E2EBootstrap />

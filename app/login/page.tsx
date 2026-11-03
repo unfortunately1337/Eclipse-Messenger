@@ -1,6 +1,7 @@
 import { getServerTranslation } from "@/lib/i18n/server";
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
+import { headers } from "next/headers";
 import LoginForm from "./LoginForm";
 import { getCurrentUser } from "@/lib/server/auth";
 
@@ -29,5 +30,8 @@ export default async function LoginPage({ searchParams }: Props) {
     }
   }
 
-  return <LoginForm isAddingAccount={isAddingAccount} />;
+  const requestHeaders = await headers();
+  const mobile = requestHeaders.get("sec-ch-ua-mobile") === "?1"
+    || /Android|iPhone|iPad|iPod|Mobile/i.test(requestHeaders.get("user-agent") ?? "");
+  return <LoginForm isAddingAccount={isAddingAccount} initialStep={mobile ? "email" : "qr"} />;
 }

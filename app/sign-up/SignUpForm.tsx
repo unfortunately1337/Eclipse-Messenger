@@ -470,7 +470,7 @@ export default function SignUpForm({
     <AuthScreen>
       <div className="w-full flex flex-col items-center">
         {isAddingAccount && <AuthAddAccountBanner onCancel={handleCancelAddAccount} />}
-        <AnimatePresence mode="wait">
+        <AnimatePresence initial={false} mode="wait">
           {step === 1 ? (
             <motion.div key="step-email" {...authStepMotion} className="w-full">
               <AuthCard
