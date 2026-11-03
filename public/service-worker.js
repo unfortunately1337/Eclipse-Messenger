@@ -1,3 +1,61 @@
+// BEGIN notification preview (generated)
+/** Plain text only: notification APIs coerce objects to "[object Object]". */
+function messageNotificationPreview(value, locale = "en", emojiForId) {
+    const ru = locale === "ru";
+    const label = (r, e) => ru ? r : e;
+    let text = typeof value === "string" ? value : "";
+    let media = value && typeof value === "object" ? value : null;
+    if (text.startsWith("__eclipse_forward__:")) {
+        try {
+            const forwarded = JSON.parse(text.slice(20));
+            text = typeof forwarded.content === "string" ? forwarded.content : "";
+        }
+        catch {
+            text = "";
+        }
+    }
+    if (text.startsWith("__eclipse_media__:")) {
+        try {
+            media = JSON.parse(text.slice(18));
+        }
+        catch {
+            text = "";
+        }
+    }
+    const plain = (input) => typeof input === "string" ? input.replace(/\uE000(tg-[a-f0-9]{24})\uE001/g, (_, id) => emojiForId?.(id) || label("Эмодзи", "Emoji")) : "";
+    if (media) {
+        const caption = plain(media.caption);
+        const type = media.type ?? media.kind;
+        if (type === "sticker") {
+            const emoji = plain(media.emoji).trim();
+            // Accept only short Unicode emoji labels; never a source URL or object.
+            text = `${emoji && emoji.length <= 32 && /\p{Extended_Pictographic}/u.test(emoji) ? emoji : "🎭"} ${label("Стикер", "Sticker")}`;
+        }
+        else if (type === "image")
+            text = label("Фотография", "Photo") + (caption ? `: ${caption}` : "");
+        else if (type === "video")
+            text = label(media.mode === "file" ? "Видеозапись" : "Видеосообщение", media.mode === "file" ? "Video" : "Video message");
+        else if (type === "voice")
+            text = label("Голосовое сообщение", "Voice message");
+        else if (type === "audio")
+            text = label("Музыка", "Music");
+        else if (type === "file")
+            text = label("Файл", "File");
+        else if (type === "album")
+            text = label("Альбом", "Album");
+        else if (type === "poll")
+            text = label("Опрос", "Poll");
+        else if (type === "location")
+            text = label("Местоположение", "Location");
+        else
+            text = plain(media.text);
+    }
+    text = plain(text).trim();
+    if (!text || text === "[object Object]" || text.startsWith("__eclipse_"))
+        return label("Новое сообщение", "New message");
+    return text.length > 160 ? `${text.slice(0, 157)}…` : text;
+}
+// END notification preview (generated)
 const FALLBACK_ICON = "/brand/hello_light.png";
 const RECENT_MESSAGE_TTL_MS = 2 * 60 * 1000;
 const CLIENT_STATE_TTL_MS = 30 * 1000;
@@ -346,7 +404,7 @@ self.addEventListener("push", (event) => {
     // The chat may have opened while the payload was fetched or decrypted.
     if (await hasVisibleClientForChat(payload.chatId)) return;
     await self.registration.showNotification(payload.senderName, {
-      body: displayBody,
+      body: messageNotificationPreview(displayBody, await notificationLanguage()),
       icon: payload.icon,
       badge: FALLBACK_ICON,
       tag: `message:${payload.messageId}`,

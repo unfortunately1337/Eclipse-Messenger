@@ -22,7 +22,7 @@
     "test": "vitest run",
     "db:migrate": "prisma migrate deploy",
     "predev": "node scripts/check-node-version.cjs && node scripts/ensure-prisma-client.cjs",
-    "prebuild": "node scripts/check-node-version.cjs",
+    "prebuild": "node scripts/check-node-version.cjs && node scripts/build-notification-preview.mjs",
     "prestart": "node scripts/check-node-version.cjs && npm run db:migrate",
     "pretest": "node scripts/check-node-version.cjs",
     "setup:local": "node scripts/setup-local-env.cjs",

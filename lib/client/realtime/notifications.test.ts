@@ -16,7 +16,7 @@ beforeEach(() => {
   const notification = { permission: "granted" };
   vi.stubGlobal("window", { Notification: notification, location: { origin: "https://eclpse.ru" } });
   vi.stubGlobal("Notification", notification);
-  vi.stubGlobal("document", { visibilityState: "visible" });
+  vi.stubGlobal("document", { visibilityState: "visible", cookie: "eclipse.locale=ru" });
   vi.stubGlobal("localStorage", storage()); vi.stubGlobal("sessionStorage", storage());
   vi.stubGlobal("navigator", { serviceWorker: { getRegistration: vi.fn().mockResolvedValue(registration) } });
 });
@@ -29,7 +29,7 @@ it("suppresses the visible current chat, including differently cased links", asy
 it("preserves notifications for a different chat or a hidden app", async () => {
   await handleIncomingMessage(message, { currentUserId: "reader", getActiveChatId: () => "bob" });
   expect(show).toHaveBeenCalledOnce();
-  vi.stubGlobal("document", { visibilityState: "hidden" });
+  vi.stubGlobal("document", { visibilityState: "hidden", cookie: "eclipse.locale=ru" });
   await handleIncomingMessage({ ...message, messageId: "two" }, { currentUserId: "reader", getActiveChatId: () => "alice" });
   expect(show).toHaveBeenCalledTimes(2);
 });

@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Plus, Search } from "lucide-react";
 import Link from "next/link";
 import { usePackLibrary } from "./PackLibraryProvider";
@@ -11,6 +11,8 @@ import { IMPORTER_BOT_LINK, importedEmojiToken, type PackItem, type PackKind } f
 import { useReducedMotion } from "framer-motion";
 import { resolvePackItem } from "@/lib/client/pack-items";
 
+import { useVirtualViewport } from "@/lib/client/use-virtual-viewport";
+
 type PickerItem = PackItem | { id: string; emoji: string; native: true };
 
 export default function AccountPackPicker({ kind, includeDefault = false, onEmoji, onSticker, selectedId, mobile = false, showRecent = false }: {
@@ -18,17 +20,20 @@ export default function AccountPackPicker({ kind, includeDefault = false, onEmoj
   onSticker?: (item: PackItem) => void; selectedId?: string | null; mobile?: boolean; showRecent?: boolean;
 }) {
   const t = useTranslation(), library = usePackLibrary(), reduced = useReducedMotion();
-  const packs = library?.packs.filter(pack => pack.kind === kind) ?? [];
-  const previews = [...(includeDefault ? [{ id: "default", title: "Default", item: null }] : []), ...packs.map(pack => ({ id: pack.id, title: pack.title, item: pack.items[0] }))];
-  if (showRecent) previews.sort((a, b) => (library?.usage[kind][b.id] ?? 0) - (library?.usage[kind][a.id] ?? 0));
+  const packs = useMemo(() => library?.packs.filter(pack => pack.kind === kind) ?? [], [library?.packs, kind]);
+  const previews = useMemo(() => {
+    const values = [...(includeDefault ? [{ id: "default", title: "Default", item: null }] : []), ...packs.map(pack => ({ id: pack.id, title: pack.title, item: pack.items[0] }))];
+    if (showRecent) values.sort((a, b) => (library?.usage[kind][b.id] ?? 0) - (library?.usage[kind][a.id] ?? 0));
+    return values;
+  }, [includeDefault, packs, showRecent, library?.usage, kind]);
   const [selection, setSelection] = useState(includeDefault ? "default" : ""), [search, setSearch] = useState("");
   const activeId = selection === "default" && includeDefault ? "default" : packs.some(pack => pack.id === selection) ? selection : includeDefault ? "default" : packs[0]?.id ?? "";
   const active = packs.find(pack => pack.id === activeId);
   const loading = Boolean(active && active.items.length < active.count);
   const load = library?.load;
-  const viewport = useRef<HTMLDivElement>(null), frame = useRef<number | null>(null);
+  const viewport = useRef<HTMLDivElement>(null);
   const packStrip = useRef<HTMLDivElement>(null), drag = useRef<{ id: number; x: number; left: number; moved: boolean } | null>(null), dragged = useRef(false);
-  const [view, setView] = useState({ top: 0, height: 240, width: 350 });
+  const view = useVirtualViewport(viewport, { top: 0, height: 240, width: 350 });
   const navigateToPack = useRef(false);
   const [navigationVersion, setNavigationVersion] = useState(0);
   const recentIds = library?.recent[kind];
@@ -45,12 +50,6 @@ export default function AccountPackPicker({ kind, includeDefault = false, onEmoj
     if (active && active.items.length < active.count && load) void load(active.id).catch(() => {});
   }, [active, load]);
   useEffect(() => {
-    const element = viewport.current; if (!element) return;
-    const measure = () => setView({ top: element.scrollTop, height: element.clientHeight, width: element.clientWidth });
-    measure(); const observer = new ResizeObserver(measure); observer.observe(element);
-    return () => { observer.disconnect(); if (frame.current !== null) cancelAnimationFrame(frame.current); };
-  }, []);
-  useEffect(() => {
     const strip = packStrip.current; if (!strip) return;
     const wheel = (event: WheelEvent) => {
       if (strip.scrollWidth <= strip.clientWidth || Math.abs(event.deltaX) >= Math.abs(event.deltaY)) return;
@@ -61,17 +60,18 @@ export default function AccountPackPicker({ kind, includeDefault = false, onEmoj
     strip.addEventListener("wheel", wheel, { passive: false });
     return () => strip.removeEventListener("wheel", wheel);
   }, [includeDefault, packs.length, reduced]);
-  const resetScroll = () => { if (viewport.current) viewport.current.scrollTop = 0; setView(previous => ({ ...previous, top: 0 })); };
-  const items: PickerItem[] = activeId === "default"
+  const resetScroll = () => { if (viewport.current) viewport.current.scrollTop = 0; };
+  const items: PickerItem[] = useMemo(() => activeId === "default"
     ? DEFAULT_ANIMATED_EMOJIS.filter(emoji => !search || emoji.includes(search)).map(emoji => ({ id: emoji, emoji, native: true as const }))
-    : (active?.items ?? []).filter(item => !search || item.emoji.includes(search) || active?.title.toLowerCase().includes(search.toLowerCase()));
+    : (active?.items ?? []).filter(item => !search || item.emoji.includes(search) || active?.title.toLowerCase().includes(search.toLowerCase())), [activeId, active?.items, active?.title, search]);
   const columns = kind === "emoji" ? Math.max(5, Math.min(7, Math.floor(view.width / 42))) : 4;
   const rowHeight = kind === "emoji" ? mobile ? 46 : 44 : Math.floor(view.width / columns);
-  const recentItems: PickerItem[] = !showRecent || search ? [] : (recentIds ?? []).flatMap<PickerItem>(id => {
+  const recentItems: PickerItem[] = useMemo(() => !showRecent || search ? [] : (recentIds ?? []).flatMap<PickerItem>(id => {
     if (kind === "emoji" && !id.startsWith("tg-") && DEFAULT_ANIMATED_EMOJIS.includes(id)) return [{ id, emoji: id, native: true }];
     const item = resolvedRecent.find(value => value.id === id);
     return item && packs.some(pack => pack.id === item.packId) ? [item] : [];
-  });
+  }), [showRecent, search, recentIds, kind, resolvedRecent, packs]);
+  const { rows, height, packOffset } = useMemo(() => {
   const rows: { top: number; height: number; title?: string; items?: PickerItem[]; recent?: boolean }[] = [];
   let height = 0;
   const section = (title: string, values: PickerItem[], recent = false) => {
@@ -83,6 +83,8 @@ export default function AccountPackPicker({ kind, includeDefault = false, onEmoj
   if (recentItems.length) section(t("Недавние"), recentItems, true);
   const packOffset = height;
   section(activeId === "default" ? "Default" : active?.title ?? t("Мои наборы"), items);
+  return { rows, height, packOffset };
+  }, [columns, rowHeight, recentItems, activeId, active?.title, items, t]);
   useEffect(() => {
     if (!navigateToPack.current) return;
     const animation = requestAnimationFrame(() => {
@@ -114,10 +116,7 @@ export default function AccountPackPicker({ kind, includeDefault = false, onEmoj
       {previews.length < 8 && <Link href={`/app?chat=${IMPORTER_BOT_LINK}&chatType=direct`} prefetch={false} data-add-pack title={t("Добавить набор")} aria-label={t("Добавить набор")} className="grid h-9 min-w-0 shrink-0 basis-[12.5%] place-items-center bg-transparent transition-transform active:scale-90"><span className="grid size-7 place-items-center rounded-full bg-white/10 text-zinc-300"><Plus size={16} /></span></Link>}
     </div>
     <label className="mb-0.5 flex h-9 shrink-0 items-center gap-2 rounded-full bg-white/[0.05] px-3 text-zinc-400"><Search size={16} /><input aria-label={t("Поиск в наборе")} value={search} onChange={event => { navigateToPack.current = false; resetScroll(); setSearch(event.target.value); }} placeholder={t("Поиск")} className="min-w-0 flex-1 bg-transparent text-[13px] text-zinc-100 outline-none" /></label>
-    <div ref={viewport} data-pack-viewport className="no-scrollbar min-h-0 flex-1 overflow-y-auto overscroll-contain" onWheel={() => { navigateToPack.current = false; }} onTouchMove={() => { navigateToPack.current = false; }} onKeyDown={event => { if (["ArrowUp", "ArrowDown", "PageUp", "PageDown", "Home", "End"].includes(event.key)) navigateToPack.current = false; }} onScroll={event => {
-      const element = event.currentTarget; if (frame.current !== null) return;
-      frame.current = requestAnimationFrame(() => { frame.current = null; setView({ top: element.scrollTop, height: element.clientHeight, width: element.clientWidth }); });
-    }}>
+    <div ref={viewport} data-pack-viewport className="no-scrollbar min-h-0 flex-1 overflow-y-auto overscroll-contain" onWheel={() => { navigateToPack.current = false; }} onTouchMove={() => { navigateToPack.current = false; }} onKeyDown={event => { if (["ArrowUp", "ArrowDown", "PageUp", "PageDown", "Home", "End"].includes(event.key)) navigateToPack.current = false; }}>
       <div className="relative" style={{ height: navigationVersion ? Math.max(height, packOffset + view.height) : height }}>
         {rows.filter(row => row.top + row.height >= view.top - rowHeight && row.top <= view.top + view.height + rowHeight).map(row => row.title ? <div key={row.top} data-recent-heading={row.recent || undefined} data-active-pack-heading={!row.recent || undefined} className="absolute flex w-full items-center gap-2 px-2 text-[12px] font-semibold text-zinc-400" style={{ top: row.top, height: row.height }}><span className="min-w-0 truncate">{row.title}</span>{!row.recent && loading && <span className="size-3 animate-spin rounded-full border border-current border-t-transparent" />}</div> : <div key={row.top} className="absolute w-full" style={{ top: row.top, height: row.height }}>{row.items?.map((item, index) => <button key={item.id} data-pack-item data-recent-item={row.recent || undefined} type="button" title={item.emoji} aria-label={item.emoji} aria-pressed={selectedId === item.id} onMouseDown={event => event.preventDefault()}
           onClick={() => choose(item)}

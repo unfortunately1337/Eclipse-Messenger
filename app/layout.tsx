@@ -5,6 +5,7 @@ import { ThemeProvider } from "next-themes";
 import AppToastViewport from "@/app/app/AppToastViewport";
 import { LocaleProvider } from "@/components/LocaleProvider";
 import { getServerLocale } from "@/lib/i18n/server";
+import DeferredFonts from "@/components/DeferredFonts";
 
 export const viewport: Viewport = {
   width: "device-width",
@@ -55,6 +56,7 @@ export default async function RootLayout({
         >
           <LocaleProvider initialLocale={locale}>
             {children}
+            <DeferredFonts />
             <AppToastViewport />
           </LocaleProvider>
         </ThemeProvider>

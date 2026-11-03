@@ -102,3 +102,39 @@ Browser regression checks cover camera swaps at 1280/393/320 px, green retractio
 into the avatar after audio and video calls, persistent red failure fills, and
 no waiting background after hangup. These are isolated desktop-browser checks,
 including mobile viewport emulation, rather than physical-phone measurements.
+## Performance and notification fixes — 2026-11-03
+
+- Pack pickers commit scroll state in 32 px bands with a full-row overscan,
+  share one scheduled resize/scroll measurement, and reuse pack filtering and row
+  descriptions. Full pack grids use the same viewport observer.
+- Vector sticker creation uses a cancellable shared 4 ms/frame queue instead of
+  initializing all visible renderers in one Promise burst. Existing playback,
+  visibility pause/resume and image resolution remain enabled.
+- Chat viewport width transitions commit after settling. Height changes remain
+  frame-coalesced for keyboard/viewport changes. Resize anchoring no longer
+  restarts a smooth bottom scroll on every intermediate layout.
+- Header and call-tray entrances keep Motion opacity/transform animation without
+  simultaneously animating a raster blur. Glass material remains unchanged.
+- Optional fonts no longer use a render-blocking CSS import. Auth no longer
+  preloads an unused 2.15 MB lock GIF and 157 kB code illustration at module load.
+  The lock illustration uses an appropriately sized animated WebP when needed:
+  135 frames and 3.002 s versus the original 135 frames and 3 s.
+- Browser and service-worker notifications share a generated plain-text formatter.
+  Sticker previews are `😻 Стикер` / `😻 Sticker`; custom emoji tokens resolve to
+  their Unicode label when available. Unknown objects/internal envelopes never
+  reach the notification API. No plaintext message content was added to Beams.
+  Activity labels no longer have trailing ellipses.
+
+Verification: production Webpack build and TypeScript passed. An isolated Chrome
+comparison of the actual picker with 2,000 entries at 393 px and 4x CPU slowdown
+recorded 119 versus 6 renders over the same 120 px fine-scroll sequence; p95 frame
+interval was 40 versus 34.5 ms. Both versions retained 70 mounted cells; selection
+worked. This is a relative picker result, not a claim that every phone runs at
+60 fps. Call animation checks passed at 1280/393 px. Notification and worker tests,
+queue cancellation, viewport resize/scroll and the existing suite passed.
+
+The supplied PageSpeed report resolves to `/login`; desktop performance was 96.
+Its render-blocking stylesheet and unused image preloads informed the auth fixes.
+It does not measure authenticated-chat scrolling. Local PostgreSQL/Redis/Docker
+were unavailable in this run, so no new complete encrypted-chat end-to-end
+benchmark or physical-device call performance result is claimed.

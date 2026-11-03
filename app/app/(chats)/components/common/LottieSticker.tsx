@@ -5,6 +5,7 @@ import React, { memo, useEffect, useRef } from "react";
 import type { AnimationItem, LottiePlayer } from "lottie-web";
 import { fetchStickerAnimationData } from "@/lib/client/stickers";
 import { useAnimationVisibility } from "@/lib/client/use-animation-visibility";
+import { scheduleAnimationMount } from "@/lib/client/animation-mount-queue";
 
 let pendingPlayer: Promise<LottiePlayer> | null = null;
 function ensureLottieScript(): Promise<LottiePlayer> {
@@ -44,14 +45,18 @@ export const LottieSticker = memo(function LottieSticker({ src, className, rende
     // scroll. Picker previews can defer the first load until they actually play.
     if (!visible || (deferUntilPlaying && !playing)) return;
     let cancelled = false;
+    let cancelMount: (() => void) | undefined;
     void Promise.all([ensureLottieScript(), fetchStickerAnimationData(src)]).then(([lottie, animationData]) => {
       if (cancelled || !containerRef.current) return;
-      animationRef.current = lottie.loadAnimation({
+      cancelMount = scheduleAnimationMount(() => {
+      if (cancelled || !containerRef.current) return;
+      try { animationRef.current = lottie.loadAnimation({
         container: containerRef.current, renderer, loop: true, autoplay: playing, animationData,
         ...(renderer === "canvas" ? { rendererSettings: { dpr: Math.min(window.devicePixelRatio || 1, 2) } } : {}),
+      }); } catch { /* Keep the thumbnail if a pack contains unsupported vector data. */ }
       });
     }).catch(() => { /* An unavailable sticker must not interrupt the chat. */ });
-    return () => { cancelled = true; };
+    return () => { cancelled = true; cancelMount?.(); };
   }, [src, visible, renderer, playing, deferUntilPlaying]);
 
   return <div ref={containerRef} className={className} style={style} />;

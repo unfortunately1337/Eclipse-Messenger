@@ -1,6 +1,10 @@
 "use client";
 import { translate as t } from "@/lib/i18n/translate";
 import { apiRequest } from "@/lib/client/http";
+import { messageNotificationPreview } from "@/lib/message-notification-preview";
+import { browserLocale } from "@/lib/i18n/locale";
+import { getEmojiStatus } from "@/lib/emoji-status";
+import { resolvePackItem } from "@/lib/client/pack-items";
 
 import {
   decryptMessageWithPrivateKeyBase64,
@@ -197,7 +201,13 @@ export async function showMessageNotification(
 
   const url = (options.buildChatUrl ?? buildDefaultChatUrl)(message.chatId);
   const title = message.senderName || newMessageNotificationText();
-  const body = await tryDecryptClientMessage(message);
+  const decrypted = await tryDecryptClientMessage(message);
+  const ids = typeof decrypted === "string" ? [...decrypted.matchAll(/\uE000(tg-[a-f0-9]{24})\uE001/g)].slice(0, 20).map(match => match[1]) : [];
+  if (ids.length) await Promise.race([
+    Promise.all(ids.filter(id => !getEmojiStatus(id)).map(id => resolvePackItem(id))),
+    new Promise(resolve => setTimeout(resolve, 350)),
+  ]);
+  const body = messageNotificationPreview(decrypted, browserLocale(), id => getEmojiStatus(id)?.emoji);
   const icon = resolveIconUrl(message.senderAvatar);
   const data = {
     messageId: message.messageId,

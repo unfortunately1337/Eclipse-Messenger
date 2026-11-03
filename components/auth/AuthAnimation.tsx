@@ -7,14 +7,6 @@ import { cn } from "@/lib/utils";
 import { loadLottiePlayer } from "@/lib/client/lottie-player";
 import { MonkeyImage, PasswordMonkeyFallback, TrackingMonkeyFallback } from "./MonkeyFallback";
 
-// Instant background prefetch for 🔐 gif as soon as auth module loads
-if (typeof window !== "undefined") {
-  const preloadLockImg = new Image();
-  preloadLockImg.src = "/gifs/lock-key.gif";
-  const preloadCodeImg = new Image();
-  preloadCodeImg.src = "/gifs/auth-code-message.webp";
-}
-
 const jsonCache = new Map<string, unknown>();
 
 /** Local animated 💬, resized for auth so no third-party request is needed. */
@@ -443,7 +435,7 @@ export function LockKeyGifAnimation({
   className?: string;
 }) {
   // Hint browser to preload in HTML stream
-  preload("/gifs/lock-key.gif", { as: "image", fetchPriority: "high" });
+  preload("/gifs/auth-lock-key.webp", { as: "image", fetchPriority: "high" });
 
   return (
     <div
@@ -454,7 +446,7 @@ export function LockKeyGifAnimation({
       )}
     >
       <img
-        src="/gifs/lock-key.gif"
+        src="/gifs/auth-lock-key.webp"
         alt="🔐"
         width={size}
         height={size}

@@ -13,6 +13,7 @@ import { mergePackSummary } from "@/lib/client/pack-library-cache";
 import { PackMedia } from "./PackMedia";
 import { useTranslation } from "./LocaleProvider";
 import { showAppToast } from "@/lib/client/app-toast";
+import { useVirtualViewport } from "@/lib/client/use-virtual-viewport";
 
 type Library = { packs: ImportedPack[]; refresh: () => Promise<void>; load: (id: string) => Promise<ImportedPack>; toggle: (pack: ImportedPack) => Promise<void>; recent: RecentPackItems; usage: PackUsage; rememberUsed: (kind: PackKind, id: string, packId: string) => void };
 const Context = createContext<Library | null>(null);
@@ -133,13 +134,10 @@ export default function PackLibraryProvider({ userId, children }: { userId: stri
   </Context.Provider>;
 }
 function PackGrid({ pack }: { pack: ImportedPack }) {
-  const ref = useRef<HTMLDivElement>(null), [view, setView] = useState({ top: 0, height: 400, width: 400 });
-  useEffect(() => {
-    const element = ref.current?.parentElement; if (!element) return;
-    const measure = () => setView({ top: element.scrollTop, height: element.clientHeight, width: element.clientWidth });
-    measure(); const observer = new ResizeObserver(measure); observer.observe(element); element.addEventListener("scroll", measure, { passive: true });
-    return () => { observer.disconnect(); element.removeEventListener("scroll", measure); };
-  }, []);
+  const ref = useRef<HTMLDivElement>(null);
+  const viewport = useRef<HTMLElement | null>(null);
+  useEffect(() => { viewport.current = ref.current?.parentElement ?? null; }, []);
+  const view = useVirtualViewport(viewport, { top: 0, height: 400, width: 400 });
   const columns = pack.kind === "emoji" ? 7 : 4, row = Math.floor(view.width / columns);
   const first = Math.max(0, Math.floor(view.top / row) - 1) * columns, last = Math.ceil((view.top + view.height) / row + 1) * columns;
   return <div ref={ref} className="relative" style={{ height: Math.ceil(pack.items.length / columns) * row }}>

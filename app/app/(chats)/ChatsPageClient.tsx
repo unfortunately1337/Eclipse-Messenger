@@ -30,6 +30,7 @@ import { schedulePanelIdle } from "@/lib/client/panel-work";
 import { requestNetworkCheck } from "@/lib/client/network-monitor";
 import { usePanelDirection } from "@/lib/client/use-panel-direction";
 import { useStableEvent } from "@/lib/client/use-stable-event";
+import { observeViewportGeometry } from "@/lib/client/observe-viewport-geometry";
 import { AnimatedChatLayout } from "./components/common/AnimatedChatLayout";
 import { BotMenuToggle, BotReplyMenu, useBotChatSettings } from "./components/common/BotChatControls";
 import { MemberActionMenu, useMemberContextMenu } from "./components/common/MemberActionMenu";
@@ -9876,7 +9877,7 @@ export default function ChatsPageClient() {
   const activeRecordingStatusText =
     activeRecordingMembers.length <= 1
       ? activeRecordingMembers[0] ?? ""
-      : t("несколько участников записывают...");
+      : t("несколько участников записывают");
   const activeGroupTypingText =
     activeTypingMembers.length === 1
       ? t("{0} печатает", { 0: activeTypingMembers[0] })
@@ -9924,7 +9925,7 @@ export default function ChatsPageClient() {
       }
       if (activeIsSending) return activeSendingStatusText;
       if (activeIsRecording) return activeRecordingStatusText;
-      if (activeIsTyping) return t("печатает...");
+      if (activeIsTyping) return t("печатает");
       return t(getPresenceStatusText(
         activePeerId,
         onlineUserIds,
@@ -9945,8 +9946,8 @@ export default function ChatsPageClient() {
       return t("группа");
     }
     if (isChannelConversation) {
-      if (activeIsSending) return activeSendingStatusText || t("публикация...");
-      if (activeIsRecording) return activeRecordingStatusText || t("идет запись...");
+      if (activeIsSending) return activeSendingStatusText || t("публикация");
+      if (activeIsRecording) return activeRecordingStatusText || t("идет запись");
       const subs = activeConversation?.channel?.subscribersCount ?? activeChat?.subscribersCount;
       if (subs !== undefined && subs !== null && subs !== "") {
         return formatSearchCount(String(subs), t("подписчик"), t("подписчика"), t("подписчиков"));
@@ -9957,7 +9958,7 @@ export default function ChatsPageClient() {
     if (activeChat?.isBot || (activeConversation?.peer?.isBot && activeConversation.peer.link === activeChat?.link)) return t("бот");
     if (activeIsSending) return activeSendingStatusText;
     if (activeIsRecording) return activeRecordingStatusText;
-    if (activeIsTyping) return t("печатает...");
+    if (activeIsTyping) return t("печатает");
     return t(getPresenceStatusText(
       activePeerId,
       onlineUserIds,
@@ -12029,20 +12030,15 @@ export default function ChatsPageClient() {
       const shouldKeepEntryBottom =
         !entryAutoScrollInterruptedRef.current && Date.now() < forceEntryBottomUntilRef.current;
       if (!userScrolledUpRef.current && (wasAtBottom || (!programmaticScrollRef.current && shouldKeepEntryBottom && distanceToBottom > MESSAGE_AUTO_SCROLL_THRESHOLD))) {
-        scrollMessagesToBottom(pendingInitialScrollRef.current ? "auto" : "smooth");
+        // Resize anchoring must not restart a smooth scroll on every layout frame.
+        scrollMessagesToBottom("auto");
         setShowScrollToBottomButton(false);
         return;
       }
       messagesAtBottomRef.current = !userScrolledUpRef.current && distanceToBottom <= MESSAGE_AUTO_SCROLL_THRESHOLD;
     };
 
-    update();
-    if (typeof ResizeObserver !== "undefined") {
-      const observer = new ResizeObserver(() => update());
-      observer.observe(viewport);
-      return () => observer.disconnect();
-    }
-    return undefined;
+    return observeViewportGeometry(viewport, update);
   }, [activeChat?.link, isDesktop, MESSAGE_AUTO_SCROLL_THRESHOLD, scrollMessagesToBottom]);
 
   useEffect(() => {
@@ -22189,9 +22185,9 @@ export default function ChatsPageClient() {
                 {chatSearchOpen ? (
                   <motion.div
                     key="chat-search-header"
-                    initial={{ opacity: 0, y: -5, filter: "blur(4px)" }}
-                    animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
-                    exit={{ opacity: 0, y: -4, filter: "blur(3px)" }}
+                    initial={{ opacity: 0, y: -5 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -4 }}
                     transition={PANEL_TRANSITION}
                   >
                     <div className="flex h-11 items-center gap-2">
@@ -22267,9 +22263,9 @@ export default function ChatsPageClient() {
                 ) : (
                   <motion.div
                     key="chat-list-header"
-                    initial={{ opacity: 0, y: 5, filter: "blur(4px)" }}
-                    animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
-                    exit={{ opacity: 0, y: 4, filter: "blur(3px)" }}
+                    initial={{ opacity: 0, y: 5 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: 4 }}
                     transition={PANEL_TRANSITION}
                   >
                     <div className="relative hidden min-w-0 items-center gap-2 md:flex">
@@ -22669,9 +22665,9 @@ export default function ChatsPageClient() {
                   <AnimatePresence mode="wait" initial={false}>
                     <motion.div
                       key={`${chatSearchScope}-${chatSearchNormalizedQuery ? "query" : "empty"}`}
-                      initial={{ opacity: 0, y: 8, filter: "blur(4px)" }}
-                      animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
-                      exit={{ opacity: 0, y: -6, filter: "blur(3px)" }}
+                      initial={{ opacity: 0, y: 8 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: -6 }}
                       transition={{ duration: 0.18, ease: [0.22, 1, 0.36, 1] }}
                     >
                       {chatSearchLoading ? (
@@ -23483,7 +23479,7 @@ export default function ChatsPageClient() {
             initial={false}
             animate={
               expiringChatId && activeChat && (activeChat.conversationId === `secret:${expiringChatId}` || activeChat.link === `secret-${expiringChatId}`)
-                ? { opacity: 0, scale: 0.95, filter: "blur(4px)" }
+                ? { opacity: 0, scale: 0.95 }
                 : !isDesktop
                   ? activeChat
                     ? { x: "0%", opacity: 1, scale: 1 }

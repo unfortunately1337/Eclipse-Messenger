@@ -198,7 +198,7 @@ export default function PersonalCallWindow(props: Props) {
   return <>
     {miniTarget ? createPortal(<AnimatePresence>
       {minimized && !closingWindow && (
-      <motion.aside key="personal-mini" aria-label={t("Звонок")} initial={reducedMotion ? { opacity: 0 } : { opacity: 0, y: -8, scale: 0.98, filter: "blur(4px)" }} animate={{ opacity: 1, y: 0, scale: 1, filter: "none" }} exit={reducedMotion ? { opacity: 0 } : { opacity: 0, y: -7, scale: 0.985, filter: "blur(3px)" }} transition={{ duration: reducedMotion ? 0.12 : 0.24, ease: [0.22, 1, 0.36, 1] }}
+      <motion.aside key="personal-mini" aria-label={t("Звонок")} initial={reducedMotion ? { opacity: 0 } : { opacity: 0, y: -8, scale: 0.98 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={reducedMotion ? { opacity: 0 } : { opacity: 0, y: -7, scale: 0.985 }} transition={{ duration: reducedMotion ? 0.12 : 0.24, ease: [0.22, 1, 0.36, 1] }}
         className="relative isolate flex h-9 w-full items-center gap-2 overflow-hidden rounded-full px-3 text-white [&>button]:relative [&>button]:z-10" style={material}>
         <CallVoiceWaves readLevels={props.readVoiceLevels} />
         <button type="button" onClick={props.onExpand} aria-label={t("Развернуть звонок")} className="flex h-full min-w-0 flex-1 items-center gap-2 text-left focus-visible:outline-2 focus-visible:outline-white/60">
