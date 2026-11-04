@@ -19,6 +19,7 @@ import { createCallRenderScheduler } from "@/lib/client/call-render-scheduler";
 import { callConnectionSignal } from "@/lib/client/call-connection-quality";
 import { switchCallCamera, type CallCameraFacing } from "@/lib/client/call-camera";
 import { callClientId } from "@/lib/client/call-p2p-signaling";
+import { personalCallStatus } from "@/lib/client/call-status";
 
 const TrackElement = memo(function TrackElement({ track, local, audio, muted = false, volume = 1, mirror = true }: { track: CallMediaTrack; local: boolean; audio: boolean; muted?: boolean; volume?: number; mirror?: boolean }) {
   const container = useRef<HTMLDivElement>(null);
@@ -106,7 +107,9 @@ export const CallRoomPanel = memo(function CallRoomPanel({ call, selfId, glass, 
         setRoom(session);
         await session.connect(connection);
         if (cancelled) { await session.disconnect(); return; }
-        setState("На связи");
+        // P2P connect() starts negotiation; only its connection events mean
+        // media is connected. Do not treat SDK initialization as an answer.
+        setState(session.state === "connected" ? "На связи" : "Соединение…");
         try { await session.startAudio(); } catch { setAudioBlocked(true); }
         try { await session.localParticipant.setMicrophoneEnabled(true); }
         catch { if (!cancelled) setError("Не удалось включить микрофон. Проверьте разрешения браузера."); }
@@ -222,11 +225,7 @@ export const CallRoomPanel = memo(function CallRoomPanel({ call, selfId, glass, 
       remote: remote?.isMicrophoneEnabled && !peerAudio.muted && peerAudio.volume > 0 ? immediate?.remote ?? remote.audioLevel : 0,
     };
   }, [room, remote, finished, peerAudio.muted, peerAudio.volume, readImmediateLevels]);
-  const personalStatus = finished ? endOutcome === "cancelled" ? "Звонок отменён" : endOutcome === "declined" ? "Звонок отклонён" : endOutcome === "missed" ? "Нет ответа" : "Звонок завершён"
-    : call.incoming ? "Входящий звонок" : !call.onThisSession ? "Звонок открыт на другом устройстве"
-    : state === "Не удалось подключиться" || state === "Соединение прервано" ? state
-    : call.status === "ringing" ? (state === "Запрос…" || state === "Ожидание…" ? state : "Вызов…")
-    : state === "Восстанавливаем соединение…" ? state : "Соединение…";
+  const personalStatus = personalCallStatus(call, state, finished, endOutcome);
 
   return (
     <>

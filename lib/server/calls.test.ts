@@ -29,7 +29,7 @@ const mock = vi.hoisted(() => {
     group: { findUnique: vi.fn() },
     privacy: vi.fn(), allowed: vi.fn(),
     historyCreate: vi.fn(), historyUpdate: vi.fn(),
-    create: vi.fn(), remove: vi.fn(), close: vi.fn(), issue: vi.fn(), notify: vi.fn(),
+    create: vi.fn(), remove: vi.fn(), close: vi.fn(), issue: vi.fn(), notify: vi.fn(), configured: vi.fn(),
   };
 });
 vi.mock("./call-notifications", () => ({ deliverCallNotification: vi.fn(async () => {}) }));
@@ -38,6 +38,7 @@ vi.mock("./redis", () => ({ redis: mock.redis }));
 vi.mock("./prisma", () => ({ prisma: { contact: mock.contact, user: mock.user, conversation: mock.conversation, group: mock.group, groupMember: mock.groupMember } }));
 vi.mock("./privacy-settings", () => ({ getPrivacySettings: mock.privacy, canUserCall: mock.allowed }));
 vi.mock("./livekit", () => ({ createCallRoom: mock.create, removeCallParticipant: mock.remove, deleteCallRoom: mock.close, issueCallConnection: mock.issue,
+  livekitConfigured: mock.configured,
   callIdentity: (id: string, user: string) => `${id}:${user}` }));
 vi.mock("./realtime", () => ({ triggerRealtimeChannels: mock.notify, userPrivateChannel: (id: string) => `private-${id}` }));
 
@@ -48,6 +49,7 @@ const bob = { userId: "bob", sessionId: "bob-session" };
 afterEach(() => vi.unstubAllEnvs());
 beforeEach(() => {
   vi.resetAllMocks(); mock.store.clear();
+  mock.configured.mockReturnValue(true);
   mock.user.findFirst.mockResolvedValue({ id: "bob", link: "bob", displayName: "Bob", isBot: false, isSystemAccount: false });
   mock.user.findMany.mockResolvedValue([{ id: "alice", displayName: "Alice", avatarUrl: null }, { id: "bob", displayName: "Bob", avatarUrl: null }]);
   mock.conversation.findFirst.mockResolvedValue({ id: "direct-chat" });
@@ -62,6 +64,17 @@ beforeEach(() => {
 });
 
 describe("call authorization and lifecycle", () => {
+  it("rejects legacy clients explicitly without LiveKit and keeps a P2P invitation usable", async () => {
+    vi.stubEnv("CALLS_DIRECT_TRANSPORT", "p2p"); vi.stubEnv("WEBRTC_TURN_URLS", "turn:turn.example.com:3478"); vi.stubEnv("WEBRTC_TURN_SECRET", "s".repeat(48));
+    mock.configured.mockReturnValue(false);
+    await expect(startCall(alice, "direct", "audio", "bob")).rejects.toMatchObject({ status: 409, message: "Обновите приложение для подключения к звонку" });
+    expect(mock.create).not.toHaveBeenCalled();
+    const direct = await startCall(alice, "direct", "audio", "bob", true);
+    await expect(joinCall(bob, direct.id)).rejects.toMatchObject({ status: 409 });
+    expect((await ownCall(alice.userId))?.status).toBe("ringing");
+    expect(await joinCall(bob, direct.id, true)).toMatchObject({ transport: "p2p", status: "active" });
+    expect(mock.create).not.toHaveBeenCalled();
+  });
   it("selects P2P only for capable personal clients and keeps LiveKit as a compatible rollback", async () => {
     vi.stubEnv("CALLS_DIRECT_TRANSPORT", "p2p"); vi.stubEnv("WEBRTC_TURN_URLS", "turn:turn.example.com:3478"); vi.stubEnv("WEBRTC_TURN_SECRET", "s".repeat(48));
     const direct = await startCall(alice, "direct", "video", "bob", true);

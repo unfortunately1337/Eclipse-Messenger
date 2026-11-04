@@ -97,6 +97,9 @@ export class P2PCallSession extends CallMediaEvents implements CallMediaSession,
       if (++this.signalingFailures >= 2) this.requestRestart();
     }, () => this.state === "connected");
     void this.signaling.send({ type: "ready" }).catch(() => this.requestRestart());
+    // ICE may remain "new"/"checking" forever when the first SDP is lost;
+    // those states do not trigger connectionstatechange=failed by themselves.
+    this.restartWatchdog = setTimeout(() => { if (this.state !== "connected") this.requestRestart(); }, 12_000);
     this.statsTimer = setInterval(() => void this.readStats(), 2000);
     window.addEventListener("online", this.online);
     this.scheduleCredentials(); this.emit("update");

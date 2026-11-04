@@ -6,7 +6,7 @@ import { prisma } from "./prisma";
 import { HttpError } from "./http";
 import { normalizeLink } from "./validation";
 import { canUserCall, getPrivacySettings } from "./privacy-settings";
-import { callIdentity, createCallRoom, deleteCallRoom, issueCallConnection, removeCallParticipant } from "./livekit";
+import { callIdentity, createCallRoom, deleteCallRoom, issueCallConnection, removeCallParticipant, livekitConfigured } from "./livekit";
 import { triggerRealtimeChannels, userPrivateChannel } from "./realtime";
 import { createCallHistory, updateCallHistory } from "./call-history";
 import { deliverCallOnce } from "./call-delivery";
@@ -169,6 +169,10 @@ export async function startCall(actor: Actor, kind: CallKind, mode: CallMode, li
   if (kind === "direct") await assertCallCooldown(actor.userId, target.invitedIds.find(id => id !== actor.userId)!);
   const now = Date.now(), id = randomUUID();
   const transport: CallTransport = kind === "direct" && supportsP2P && p2pCallsConfigured() ? "p2p" : "livekit";
+  if (transport === "livekit" && !livekitConfigured()) {
+    throw new HttpError(kind === "direct" && p2pCallsConfigured() ? 409 : 503,
+      kind === "direct" && p2pCallsConfigured() ? "Обновите приложение для подключения к звонку" : "Звонки пока не настроены");
+  }
   const call: CallRecord = { id, kind, mode, transport, status: kind === "direct" ? "ringing" : "active", chatId: target.chatId,
     link: target.link, callerId: actor.userId, invitedIds: target.invitedIds,
     parties: { [actor.userId]: { sessionId: actor.sessionId, lastSeen: now } }, createdAt: now,
@@ -199,6 +203,7 @@ export async function joinCall(actor: Actor, id: string, supportsP2P = false) {
   await assertCallAccess(initial, actor.userId);
   const downgrade = initial.transport === "p2p" && !supportsP2P;
   if (downgrade) {
+    if (!livekitConfigured()) throw new HttpError(409, "Обновите приложение для подключения к звонку");
     if (initial.parties[actor.userId] && initial.parties[actor.userId].sessionId !== actor.sessionId) throw new HttpError(409, "Звонок открыт на другом устройстве");
     await createCallRoom(id, 2);
   }

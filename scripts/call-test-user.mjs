@@ -1,4 +1,4 @@
-// Local development helper. Uses real call authorization and LiveKit transport.
+// Local development helper. Uses real authorization and the configured transport.
 import { randomBytes, randomUUID } from "node:crypto";
 import { createRequire } from "node:module";
 import { existsSync, readFileSync } from "node:fs";
@@ -7,6 +7,8 @@ import { PrismaClient } from "@prisma/client";
 import Redis from "ioredis";
 import argon2 from "argon2";
 import { chromium } from "playwright-core";
+import { build } from "rolldown";
+import path from "node:path";
 import { loadCallTestIdentity, isCallCommand } from "./call-test-commands.mjs";
 
 const require = createRequire(import.meta.url);
@@ -57,14 +59,18 @@ async function disconnect() {
   mediaReady = false;
 }
 let heartbeatAt = 0;
+const clientIds = new Map();
 async function connectMedia(id) {
-          const connection = await api({ action: "token", id });
+          const clientId = clientIds.get(id) ?? randomUUID(); clientIds.set(id, clientId);
+          const connection = await api({ action: "token", id, clientId });
           const speechFile = ".cache/call-test-voice.wav";
           const speech = existsSync(speechFile) ? readFileSync(speechFile).toString("base64") : null;
           await page.evaluate(async ({ connection, speech }) => {
-            const room = new window.LivekitClient.Room({ adaptiveStream: true, dynacast: true });
+            const p2p = connection.transport === "p2p";
+            const room = p2p ? new window.EclipseCall.P2PCallSession() : new window.LivekitClient.Room({ adaptiveStream: true, dynacast: true });
             window.testRoom = room;
-            await room.connect(connection.url, connection.token);
+            if (p2p) await room.connect(connection);
+            else await room.connect(connection.url, connection.token);
             // Synthetic test speech only. Never capture a device microphone.
             const audio = new AudioContext(); window.testAudio = audio;
             const destination = audio.createMediaStreamDestination();
@@ -96,8 +102,14 @@ async function connectMedia(id) {
                 gain.gain.setValueAtTime(0.24, end - 0.06); gain.gain.linearRampToValueAtTime(0, end);
               }
             }
-            const track = new window.LivekitClient.LocalAudioTrack(destination.stream.getAudioTracks()[0]);
-            await room.localParticipant.publishTrack(track, { source: window.LivekitClient.Track.Source.Microphone });
+            if (p2p) {
+              // This isolated helper page supplies synthetic audio, never a device.
+              Object.defineProperty(navigator, "mediaDevices", { configurable: true, value: { getUserMedia: async () => destination.stream } });
+              await room.localParticipant.setMicrophoneEnabled(true);
+            } else {
+              const track = new window.LivekitClient.LocalAudioTrack(destination.stream.getAudioTracks()[0]);
+              await room.localParticipant.publishTrack(track, { source: window.LivekitClient.Track.Source.Microphone });
+            }
           }, { connection, speech });
           mediaReady = true;
 
@@ -129,9 +141,20 @@ try {
     args: ["--autoplay-policy=no-user-gesture-required"] });
   page = await browser.newPage();
   await page.setContent("<html><body>Local Eclipse call test</body></html>");
-  await page.addScriptTag({ content: readFileSync(require.resolve("livekit-client"), "utf8") });
   const snapshot = await api();
   if (!snapshot.enabled) throw new Error("Calls are not configured in the local app.");
+  if (snapshot.directTransport === "p2p") {
+    const bundled = await build({ input: path.resolve("lib/client/call-p2p-session.ts"), platform: "browser",
+      write: false, output: { format: "iife", name: "EclipseCall" }, plugins: [{ name: "call-helper-api",
+        resolveId(source, importer) {
+          if (source === "./http" && importer?.replaceAll("\\", "/").endsWith("/call-p2p-signaling.ts")) return "\0call-helper-api";
+          if (source.startsWith("@/")) return this.resolve(path.resolve(source.slice(2)), undefined, { skipSelf: true });
+        },
+        load(id) { if (id === "\0call-helper-api") return "export const apiRequest = (url, init) => window.testApi(url, init);"; },
+      }] });
+    await page.exposeFunction("testApi", (url, init) => api(init?.body ? JSON.parse(init.body) : null, url));
+    await page.addScriptTag({ content: bundled.output.find(item => item.type === "chunk").code });
+  } else await page.addScriptTag({ content: readFileSync(require.resolve("livekit-client"), "utf8") });
   const identity = await loadCallTestIdentity();
   await api({ publicKey: identity.publicKey }, "/api/settings/e2e-key");
   const commandSince = new Date();
@@ -145,7 +168,7 @@ try {
       const command = await isCallCommand(data.messages?.find(item => item.id === message.id), identity);
       seenCommands.add(message.id);
       if (command) {
-        const result = await api({ action: "start", kind: "direct", mode: "audio", link: message.sender.link });
+        const result = await api({ action: "start", protocol: "p2p-v1", kind: "direct", mode: "audio", link: message.sender.link });
         currentId = result.call.id;
         await connectMedia(currentId);
         console.log("Command 1 received; outgoing test call started.");
@@ -173,7 +196,7 @@ try {
         await delay(Math.max(0, call.createdAt + 4000 - Date.now()));
         const latest = (await api()).current;
         if (!stopped && latest?.id === call.id && latest.incoming) {
-          await api({ action: "join", id: call.id });
+          await api({ action: "join", protocol: "p2p-v1", id: call.id });
           currentId = call.id;
           await connectMedia(call.id);
           heartbeatAt = Date.now(); console.log("Call accepted; test media connected.");

@@ -1,21 +1,24 @@
 # Personal calls: P2P migration and coturn rollout
 
 The existing personal-call UI now has interchangeable P2P and LiveKit media
-adapters. No database migration is needed. **The default remains LiveKit until
-coturn is installed and production relay tests pass.** The deployment record at
-the end distinguishes the application's defaults from the production setting.
+adapters. No database migration is needed. **The environment example defaults to
+P2P; production requires coturn and relay verification.** The deployment record
+at the end describes the production setting.
 
 ## Transport and compatibility
 
 - `CALLS_DIRECT_TRANSPORT=p2p` selects P2P for new personal calls between updated
   clients. Production requires a valid TURN configuration before selecting it.
-- `CALLS_DIRECT_TRANSPORT=livekit` rolls new calls back to LiveKit. Keep its three
-  server credentials and both SDK dependencies during the transition.
+- `CALLS_DIRECT_TRANSPORT=livekit` rolls new calls back to LiveKit only when its
+  three server credentials are explicitly restored. Both SDK dependencies remain
+  available for that rollback; active local/production env files omit Cloud keys.
 - A call retains its transport throughout its lifetime. An old cached recipient
   without `p2p-v1` support causes the invitation to downgrade to LiveKit before
-  acceptance; the updated caller reconnects using the selected adapter. Existing
-  local `@call_test` helpers still use this compatibility path.
-- Groups continue through the existing LiveKit adapter. P2P is strictly 1:1.
+  acceptance only if LiveKit is configured. Otherwise it receives an explicit
+  update-client error without changing the P2P invitation. The local `@call_test`
+  helper supports P2P and no longer needs this downgrade.
+- P2P is strictly 1:1. The group adapter requires separately configured LiveKit;
+  removing Cloud keys does not turn group calls into unsupported mesh calls.
 - Privacy rules, exceptions, abuse limits, history, notification deduplication,
   camera flip, simultaneous camera/screen, volume preferences and UI remain.
 
