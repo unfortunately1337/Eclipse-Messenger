@@ -780,7 +780,7 @@ export const SettingsDrawer = React.memo(function SettingsDrawer(props: any) {
   const settingsDepth = settingsPanelView === "main" ? 0
     : settingsPrivacyDetail === "lastSeenExceptions" ? 3
     : settingsPrivacyDetail || settingsSecurityPanel || ["security-totp", "security-password", "scan-qr", "custom-theme"].includes(settingsPanelView) ? 2 : 1;
-  const settingsNavDirection = usePanelDirection(settingsDepth);
+  const settingsNavDirection = usePanelDirection(settingsDepth, `${settingsPanelView}-${settingsPrivacyDetail ?? settingsSecurityPanel ?? "root"}`);
   const [settingsMoreOpen, setSettingsMoreOpen] = useState(false);
   const [settingsMusicUploading, setSettingsMusicUploading] = useState(false);
   const [settingsCoverUploading, setSettingsCoverUploading] = useState(false);
@@ -1960,7 +1960,7 @@ export const SettingsDrawer = React.memo(function SettingsDrawer(props: any) {
 
                     return (
                       <div
-                        className="shrink-0 flex flex-col justify-between transition-all duration-300 relative overflow-hidden mb-3"
+                        className="shrink-0 flex flex-col justify-between transition-colors duration-150 relative overflow-hidden mb-3"
                         style={{
                           background: effectiveGradient || "transparent",
                         }}

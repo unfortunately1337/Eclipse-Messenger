@@ -356,6 +356,12 @@ body:has(.h-\[100dvh\]) {
 [data-panel-navigation] > * {
   grid-area: 1 / 1;
   min-width: 0;
+  min-height: 0;
+}
+/* The incoming screen covers the outgoing one only while they overlap;
+   settled screens keep the panel's single glass surface. */
+[data-panel-navigation]:has(> [inert]) > * {
+  background-color: var(--app-panel-background, #1c1c1e);
 }
 
 [data-community-details]:has(> [data-community-overlay]) > :not([data-community-overlay]) {

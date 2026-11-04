@@ -10,7 +10,7 @@ describe("optional panel work", () => {
     vi.stubGlobal("window", { setTimeout, clearTimeout, requestIdleCallback: idle, cancelIdleCallback: vi.fn() });
     const task = vi.fn();
     schedulePanelIdle(task);
-    vi.advanceTimersByTime(219);
+    vi.advanceTimersByTime(251);
     expect(idle).not.toHaveBeenCalled();
     vi.advanceTimersByTime(1);
     expect(task).not.toHaveBeenCalled();
@@ -22,7 +22,7 @@ describe("optional panel work", () => {
     const idle = vi.fn<(callback: () => void) => number>().mockReturnValue(7), cancel = vi.fn(), task = vi.fn();
     vi.stubGlobal("window", { setTimeout, clearTimeout, requestIdleCallback: idle, cancelIdleCallback: cancel });
     const stop = schedulePanelIdle(task);
-    vi.advanceTimersByTime(220);
+    vi.advanceTimersByTime(252);
     stop();
     idle.mock.calls[0][0]();
     expect(task).not.toHaveBeenCalled();
@@ -33,6 +33,6 @@ describe("optional panel work", () => {
     vi.stubGlobal("window", { setTimeout, clearTimeout });
     const task = vi.fn(), cancel = schedulePanelIdle(task);
     cancel(); vi.runAllTimers(); expect(task).not.toHaveBeenCalled();
-    schedulePanelIdle(task); vi.advanceTimersByTime(220); expect(task).toHaveBeenCalledOnce();
+    schedulePanelIdle(task); vi.advanceTimersByTime(252); expect(task).toHaveBeenCalledOnce();
   });
 });

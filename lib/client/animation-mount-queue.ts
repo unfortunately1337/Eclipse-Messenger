@@ -1,8 +1,14 @@
 type Job = { run: () => void; cancelled: boolean };
 const jobs: Job[] = [];
 let frame: number | null = null;
+let deferredUntil = 0;
+/** Existing emoji keep playing; expensive new renderers wait for navigation. */
+export function deferAnimationMounts(durationMs: number) {
+  deferredUntil = Math.max(deferredUntil, performance.now() + durationMs);
+}
 function flush() {
   frame = null;
+  if (performance.now() < deferredUntil) { frame = requestAnimationFrame(flush); return; }
   const started = performance.now();
   while (jobs.length) {
     const job = jobs.shift()!;

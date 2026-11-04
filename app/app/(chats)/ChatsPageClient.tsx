@@ -25,13 +25,15 @@ import { customThemeMessageBackground, customThemeChatBackground, customThemeTex
 
 import { readAudioFileMetadata } from "@/lib/client/audio-file-metadata";
 import { PanelNavigation } from "./components/common/PanelNavigation";
-import { PANEL_SUBVIEW_VARIANTS, PANEL_TRANSITION } from "@/lib/client/panel-motion";
+import { PANEL_SUBVIEW_VARIANTS, PANEL_TRANSITION, NAVIGATION_TRANSITION, NAVIGATION_EXIT_TRANSITION, panelOverlayMotion } from "@/lib/client/panel-motion";
 import { schedulePanelIdle } from "@/lib/client/panel-work";
 import { requestNetworkCheck } from "@/lib/client/network-monitor";
 import { usePanelDirection } from "@/lib/client/use-panel-direction";
 import { useStableEvent } from "@/lib/client/use-stable-event";
 import { observeViewportGeometry } from "@/lib/client/observe-viewport-geometry";
 import { AnimatedChatLayout } from "./components/common/AnimatedChatLayout";
+import { ChatScene } from "./components/common/ChatScene";
+import { RetainedContent } from "./components/common/RetainedContent";
 import { BotMenuToggle, BotReplyMenu, useBotChatSettings } from "./components/common/BotChatControls";
 import { MemberActionMenu, useMemberContextMenu } from "./components/common/MemberActionMenu";
 import { SecretChatInfoDialog } from "./components/common/SecretChatInfoDialog";
@@ -4364,6 +4366,8 @@ export default function ChatsPageClient() {
     });
   }, []);
   const [profileModalOpen, setProfileModalOpen] = useState(false);
+  const detailsTargetRef = useRef<{ kind: "direct" | "group" | "channel"; link: string } | null>(null);
+  useEffect(() => { detailsTargetRef.current = null; }, [selfId]);
   const [profileOpenedExternally, setProfileOpenedExternally] = useState(false);
   const [profileMoreOpen, setProfileMoreOpen] = useState(false);
   const [hoverReactionMessageId, setHoverReactionMessageId] = useState<string | null>(null);
@@ -4790,30 +4794,14 @@ export default function ChatsPageClient() {
   const [createChatContactQuery, setCreateChatContactQuery] = useState("");
   const [createChatContactsLoading, setCreateChatContactsLoading] = useState(false);
   const [createChatCreating, setCreateChatCreating] = useState(false);
-  const [createChatNavDirection, setCreateChatNavDirection] = useState<"forward" | "backward">("forward");
-  const prevCreateChatStepRef = useRef<CreateChatStep>("intro");
-  useEffect(() => {
-    const getCreateStepDepth = (step: CreateChatStep, kind: CreateChatKind | null) => {
-      if (kind === "channel") {
-        if (step === "details") return 0;
-        if (step === "settings") return 1;
-        if (step === "members") return 2;
-      } else {
-        if (step === "members") return 0;
-        if (step === "details") return 1;
-        if (step === "settings") return 2;
-      }
-      return 0;
-    };
-    const cur = getCreateStepDepth(createChatStep, createChatKind);
-    const prev = getCreateStepDepth(prevCreateChatStepRef.current, createChatKind);
-    if (cur !== prev) setCreateChatNavDirection(cur > prev ? "forward" : "backward");
-    prevCreateChatStepRef.current = createChatStep;
-  }, [createChatStep, createChatKind]);
+  const createChatDepth = createChatKind === "channel"
+    ? createChatStep === "members" ? 2 : createChatStep === "settings" ? 1 : 0
+    : createChatStep === "settings" ? 2 : createChatStep === "details" ? 1 : 0;
+  const createChatNavDirection = usePanelDirection(createChatDepth, `${createChatKind}:${createChatStep}`);
 
-  const profileNavDirection = usePanelDirection(profileSubView === null ? 0 : 1);
-  const groupNavDirection = usePanelDirection(!groupSubView ? 0 : ["add_members", "reactions", "type"].includes(groupSubView) ? 2 : 1);
-  const channelNavDirection = usePanelDirection(!channelSubView ? 0 : ["add_subscribers", "reactions", "type"].includes(channelSubView) ? 2 : 1);
+  const profileNavDirection = usePanelDirection(profileSubView === null ? 0 : 1, profileSubView);
+  const groupNavDirection = usePanelDirection(!groupSubView ? 0 : ["add_members", "reactions", "type"].includes(groupSubView) ? 2 : 1, groupSubView);
+  const channelNavDirection = usePanelDirection(!channelSubView ? 0 : ["add_subscribers", "reactions", "type"].includes(channelSubView) ? 2 : 1, channelSubView);
 
   const [secretChatCreateOpen, setSecretChatCreateOpen] = useState(false);
   const [secretChatInfoOpen, setSecretChatInfoOpen] = useState(false);
@@ -15492,6 +15480,8 @@ export default function ChatsPageClient() {
       targetLink = (activeConversation?.peer?.link || (activeChat as any)?.peer?.link || "").replace(/^@+/, "");
       if (!targetLink) return;
     }
+    detailsTargetRef.current = { kind: "direct", link: targetLink };
+    const isCurrent = () => detailsTargetRef.current?.kind === "direct" && detailsTargetRef.current.link === targetLink;
 
     setProfileOpenedExternally(external);
     if (isDesktop && !forceModal) {
@@ -15642,6 +15632,7 @@ export default function ChatsPageClient() {
         apiRequest<ProfilePreview>(`/api/profile/${encodeURIComponent(targetLink)}`, { method: "GET" }),
         apiRequest<ContactResponse>(`/api/contacts/${encodeURIComponent(targetLink)}`, { method: "GET" }).catch(() => ({ exists: false, contact: null })),
       ]);
+      if (!isCurrent()) return;
 
       const snapshot = { savedAt: Date.now(), profile, contact };
       writeProfileDetailsMemoryCache(selfId, targetLink, snapshot);
@@ -15712,7 +15703,7 @@ export default function ChatsPageClient() {
         )
       );
     } catch (error) {
-      if (!cachedProfile && seedProfile.id === "") {
+      if (isCurrent() && !cachedProfile && seedProfile.id === "") {
         setProfileData(null);
         setContactEditorTarget(null);
         if (isDesktop && !forceModal) {
@@ -15731,11 +15722,13 @@ export default function ChatsPageClient() {
         });
       }
     } finally {
-      setProfileLoading(false);
+      if (isCurrent()) setProfileLoading(false);
     }
   }
 
   async function openGroupModal(link: string, options?: { forceRefresh?: boolean; forceModal?: boolean }) {
+    detailsTargetRef.current = { kind: "group", link };
+    const isCurrent = () => detailsTargetRef.current?.kind === "group" && detailsTargetRef.current.link === link;
     groupMembersReturnViewRef.current = null;
     if (isDesktop && !options?.forceModal) {
       setInspectedDetailsEntity({ type: "group", link });
@@ -15799,6 +15792,7 @@ export default function ChatsPageClient() {
         cache: "no-store",
       });
       groupModalCacheRef.current.set(link, { savedAt: Date.now(), data });
+      if (!isCurrent()) return;
       setGroupModalData(data);
       setGroupNameDraft(data.group.name ?? "");
       setGroupDescriptionDraft(data.group.description ?? "");
@@ -15806,13 +15800,13 @@ export default function ChatsPageClient() {
       setGroupIsPublicDraft(Boolean(data.group.isPublic));
       setGroupLinkDraft(data.group.link ?? "");
     } catch (error) {
-      if (!immediate) {
+      if (isCurrent() && !immediate) {
         setGroupModalData(null);
         setGroupModalError(error instanceof Error ? error.message : t("Не удалось загрузить группу"));
       }
     } finally {
       groupDetailsInFlightRef.current.delete(link);
-      setGroupModalLoading(false);
+      if (isCurrent()) setGroupModalLoading(false);
     }
   }
 
@@ -18804,6 +18798,8 @@ export default function ChatsPageClient() {
   }
 
   async function openChannelModal(link: string, options?: { forceRefresh?: boolean; forceModal?: boolean }) {
+    detailsTargetRef.current = { kind: "channel", link };
+    const isCurrent = () => detailsTargetRef.current?.kind === "channel" && detailsTargetRef.current.link === link;
     channelMembersReturnViewRef.current = null;
     if (isDesktop && !options?.forceModal) {
       setInspectedDetailsEntity({ type: "channel", link });
@@ -18862,6 +18858,7 @@ export default function ChatsPageClient() {
     try {
       const data = await apiRequest<ChannelModalData>(`/api/channels/${encodeURIComponent(link)}`, { method: "GET", cache: "no-store" });
       channelModalCacheRef.current.set(link, { savedAt: Date.now(), data });
+      if (!isCurrent()) return;
       setChannelModalData(data);
       setActiveConversation(prev => prev?.chatType === "channel" && prev.channel?.link === link ? { ...prev, channel: { ...prev.channel, isSubscribed: data.channel.isSubscribed, subscribersCount: data.channel.subscribersCount } } : prev);
       setChatSearchChannels(prev => prev.map(channel => channel.link === link ? { ...channel, subscribersCount: data.channel.subscribersCount } : channel));
@@ -18872,13 +18869,13 @@ export default function ChatsPageClient() {
       setChannelIsPublicDraft(Boolean(data.channel.isPublic));
       setChannelLinkDraft(data.channel.link ?? "");
     } catch (error) {
-      if (!immediate) {
+      if (isCurrent() && !immediate) {
         setChannelModalData(null);
         setChannelModalError(error instanceof Error ? error.message : t("Не удалось загрузить канал"));
       }
     } finally {
       channelDetailsInFlightRef.current.delete(link);
-      setChannelModalLoading(false);
+      if (isCurrent()) setChannelModalLoading(false);
     }
   }
 
@@ -22154,7 +22151,7 @@ export default function ChatsPageClient() {
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              transition={{ duration: 0.38, ease: [0.16, 1, 0.3, 1] }}
+              transition={NAVIGATION_TRANSITION}
               className="fixed inset-0 z-0 overflow-hidden pointer-events-none select-none"
             >
               <img
@@ -22173,10 +22170,10 @@ export default function ChatsPageClient() {
           <motion.aside
             animate={
               mobileChatOpen
-                ? { x: -28, scale: 0.992, opacity: 0 }
-                : { x: 0, scale: 1, opacity: 1 }
+                ? { x: reducedPanelMotion ? 0 : -28, opacity: 0 }
+                : { x: 0, opacity: 1 }
             }
-            transition={PANEL_TRANSITION}
+            transition={NAVIGATION_TRANSITION}
             className={cn(
               "relative flex min-h-0 w-full max-w-full flex-col overflow-x-hidden md:my-2.5 md:ml-2.5 md:rounded-[26px] border-0 shadow-2xl shadow-black/50",
               liveBackgroundPreset === "none" ? "bg-[#1c1c1e] dark:bg-[#1c1c1e]" : "",
@@ -23480,24 +23477,13 @@ export default function ChatsPageClient() {
 
           </motion.aside>
 
-          <motion.section
-            initial={false}
-            animate={
-              expiringChatId && activeChat && (activeChat.conversationId === `secret:${expiringChatId}` || activeChat.link === `secret-${expiringChatId}`)
-                ? { opacity: 0, scale: 0.95 }
-                : !isDesktop
-                  ? activeChat
-                    ? { x: "0%", opacity: 1, scale: 1 }
-                    : { x: "100%", opacity: 0.98, scale: 0.995 }
-                  : { x: "0%", opacity: 1, scale: 1 }
-            }
-            transition={{
-              duration: expiringChatId && activeChat && (activeChat.conversationId === `secret:${expiringChatId}` || activeChat.link === `secret-${expiringChatId}`) ? 0.42 : 0.28,
-              ease: [0.22, 1, 0.36, 1],
-            }}
-            className={`${activeChat ? "flex" : "hidden md:flex"} ${!isDesktop ? "absolute inset-0 z-20" : "relative"} bg-transparent flex-col min-h-0 overflow-hidden ${!activeChat && !isDesktop ? "pointer-events-none" : ""}`}
+          <ChatScene
+            open={Boolean(activeChat)}
+            desktop={isDesktop}
+            sceneKey={activeChat ? `${activeChat.chatType}:${activeChat.peerId || activeChat.link}` : null}
+            expiring={Boolean(expiringChatId && activeChat && (activeChat.conversationId === `secret:${expiringChatId}` || activeChat.link === `secret-${expiringChatId}`))}
             style={
-              !isDesktop && activeChat && mobileChatViewportHeight
+              !isDesktop && mobileChatViewportHeight
                 ? {
                   height: `${mobileChatViewportHeight}px`,
                   maxHeight: `${mobileChatViewportHeight}px`,
@@ -27347,7 +27333,7 @@ export default function ChatsPageClient() {
                 </footer>
               </>
             )}
-          </motion.section>
+          </ChatScene>
           {canUseDesktopDetailsPanel ? (
             <div data-details-reveal className="relative hidden min-w-0 overflow-visible md:block" aria-hidden={!desktopDetailsPanelOpen} inert={!desktopDetailsPanelOpen}>
             <motion.aside data-community-details
@@ -27364,11 +27350,12 @@ export default function ChatsPageClient() {
                 visibility: "visible",
                 transitionEnd: { visibility: desktopDetailsPanelOpen ? "visible" : "hidden" },
               }}
-              transition={PANEL_TRANSITION}
+              transition={desktopDetailsPanelOpen ? NAVIGATION_TRANSITION : NAVIGATION_EXIT_TRANSITION}
               onAnimationComplete={() => {
                 if (!desktopDetailsPanelOpen) setDesktopDetailsContentRetained(false);
               }}
             >
+              <RetainedContent frozen={!desktopDetailsPanelOpen && desktopDetailsContentRetained}>
               {(desktopDetailsPanelOpen || desktopDetailsContentRetained) && <>
               {(() => {
                 if (profileSubView === "qrcode" || groupSubView === "qrcode" || channelSubView === "qrcode") {
@@ -27747,7 +27734,7 @@ export default function ChatsPageClient() {
 
                             return (
                               <div
-                                className={cn("relative flex flex-col items-center pt-14 pb-0 text-center transition-all duration-300 overflow-hidden", effectiveGradient || isMediaBg || profileData.musicUrl?.trim() ? "mb-3" : "mb-2")}
+                                className={cn("relative flex flex-col items-center pt-14 pb-0 text-center transition-colors duration-150 overflow-hidden", effectiveGradient || isMediaBg || profileData.musicUrl?.trim() ? "mb-3" : "mb-2")}
                                 style={{
                                   background: effectiveGradient || "transparent",
                                 }}
@@ -29245,6 +29232,7 @@ export default function ChatsPageClient() {
                 </div>
               </div>
               </>}
+              </RetainedContent>
             </motion.aside>
             </div>
           ) : null}
@@ -29537,7 +29525,7 @@ export default function ChatsPageClient() {
           >
             <motion.button
               type="button"
-              className="absolute inset-0 bg-black/40 backdrop-blur-[2px]"
+              className="absolute inset-0 bg-black/35"
               onClick={() => setProfileModalOpen(false)}
               aria-label={t("Закрыть")}
               initial={{ opacity: 0 }}
@@ -29547,10 +29535,7 @@ export default function ChatsPageClient() {
             />
 
             <motion.div
-              initial={{ opacity: 0, x: "100%" }}
-              animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: "100%" }}
-              transition={PANEL_TRANSITION}
+              {...panelOverlayMotion(reducedPanelMotion)}
               className={cn(
                 "relative flex h-full w-full flex-col overflow-hidden text-zinc-100 shadow-[-18px_0_42px_rgba(0,0,0,0.36)] md:w-[380px] lg:w-[400px] md:inset-y-2 md:right-2 md:rounded-2xl",
                 isDesktop && liveBackgroundPreset !== "none" ? "" : "bg-[#171719] dark:bg-[#171719]",
@@ -29762,7 +29747,7 @@ export default function ChatsPageClient() {
 
                         return (
                           <div
-                            className={cn("relative flex flex-col items-center pt-14 pb-0 text-center transition-all duration-300 overflow-hidden", effectiveGradient || isMediaBg || profileData.musicUrl?.trim() ? "mb-3" : "mb-2")}
+                            className={cn("relative flex flex-col items-center pt-14 pb-0 text-center transition-colors duration-150 overflow-hidden", effectiveGradient || isMediaBg || profileData.musicUrl?.trim() ? "mb-3" : "mb-2")}
                             style={{
                               background: effectiveGradient || "transparent",
                             }}
@@ -30387,7 +30372,7 @@ export default function ChatsPageClient() {
           >
             <motion.button
               type="button"
-              className="absolute inset-0 bg-black/40 backdrop-blur-[2px]"
+              className="absolute inset-0 bg-black/35"
               onClick={() => setChannelModalOpen(false)}
               aria-label={t("Закрыть")}
               initial={{ opacity: 0 }}
@@ -30401,10 +30386,7 @@ export default function ChatsPageClient() {
                 isDesktop && liveBackgroundPreset !== "none" ? "" : "bg-[#171719] dark:bg-[#171719]",
               )}
               data-app-panel style={desktopDetailsPanelThemeStyle}
-              initial={{ opacity: 0, x: "100%" }}
-              animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: "100%" }}
-              transition={PANEL_TRANSITION}
+              {...panelOverlayMotion(reducedPanelMotion)}
             >
 
               {channelModalLoading ? (
@@ -31008,7 +30990,7 @@ export default function ChatsPageClient() {
           >
             <motion.button
               type="button"
-              className="absolute inset-0 bg-black/40 backdrop-blur-[2px]"
+              className="absolute inset-0 bg-black/35"
               onClick={() => setGroupModalOpen(false)}
               aria-label={t("Закрыть")}
               initial={{ opacity: 0 }}
@@ -31023,10 +31005,7 @@ export default function ChatsPageClient() {
                 isDesktop && liveBackgroundPreset !== "none" ? "" : "bg-[#171719] dark:bg-[#171719]",
               )}
               data-app-panel style={desktopDetailsPanelThemeStyle}
-              initial={{ opacity: 0, x: "100%" }}
-              animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: "100%" }}
-              transition={PANEL_TRANSITION}
+              {...panelOverlayMotion(reducedPanelMotion)}
             >
 
               {groupModalLoading ? (

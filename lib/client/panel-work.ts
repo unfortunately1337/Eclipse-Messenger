@@ -1,5 +1,7 @@
+import { NAVIGATION_TRANSITION } from "./panel-motion";
+
 /** Defer optional panel work until its entrance has finished and the browser is idle. */
-export function schedulePanelIdle(task: () => void, delay = 220) {
+export function schedulePanelIdle(task: () => void, delay = NAVIGATION_TRANSITION.duration * 1000 + 32) {
   let cancelled = false;
   let idle: number | undefined;
   const timer = window.setTimeout(() => {
