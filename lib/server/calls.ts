@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from "node:crypto";
-import type { CallKind, CallMode, CallStatus, CallView } from "@/lib/calls";
+import type { CallKind, CallMode, CallStatus, CallView, CallTransport } from "@/lib/calls";
 import { CALL_GROUP_LIMIT } from "@/lib/calls";
 import { redis } from "./redis";
 import { prisma } from "./prisma";
@@ -14,6 +14,8 @@ import { deliverCallNotification } from "./call-notifications";
 import { assertCallCooldown, recordCallOutcome } from "./call-abuse";
 import type { CallOutcome } from "@/lib/call-history";
 import { readParticipantAudio, writeParticipantAudio, type ParticipantAudio } from "./call-audio";
+import { p2pCallsConfigured } from "./call-ice";
+import { p2pConnection, releaseP2PCall } from "./call-p2p";
 
 const TTL = 8 * 60 * 60;
 const RING_MS = 45_000;
@@ -23,6 +25,7 @@ const userKey = (id: string) => `calls:v1:user:${id}`;
 const threadKey = (kind: CallKind, id: string) => `calls:v1:thread:${kind}:${id}`;
 type Party = { sessionId: string; lastSeen: number };
 export type CallRecord = {
+  transport?: CallTransport;
   id: string; kind: CallKind; mode: CallMode; status: CallStatus; chatId: string;
   link: string; callerId: string; invitedIds: string[]; parties: Record<string, Party>;
   createdAt: number; startedAt: number | null; expiresAt: number; revision: number;
@@ -51,8 +54,11 @@ async function release(call: CallRecord, extraIds: string[] = []) {
     redis.compareAndDelete(threadKey(call.kind, call.chatId), call.id),
     ...ids.map(id => redis.compareAndDelete(userKey(id), call.id)),
   ]);
-  await Promise.all(ids.map(userId => removeCallParticipant(call.id, userId)));
-  await deleteCallRoom(call.id);
+  if (call.transport === "p2p") await releaseP2PCall(call);
+  else {
+    await Promise.all(ids.map(userId => removeCallParticipant(call.id, userId)));
+    await deleteCallRoom(call.id);
+  }
   await redis.set(`calls:cleanup:v1:${call.id}`, "1", "EX", 3600);
 }
 
@@ -99,7 +105,7 @@ export async function reconcileCall(id: string) {
   if (next.status === "ended") await release(next, removed);
   else await Promise.all(removed.map(async userId => {
     await redis.compareAndDelete(userKey(userId), id);
-    await removeCallParticipant(id, userId);
+    if (next.transport !== "p2p") await removeCallParticipant(id, userId);
   }));
   await notifyCall(next).catch(() => { console.warn("Call delivery queued for retry"); });
   return next;
@@ -151,7 +157,7 @@ export async function groupCall(link: string, userId: string) {
   return pointer(threadKey("group", target.chatId));
 }
 
-export async function startCall(actor: Actor, kind: CallKind, mode: CallMode, link: string) {
+export async function startCall(actor: Actor, kind: CallKind, mode: CallMode, link: string, supportsP2P = false) {
   const target = await resolveCallTarget(kind, link, actor.userId);
   const existing = await pointer(threadKey(kind, target.chatId));
   if (existing) {
@@ -162,11 +168,12 @@ export async function startCall(actor: Actor, kind: CallKind, mode: CallMode, li
   for (const id of target.invitedIds) if (await ownCall(id)) throw new HttpError(409, "Участник уже в другом звонке");
   if (kind === "direct") await assertCallCooldown(actor.userId, target.invitedIds.find(id => id !== actor.userId)!);
   const now = Date.now(), id = randomUUID();
-  const call: CallRecord = { id, kind, mode, status: kind === "direct" ? "ringing" : "active", chatId: target.chatId,
+  const transport: CallTransport = kind === "direct" && supportsP2P && p2pCallsConfigured() ? "p2p" : "livekit";
+  const call: CallRecord = { id, kind, mode, transport, status: kind === "direct" ? "ringing" : "active", chatId: target.chatId,
     link: target.link, callerId: actor.userId, invitedIds: target.invitedIds,
     parties: { [actor.userId]: { sessionId: actor.sessionId, lastSeen: now } }, createdAt: now,
     startedAt: kind === "group" ? now : null, expiresAt: now + TTL * 1000, revision: 1 };
-  await createCallRoom(id, kind === "direct" ? 2 : CALL_GROUP_LIMIT);
+  if (transport === "livekit") await createCallRoom(id, kind === "direct" ? 2 : CALL_GROUP_LIMIT);
   const acquired: string[] = [];
   try {
     await redis.set(recordKey(id), JSON.stringify(call), "EX", TTL + 120);
@@ -179,17 +186,22 @@ export async function startCall(actor: Actor, kind: CallKind, mode: CallMode, li
   } catch (error) {
     await Promise.all(acquired.map(key => redis.compareAndDelete(key, id)));
     await redis.del(recordKey(id));
-    await deleteCallRoom(id);
+    if (transport === "livekit") await deleteCallRoom(id);
     throw error;
   }
   await notifyCall(call).catch(() => { console.warn("Call delivery queued for retry"); });
   return call;
 }
 
-export async function joinCall(actor: Actor, id: string) {
+export async function joinCall(actor: Actor, id: string, supportsP2P = false) {
   const initial = await reconcileCall(id);
   if (!initial || initial.status === "ended") throw new HttpError(410, "Звонок завершён");
   await assertCallAccess(initial, actor.userId);
+  const downgrade = initial.transport === "p2p" && !supportsP2P;
+  if (downgrade) {
+    if (initial.parties[actor.userId] && initial.parties[actor.userId].sessionId !== actor.sessionId) throw new HttpError(409, "Звонок открыт на другом устройстве");
+    await createCallRoom(id, 2);
+  }
   const busy = await ownCall(actor.userId);
   if (busy && busy.id !== id) throw new HttpError(409, "Сначала завершите текущий звонок");
   const reserved = !busy && await redis.setIfAbsent(userKey(actor.userId), id, TTL);
@@ -203,9 +215,11 @@ export async function joinCall(actor: Actor, id: string) {
       if (state.kind === "direct" && actor.userId === state.callerId && state.status === "ringing") throw new HttpError(409, "Ожидаем ответа собеседника");
       state.parties[actor.userId] = { sessionId: actor.sessionId, lastSeen: Date.now() };
       state.status = "active";
+      if (downgrade) state.transport = "livekit";
       state.startedAt ??= Date.now();
     });
     await updateCallHistory(call).catch(() => { console.warn("Call history update failed"); });
+    if (downgrade) await releaseP2PCall(initial);
     await notifyCall(call);
     return call;
   } catch (error) {
@@ -214,14 +228,21 @@ export async function joinCall(actor: Actor, id: string) {
   }
 }
 
-export async function connectionForCall(actor: Actor, id: string) {
+export async function sessionCallForActor(actor: Actor, id: string) {
   const call = await reconcileCall(id);
   if (!call || call.status === "ended") throw new HttpError(410, "Звонок завершён");
   await assertCallAccess(call, actor.userId);
   if (call.parties[actor.userId]?.sessionId !== actor.sessionId) throw new HttpError(403, "Сначала примите звонок на этом устройстве");
-  const connection = await issueCallConnection(id, actor.userId);
+  return call;
+}
+
+export async function connectionForCall(actor: Actor, id: string, clientId?: string) {
+  const call = await sessionCallForActor(actor, id);
+  if (call.transport === "p2p" && !clientId) throw new HttpError(400, "Обновите приложение для подключения к звонку");
+  const connection = call.transport === "p2p" ? await p2pConnection(call, actor, clientId!) : await issueCallConnection(id, actor.userId);
   const latest = await read(id);
   if (!latest || latest.status === "ended" || latest.parties[actor.userId]?.sessionId !== actor.sessionId) throw new HttpError(410, "Звонок завершён");
+  if ((latest.transport ?? "livekit") !== (call.transport ?? "livekit")) throw new HttpError(409, "Подключение звонка изменилось. Повторите подключение.");
   return connection;
 }
 
@@ -261,7 +282,7 @@ export async function leaveCall(actor: Actor, id: string, endForAll: boolean) {
   if (call.status === "ended") await release(call, Object.keys(initial.parties));
   else {
     await redis.compareAndDelete(userKey(actor.userId), id);
-    await removeCallParticipant(id, actor.userId);
+    if (call.transport !== "p2p") await removeCallParticipant(id, actor.userId);
   }
   await notifyCall({ ...call, invitedIds: [...new Set([...call.invitedIds, actor.userId])] }).catch(() => { console.warn("Call delivery queued for retry"); });
   return call;
@@ -292,7 +313,7 @@ export async function callView(call: CallRecord, actor: Actor): Promise<CallView
   const contact = call.kind === "direct" && peer ? await prisma.contact.findUnique({ where: { ownerId_peerId: { ownerId: actor.userId, peerId: peer.id } }, select: { alias: true } }) : null;
   const peerName = contact?.alias?.trim() || peer?.displayName || "Eclipse";
   const title = group?.name ?? peerName;
-  return { id: call.id, kind: call.kind, mode: call.mode, status: call.status, link: group?.link ?? call.link,
+  return { id: call.id, kind: call.kind, transport: call.transport ?? "livekit", mode: call.mode, status: call.status, link: group?.link ?? call.link,
     title, audioPreferences: await readParticipantAudio(actor.sessionId, people.filter(p => p.id !== actor.userId).map(p => p.id)),
     ...(call.kind === "direct" && peer ? { peer: { id: peer.id, name: peerName, avatarUrl: peer.avatarUrl, backgroundUrl: peer.backgroundUrl ?? null } } : {}),
     callerId: call.callerId, createdAt: call.createdAt, startedAt: call.startedAt, expiresAt: call.expiresAt,

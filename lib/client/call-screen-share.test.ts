@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { screenShareError, selectCallVideo, visibleCallTrack } from "./call-screen-share";
-import type { Participant, Track } from "livekit-client";
+import type { CallParticipant } from "./call-media-session";
 
 describe("call screen sharing", () => {
   it("keeps own screen above the peer camera and preserves that camera as a preview", () => {
@@ -13,8 +13,8 @@ describe("call screen sharing", () => {
     expect(selectCallVideo(undefined, undefined, "camera")).toMatchObject({ main: "camera", screen: false, secondary: undefined });
   });
   it("does not leave a muted screen as the main video", () => {
-    const person = { getTrackPublication: () => ({ isMuted: true, track: {} }) } as unknown as Participant;
-    expect(visibleCallTrack(person, "screen_share" as Track.Source)).toBeUndefined();
+    const person = { getTrackPublication: () => ({ isMuted: true, track: {} }) } as unknown as CallParticipant;
+    expect(visibleCallTrack(person, "screen_share")).toBeUndefined();
   });
   it("treats picker cancellation quietly and explains capture failures", () => {
     expect(screenShareError({ name: "NotAllowedError" })).toBeNull();

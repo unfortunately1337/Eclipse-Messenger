@@ -1,0 +1,52 @@
+# Eclipse 1:1 calls. Render placeholders before installation.
+# Ubuntu/Debian coturn; do not place this file in the public web root.
+listening-port=3478
+tls-listening-port=5349
+listening-ip=__BIND_IP__
+relay-ip=__BIND_IP__
+external-ip=__PUBLIC_IP__
+min-port=49160
+max-port=49959
+
+realm=eclpse.ru
+server-name=eclpse.ru
+fingerprint
+use-auth-secret
+static-auth-secret=__TURN_SECRET__
+stale-nonce=600
+
+cert=/etc/coturn/tls/fullchain.pem
+pkey=/etc/coturn/tls/privkey.pem
+no-tlsv1
+no-tlsv1_1
+no-dtls
+# Keep TURN/TCP and TURN/TLS client transports; block RFC6062 TCP peer relays.
+no-tcp-relay
+no-cli
+no-multicast-peers
+no-rfc5780
+no-stun-backward-compatibility
+
+# One relay worker on the 1-vCPU VPS. No transcoding or SFU runs here.
+relay-threads=1
+user-quota=12
+total-quota=600
+# Bytes/s per allocation, per direction: 16 Mbit/s, allows camera + screen.
+max-bps=2000000
+
+# TURN must not become a proxy into the VPS's Docker/LAN/metadata services.
+# Loopback is also rejected by coturn by default; never enable allow-loopback-peers.
+denied-peer-ip=0.0.0.0-0.255.255.255
+denied-peer-ip=10.0.0.0-10.255.255.255
+denied-peer-ip=100.64.0.0-100.127.255.255
+denied-peer-ip=127.0.0.0-127.255.255.255
+denied-peer-ip=169.254.0.0-169.254.255.255
+denied-peer-ip=172.16.0.0-172.31.255.255
+denied-peer-ip=192.168.0.0-192.168.255.255
+denied-peer-ip=224.0.0.0-255.255.255.255
+# Listener/relay addresses above must be IPv4. Coturn 4.5 interprets an IPv6
+# unspecified-address ACL as an IPv4 wildcard. Do not add IPv6 relay addresses
+# without upgrading coturn and testing family-specific private-address ACLs.
+
+syslog
+no-stdout-log

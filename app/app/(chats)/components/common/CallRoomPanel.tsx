@@ -1,7 +1,7 @@
 "use client";
 
 import { memo, useCallback, useEffect, useRef, useState } from "react";
-import type { Room, Participant, Track } from "livekit-client";
+import type { CallMediaSession, CallParticipant, CallMediaTrack } from "@/lib/client/call-media-session";
 import { AnimatePresence, motion } from "framer-motion";
 import { ChevronDown, Maximize2, Mic, MicOff, MonitorUp, Phone, PhoneOff, Video, VideoOff, Volume2, X } from "lucide-react";
 import { useTranslation } from "@/components/LocaleProvider";
@@ -18,8 +18,9 @@ import { selectCallVideo, visibleCallTrack, screenShareError } from "@/lib/clien
 import { createCallRenderScheduler } from "@/lib/client/call-render-scheduler";
 import { callConnectionSignal } from "@/lib/client/call-connection-quality";
 import { switchCallCamera, type CallCameraFacing } from "@/lib/client/call-camera";
+import { callClientId } from "@/lib/client/call-p2p-signaling";
 
-const TrackElement = memo(function TrackElement({ track, local, audio, muted = false, volume = 1, mirror = true }: { track: Track; local: boolean; audio: boolean; muted?: boolean; volume?: number; mirror?: boolean }) {
+const TrackElement = memo(function TrackElement({ track, local, audio, muted = false, volume = 1, mirror = true }: { track: CallMediaTrack; local: boolean; audio: boolean; muted?: boolean; volume?: number; mirror?: boolean }) {
   const container = useRef<HTMLDivElement>(null);
   useEffect(() => {
     const element = track.attach();
@@ -43,7 +44,7 @@ type Props = { call: CallView; selfId: string; glass: boolean; busy: boolean; on
 
 export const CallRoomPanel = memo(function CallRoomPanel({ call, selfId, glass, busy, onJoin, onLeave }: Props) {
   const t = useTranslation();
-  const [room, setRoom] = useState<Room | null>(null);
+  const [room, setRoom] = useState<CallMediaSession | null>(null);
   const [state, setState] = useState("Запрос…");
   const [localEndOutcome, setLocalEndOutcome] = useState<CallView["endOutcome"]>(undefined);
   const [error, setError] = useState<string | null>(null);
@@ -72,30 +73,24 @@ export const CallRoomPanel = memo(function CallRoomPanel({ call, selfId, glass, 
   useEffect(() => {
     if (!call.onThisSession || callEnded || call.requesting) return;
     let cancelled = false;
-    let active: Room | null = null;
+    let active: CallMediaSession | null = null;
     const rendering = createCallRenderScheduler(() => { if (!cancelled) redraw(value => value + 1); });
     const connect = async () => {
       try {
-        const [{ Room: LiveRoom, RoomEvent }, connection] = await Promise.all([
-          import("livekit-client"),
-          apiRequest<CallConnection>("/api/calls", { method: "POST", body: JSON.stringify({ action: "token", id: call.id }), timeoutMs: 12_000 }),
-        ]);
+        const connection = await apiRequest<CallConnection>("/api/calls", { method: "POST", body: JSON.stringify({ action: "token", id: call.id, clientId: callClientId(call.id) }), timeoutMs: 12_000 });
         if (cancelled) return;
         setState("Ожидание…");
-        const session = new LiveRoom({ adaptiveStream: true, dynacast: true,
-          audioCaptureDefaults: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
-          videoCaptureDefaults: { facingMode: "user", resolution: { width: 1280, height: 720, frameRate: 24 } } });
+        const session: CallMediaSession = connection.transport === "p2p"
+          ? new (await import("@/lib/client/call-p2p-session")).P2PCallSession()
+          : await (await import("@/lib/client/call-livekit-session")).createLiveKitSession();
+        if (cancelled) { await session.disconnect(); return; }
         active = session;
         const update = rendering.update;
-        for (const event of [RoomEvent.ParticipantConnected, RoomEvent.ParticipantDisconnected, RoomEvent.TrackSubscribed,
-          RoomEvent.TrackUnsubscribed, RoomEvent.LocalTrackPublished, RoomEvent.LocalTrackUnpublished,
-          RoomEvent.TrackMuted, RoomEvent.TrackUnmuted, RoomEvent.ConnectionQualityChanged,
-          RoomEvent.ConnectionStateChanged, RoomEvent.TrackPublished, RoomEvent.TrackUnpublished]) session.on(event, update);
-        if (call.kind !== "direct") session.on(RoomEvent.ActiveSpeakersChanged, update);
-        session.on(RoomEvent.Reconnecting, () => { if (!cancelled) setState("Восстанавливаем соединение…"); });
-        session.on(RoomEvent.Reconnected, () => { if (!cancelled) setState("На связи"); });
-        session.on(RoomEvent.AudioPlaybackStatusChanged, () => { if (!cancelled) setAudioBlocked(!session.canPlaybackAudio); });
-        session.on(RoomEvent.Disconnected, () => {
+        session.on("update", update);
+        session.on("reconnecting", () => { if (!cancelled) setState("Восстанавливаем соединение…"); });
+        session.on("reconnected", () => { if (!cancelled) setState("На связи"); });
+        session.on("audioPlayback", () => { if (!cancelled) setAudioBlocked(!session.canPlaybackAudio); });
+        session.on("disconnected", () => {
           window.dispatchEvent(new Event("eclipse:call-silence"));
           if (!cancelled && !intentionalHangup.current) {
             setState("Звонок завершён");
@@ -109,7 +104,7 @@ export const CallRoomPanel = memo(function CallRoomPanel({ call, selfId, glass, 
           }
         });
         setRoom(session);
-        await session.connect(connection.url, connection.token);
+        await session.connect(connection);
         if (cancelled) { await session.disconnect(); return; }
         setState("На связи");
         try { await session.startAudio(); } catch { setAudioBlocked(true); }
@@ -127,10 +122,10 @@ export const CallRoomPanel = memo(function CallRoomPanel({ call, selfId, glass, 
     };
     void connect();
     return () => { cancelled = true; rendering.dispose(); if (active) { active.removeAllListeners(); void active.disconnect(true); } };
-  }, [call.id, call.kind, call.onThisSession, call.requesting, callEnded, initialVideo]);
+  }, [call.id, call.kind, call.transport, call.onThisSession, call.requesting, callEnded, initialVideo]);
 
   const toggle = useCallback(async (kind: "mic" | "camera" | "screen") => {
-    if (!room || mediaLock.current || room.state !== "connected" || callEnded || intentionalHangup.current) return;
+    if (!room?.ready || mediaLock.current || callEnded || intentionalHangup.current) return;
     if (kind === "screen" && !room.localParticipant.isScreenShareEnabled && !navigator.mediaDevices?.getDisplayMedia) {
       setError(null);
       showAppToast({ type: "error", title: t("Этот браузер не поддерживает показ вашего экрана. Демонстрацию собеседника смотреть можно."), durationMs: 5000 });
@@ -143,15 +138,15 @@ export const CallRoomPanel = memo(function CallRoomPanel({ call, selfId, glass, 
       if (kind === "mic") await room.localParticipant.setMicrophoneEnabled(!room.localParticipant.isMicrophoneEnabled);
       if (kind === "camera") {
         await room.localParticipant.setCameraEnabled(!room.localParticipant.isCameraEnabled, { facingMode: cameraFacing });
-        if (intentionalHangup.current || room.state !== "connected") await room.localParticipant.setCameraEnabled(false);
+        if (intentionalHangup.current || !room.ready) await room.localParticipant.setCameraEnabled(false);
       }
       if (kind === "screen") {
         const enabling = !room.localParticipant.isScreenShareEnabled;
         await room.localParticipant.setScreenShareEnabled(enabling, {
           audio: true, contentHint: "detail", selfBrowserSurface: "exclude", surfaceSwitching: "include",
-        }, { screenShareEncoding: { maxBitrate: 3_000_000, maxFramerate: 15 } });
+        }, { screenShareEncoding: { maxBitrate: 6_000_000, maxFramerate: 45 } });
         // A picker can remain open while the other participant hangs up.
-        if (intentionalHangup.current || room.state !== "connected") {
+        if (intentionalHangup.current || !room.ready) {
           await room.localParticipant.setScreenShareEnabled(false);
         }
       }
@@ -169,14 +164,14 @@ export const CallRoomPanel = memo(function CallRoomPanel({ call, selfId, glass, 
   }, [room, callEnded, cameraFacing, t]);
 
   const flipCamera = useCallback(async () => {
-    if (!room || room.state !== "connected" || mediaLock.current || callEnded || intentionalHangup.current || !room.localParticipant.isCameraEnabled) return;
-    const track = room.localParticipant.getTrackPublication("camera" as Track.Source)?.videoTrack;
+    if (!room?.ready || mediaLock.current || callEnded || intentionalHangup.current || !room.localParticipant.isCameraEnabled) return;
+    const track = room.localParticipant.getTrackPublication("camera")?.videoTrack;
     if (!track) return;
     mediaLock.current = true;
     setMediaBusy(true);
     setCameraSwitching(true);
     setError(null);
-    const isCurrent = () => room.state === "connected" && !intentionalHangup.current && room.localParticipant.isCameraEnabled;
+    const isCurrent = () => room.ready && !intentionalHangup.current && room.localParticipant.isCameraEnabled;
     try {
       const devices = await navigator.mediaDevices.enumerateDevices().catch(() => []);
       const result = await switchCallCamera({ track, facing: cameraFacing, deviceIds: devices.filter(device => device.kind === "videoinput").map(device => device.deviceId), isCurrent });
@@ -201,24 +196,24 @@ export const CallRoomPanel = memo(function CallRoomPanel({ call, selfId, glass, 
   };
 
   const connected = room?.state === "connected";
-  const participants: Participant[] = room ? [room.localParticipant, ...room.remoteParticipants.values()] : [];
+  const participants: CallParticipant[] = room ? [room.localParticipant, ...room.remoteParticipants.values()] : [];
   const microphone = room?.localParticipant.isMicrophoneEnabled ?? false;
   const camera = room?.localParticipant.isCameraEnabled ?? false;
   const screen = room?.localParticipant.isScreenShareEnabled ?? false;
   const status = call.incoming ? t("Входящий звонок") : call.status === "ringing" ? t("Ожидаем ответа…") : !call.onThisSession ? t("Звонок открыт на другом устройстве") : <>{t(state)}{call.startedAt ? <> · <CallElapsed startedAt={call.startedAt} /></> : null}</>;
   const finished = call.status === "ended" || Boolean(localEndOutcome) || state === "Звонок завершён";
   const endOutcome = call.endOutcome ?? localEndOutcome;
-  const controlsDisabled = !connected || mediaBusy || busy || finished;
+  const controlsDisabled = !room?.ready || mediaBusy || busy || finished;
   const remote = participants.find(person => person !== room?.localParticipant);
-  const remoteScreen = visibleCallTrack(remote, "screen_share" as Track.Source);
-  const sharedVideo = screen ? visibleCallTrack(room?.localParticipant, "screen_share" as Track.Source) : undefined;
-  const remoteCamera = remote?.isCameraEnabled ? visibleCallTrack(remote, "camera" as Track.Source) : undefined;
+  const remoteScreen = visibleCallTrack(remote, "screen_share");
+  const sharedVideo = screen ? visibleCallTrack(room?.localParticipant, "screen_share") : undefined;
+  const remoteCamera = remote?.isCameraEnabled ? visibleCallTrack(remote, "camera") : undefined;
   const presentation = selectCallVideo(remoteScreen, sharedVideo, remoteCamera);
   const mainVideo = presentation.main;
-  const localVideo = camera ? visibleCallTrack(room?.localParticipant, "camera" as Track.Source) : undefined;
+  const localVideo = camera ? visibleCallTrack(room?.localParticipant, "camera") : undefined;
   const peer = call.peer ?? call.participants.find(person => person.id !== selfId);
   const peerAudio = participantAudio.get(peer?.id ?? "");
-  const readImmediateLevels = useCallAudioLevels(room?.localParticipant.getTrackPublication("microphone" as Track.Source)?.track?.mediaStreamTrack, remote?.getTrackPublication("microphone" as Track.Source)?.track?.mediaStreamTrack, call.kind === "direct" && connected && !finished);
+  const readImmediateLevels = useCallAudioLevels(room?.localParticipant.getTrackPublication("microphone")?.track?.mediaStreamTrack, remote?.getTrackPublication("microphone")?.track?.mediaStreamTrack, call.kind === "direct" && connected && !finished);
   const readVoiceLevels = useCallback(() => {
     if (!room || room.state !== "connected" || finished) return { local: 0, remote: 0 };
     const immediate = readImmediateLevels();
@@ -237,7 +232,7 @@ export const CallRoomPanel = memo(function CallRoomPanel({ call, selfId, glass, 
     <>
     {participants.filter(person => person !== room?.localParticipant).flatMap(person => [...person.audioTrackPublications.values()].map(publication => publication.track && <TrackElement key={`${person.identity}:${publication.trackSid}`} track={publication.track} local={false} audio muted={participantAudio.get(call.participants.find(p => p.identity === person.identity)?.id ?? "").muted} volume={participantAudio.get(call.participants.find(p => p.identity === person.identity)?.id ?? "").volume}/>))}
     {call.kind === "direct" ? <PersonalCallWindow
-      active={!finished && call.status === "active" && call.onThisSession} endOutcome={finished ? endOutcome ?? "completed" : undefined}
+      active={!finished && call.status === "active" && call.onThisSession && connected && Boolean(remote)} endOutcome={finished ? endOutcome ?? "completed" : undefined}
       signal={callConnectionSignal(room?.state, [room?.localParticipant.connectionQuality ?? "unknown", remote?.connectionQuality ?? "unknown"], finished)}
       name={call.title} avatarUrl={peer?.avatarUrl ?? null} backgroundUrl={call.peer?.backgroundUrl ?? null}
       status={personalStatus} startedAt={!finished && call.status === "active" && call.startedAt && call.onThisSession && connected && remote ? call.startedAt : null}
@@ -266,8 +261,8 @@ export const CallRoomPanel = memo(function CallRoomPanel({ call, selfId, glass, 
             {participants.length ? <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">{participants.map(person => {
               const profile = call.participants.find(p => p.identity === person.identity);
               const local = person === room?.localParticipant;
-              const videoTrack = person.getTrackPublication((screen && local ? "screen_share" : "camera") as Track.Source)?.track;
-              const screenTrack = !local ? person.getTrackPublication("screen_share" as Track.Source)?.track : undefined;
+              const videoTrack = person.getTrackPublication(screen && local ? "screen_share" : "camera")?.track;
+              const screenTrack = !local ? person.getTrackPublication("screen_share")?.track : undefined;
               const visibleTrack = screenTrack ?? (person.isCameraEnabled || (screen && local) ? videoTrack : undefined);
               return <div key={person.identity} className={`relative flex min-h-[160px] items-center justify-center overflow-hidden rounded-3xl bg-black/20 ${person.isSpeaking ? "ring-2 ring-emerald-400/80 ring-inset" : ""}`}>
                 {visibleTrack ? <div className="aspect-video w-full"><TrackElement track={visibleTrack} local={local} audio={false}/></div> : <MediaAvatar src={profile?.avatarUrl ?? undefined} alt={profile?.name ?? t("Участник")} className="h-20 w-20 rounded-full" fallbackText={profile?.name?.slice(0, 1) ?? "E"} />}

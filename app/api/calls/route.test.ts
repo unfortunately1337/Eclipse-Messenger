@@ -42,7 +42,7 @@ it("rejects caller-supplied identity, session, room and privilege fields", async
 it("passes only the authenticated actor to call creation and returns no-store responses", async () => {
   const response = await post({ action: "start", kind: "group", mode: "audio", link: "testgroup" });
   expect(response.status).toBe(200);
-  expect(mock.start).toHaveBeenCalledWith({ userId: "alice", sessionId: "alice-session" }, "group", "audio", "testgroup");
+  expect(mock.start).toHaveBeenCalledWith({ userId: "alice", sessionId: "alice-session" }, "group", "audio", "testgroup", false);
   expect(response.headers.get("cache-control")).toContain("no-store");
   expect(mock.limit).toHaveBeenCalledWith(expect.objectContaining({ key: "calls:start:alice", limit: 5 }));
 });

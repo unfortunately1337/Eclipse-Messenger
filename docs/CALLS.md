@@ -1,6 +1,11 @@
 # Calls
 
-Eclipse uses LiveKit Cloud for media transport. No extra media process, TURN
+Personal calls now also support a staged WebRTC P2P migration. See
+[P2P and coturn rollout](CALLS_P2P_MIGRATION.md) for flags, security, ports,
+installation commands, relay-only tests and rollback. LiveKit remains the
+default until relay verification and production rollout are complete.
+
+The original integration described below uses LiveKit Cloud. No extra media process, TURN
 installation or DNS records are required on the Eclipse host. The existing
 application server authorizes users and issues room-scoped tokens; media goes
 between the clients and LiveKit Cloud.

@@ -155,22 +155,22 @@ export function useCalls(userId: string | null, target: Target) {
       callerId: userId!, createdAt: Date.now(), startedAt: null, expiresAt: Date.now() + 45_000,
       participantCount: 1, participants: [], incoming: false, onThisSession: true, canEnd: true });
     // Parse the media SDK while the permission prompt/API request is in progress.
-    void import("livekit-client").catch(() => {});
+    if (destination.kind === "group" || snapshot.directTransport !== "p2p") void import("livekit-client").catch(() => {});
     try {
       await microphonePermission(mode === "video");
       if (owner.current !== userId) return;
-      const result = await apiRequest<{ call: CallView }>("/api/calls", { method: "POST", body: JSON.stringify({ action: "start", kind: destination.kind, link: destination.link, mode }) });
+      const result = await apiRequest<{ call: CallView }>("/api/calls", { method: "POST", body: JSON.stringify({ action: "start", protocol: "p2p-v1", kind: destination.kind, link: destination.link, mode }) });
       if (owner.current === userId) setSnapshot(previous => ({ ...previous, current: result.call }));
     } catch (failure) { setLaunch(null); throw failure; }
-  }), [run, target, call, userId, setSnapshot]);
+  }), [run, target, call, userId, setSnapshot, snapshot.directTransport]);
 
   const join = useCallback((id: string) => run(async () => {
-    void import("livekit-client").catch(() => {});
+    if (call?.transport !== "p2p") void import("livekit-client").catch(() => {});
     await microphonePermission(false);
     if (owner.current !== userId) return;
-    const result = await apiRequest<{ call: CallView }>("/api/calls", { method: "POST", body: JSON.stringify({ action: "join", id }) });
+    const result = await apiRequest<{ call: CallView }>("/api/calls", { method: "POST", body: JSON.stringify({ action: "join", protocol: "p2p-v1", id }) });
     if (owner.current === userId) setSnapshot(previous => ({ ...previous, current: result.call }));
-  }), [run, userId, setSnapshot]);
+  }), [run, userId, setSnapshot, call?.transport]);
 
   const leave = useCallback((end = false) => run(async () => {
     if (!call) return;

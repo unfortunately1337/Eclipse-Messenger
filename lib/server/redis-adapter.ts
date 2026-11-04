@@ -5,6 +5,30 @@ import type { RedisLike } from "./redis";
 // a cached session after Redis has deleted it or become unavailable.
 export function createRemoteRedis(real: Redis): RedisLike {
   return {
+    async appendBoundedEvent(key, counterKey, json, seconds, maxCount, maxBytes) {
+      // Sequence allocation and publication are one operation. Otherwise a
+      // concurrent poll could advance its cursor past an unpublished SDP.
+      const result = await real.eval(`
+        local previous = cjson.decode(redis.call('GET', KEYS[1]) or '[]')
+        local event = cjson.decode(ARGV[1])
+        for _, item in ipairs(previous) do if item.id == event.id then return -item.sequence end end
+        event.sequence = tonumber(redis.call('GET', KEYS[2]) or '0') + 1
+        local messages = {}
+        for _, item in ipairs(previous) do
+          if item.sentAt > event.sentAt - tonumber(ARGV[2]) * 1000 then table.insert(messages, item) end
+        end
+        table.insert(messages, event)
+        while #messages > tonumber(ARGV[3]) do table.remove(messages, 1) end
+        local encoded = cjson.encode(messages)
+        while #encoded > tonumber(ARGV[4]) and #messages > 1 do
+          table.remove(messages, 1); encoded = cjson.encode(messages)
+        end
+        redis.call('SET', KEYS[1], encoded, 'EX', ARGV[2])
+        redis.call('SET', KEYS[2], tostring(event.sequence), 'EX', 36000)
+        return event.sequence`, 2, key, counterKey, json, seconds, maxCount, maxBytes);
+      if (typeof result !== "number") throw new Error("Invalid event append result");
+      return result;
+    },
     async setIfAbsent(key, value, seconds) {
       return (await real.set(key, value, "EX", seconds, "NX")) === "OK";
     },

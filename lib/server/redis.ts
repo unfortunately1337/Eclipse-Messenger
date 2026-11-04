@@ -13,6 +13,7 @@ export type RedisLike = {
   consumeRollingLimit: (key: string, limit: number, seconds: number, now: number) => Promise<number>;
   setIfExists: (key: string, value: string, seconds: number) => Promise<boolean>;
   compareAndSet: (key: string, expected: string, value: string, seconds: number) => Promise<boolean>;
+  appendBoundedEvent: (key: string, counterKey: string, json: string, seconds: number, maxCount: number, maxBytes: number) => Promise<number>;
   setIfAbsent: (key: string, value: string, seconds: number) => Promise<boolean>;
   compareAndDelete: (key: string, expected: string) => Promise<boolean>;
   del: (...keys: string[]) => Promise<number>;
@@ -63,6 +64,20 @@ function createMemoryRedis(): RedisLike {
   };
 
   return {
+    async appendBoundedEvent(key, counterKey, json, seconds, maxCount, maxBytes) {
+      cleanup(key); cleanup(counterKey);
+      const event = JSON.parse(json);
+      let messages = JSON.parse(store.get(key) || "[]") as Array<{ id: string; sequence: number; sentAt: number }>;
+      const duplicate = messages.find(message => message.id === event.id);
+      if (duplicate) return -duplicate.sequence;
+      event.sequence = Number(store.get(counterKey) || "0") + 1;
+      messages = [...messages.filter(message => message.sentAt > event.sentAt - seconds * 1000), event].slice(-maxCount);
+      let encoded = JSON.stringify(messages);
+      while (Buffer.byteLength(encoded) > maxBytes && messages.length > 1) { messages.shift(); encoded = JSON.stringify(messages); }
+      store.set(key, encoded); expirations.set(key, Date.now() + seconds * 1000);
+      store.set(counterKey, String(event.sequence)); expirations.set(counterKey, Date.now() + 36_000_000);
+      return event.sequence;
+    },
     async setIfAbsent(key, value, seconds) {
       cleanup(key);
       if (store.has(key)) return false;

@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const mock = vi.hoisted(() => {
   const store = new Map<string, string>();
@@ -45,6 +45,7 @@ import { callView, connectionForCall, groupCall, heartbeatCall, joinCall, leaveC
 
 const alice = { userId: "alice", sessionId: "alice-session" };
 const bob = { userId: "bob", sessionId: "bob-session" };
+afterEach(() => vi.unstubAllEnvs());
 beforeEach(() => {
   vi.resetAllMocks(); mock.store.clear();
   mock.user.findFirst.mockResolvedValue({ id: "bob", link: "bob", displayName: "Bob", isBot: false, isSystemAccount: false });
@@ -61,6 +62,27 @@ beforeEach(() => {
 });
 
 describe("call authorization and lifecycle", () => {
+  it("selects P2P only for capable personal clients and keeps LiveKit as a compatible rollback", async () => {
+    vi.stubEnv("CALLS_DIRECT_TRANSPORT", "p2p"); vi.stubEnv("WEBRTC_TURN_URLS", "turn:turn.example.com:3478"); vi.stubEnv("WEBRTC_TURN_SECRET", "s".repeat(48));
+    const direct = await startCall(alice, "direct", "video", "bob", true);
+    expect(direct.transport).toBe("p2p"); expect(mock.create).not.toHaveBeenCalled();
+    await joinCall(bob, direct.id, true);
+    expect(await connectionForCall(alice, direct.id, "00000000-0000-4000-8000-000000000001")).toMatchObject({ transport: "p2p", polite: false });
+    expect(mock.issue).not.toHaveBeenCalled();
+    await leaveCall(alice, direct.id, false);
+    expect(mock.close).not.toHaveBeenCalled(); expect(mock.remove).not.toHaveBeenCalled();
+    const legacy = await startCall(alice, "direct", "audio", "bob");
+    expect(legacy.transport).toBe("livekit"); expect(mock.create).toHaveBeenCalledWith(legacy.id, 2);
+  });
+
+  it("downgrades a P2P invitation before an old recipient joins and notifies both clients", async () => {
+    vi.stubEnv("CALLS_DIRECT_TRANSPORT", "p2p"); vi.stubEnv("WEBRTC_TURN_URLS", "turn:turn.example.com:3478"); vi.stubEnv("WEBRTC_TURN_SECRET", "s".repeat(48));
+    const direct = await startCall(alice, "direct", "audio", "bob", true);
+    const joined = await joinCall(bob, direct.id);
+    expect(joined.transport).toBe("livekit"); expect(mock.create).toHaveBeenCalledWith(direct.id, 2);
+    await connectionForCall(alice, direct.id);
+    expect(mock.issue).toHaveBeenCalledWith(direct.id, "alice");
+  });
   it("uses the viewer's contact alias without exposing it to the other participant", async () => {
     const call = await startCall(alice, "direct", "audio", "bob");
     mock.contact.findUnique.mockResolvedValueOnce({ alias: "My friend" });

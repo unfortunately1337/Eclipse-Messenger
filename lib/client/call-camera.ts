@@ -1,8 +1,8 @@
-import type { LocalVideoTrack, VideoCaptureOptions } from "livekit-client";
+import type { CallCameraTrack, CameraRestartOptions } from "./call-media-session";
 
 export type CallCameraFacing = "user" | "environment";
-type CameraTrack = Pick<LocalVideoTrack, "mediaStreamTrack" | "restartTrack" | "stop">;
-const resolution = { width: 1280, height: 720, frameRate: 24 };
+type CameraTrack = Pick<CallCameraTrack, "mediaStreamTrack" | "restartTrack" | "stop">;
+const resolution = { width: 1280, height: 720, frameRate: 30 };
 
 /** Restart the published picture in place; never replace the room or microphone. */
 export async function switchCallCamera({ track, facing, deviceIds, isCurrent }: {
@@ -17,7 +17,7 @@ export async function switchCallCamera({ track, facing, deviceIds, isCurrent }: 
   const alternate = devices.length > 1 ? devices[(index + 1) % devices.length] : undefined;
   // Desktops with one webcam cannot flip. Avoid interrupting its working picture.
   if (!previous.facingMode && !alternate && devices.length === 1) return { facing: current, switched: false };
-  const restart = async (options: VideoCaptureOptions) => {
+  const restart = async (options: CameraRestartOptions) => {
     await track.restartTrack({ ...options, resolution });
     if (!isCurrent()) { track.stop(); return false; }
     return true;

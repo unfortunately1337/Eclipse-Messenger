@@ -24,6 +24,10 @@ const nextConfig: NextConfig = {
         ],
       },
       {
+        source: "/fonts/app/:path*",
+        headers: [{ key: "Cache-Control", value: "public, max-age=31536000, immutable" }],
+      },
+      {
         source: "/gifs/:path*",
         headers: [
           {

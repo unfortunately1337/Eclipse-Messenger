@@ -1,0 +1,10 @@
+[Unit]
+Description=Copy renewed Eclipse TLS certificate to coturn
+
+[Service]
+Type=oneshot
+EnvironmentFile=/etc/coturn/certificate-source.env
+ExecStart=/usr/local/sbin/eclipse-turn-certificate
+User=root
+NoNewPrivileges=true
+PrivateTmp=true

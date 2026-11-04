@@ -165,3 +165,14 @@ Browser checks covered SSR visibility without JavaScript, mobile email login,
 desktop QR rendering, native playback, vector tracking after typing, and
 password visibility. These are browser/emulated-device checks, not physical
 iPhone measurements. Follow-up Lighthouse artifacts are kept outside Git.
+
+## Self-hosted font fix — 2026-11-04
+
+Inter now loads from the same origin in the initial stylesheet, with its Latin
+subset preloaded and Cyrillic preloaded for Russian UI. Roboto, Outfit and
+Nunito are also self-hosted for story typography. Unicode ranges keep unused
+subsets from being downloaded. The delayed Google Fonts component was removed.
+Font files use content-hashed names and immutable caching. Licenses and sources
+are in `public/fonts/app/`. Browser verification loaded both Inter subsets with
+Google Fonts requests blocked, avoiding a missing/default font when that service
+is unreachable.

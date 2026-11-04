@@ -16571,6 +16571,11 @@ export default function ChatsPageClient() {
         const userChannel = pusher.subscribe(`private-user-${selfId}`);
         const refreshCallsRealtime = () => window.dispatchEvent(new Event(CALLS_CHANGED_EVENT));
         userChannel.bind("call:changed", refreshCallsRealtime);
+        userChannel.bind("call:signal", (payload: unknown) => {
+          if (payload && typeof payload === "object" && "id" in payload && typeof payload.id === "string") {
+            window.dispatchEvent(new CustomEvent("eclipse:call-signal", { detail: { id: payload.id } }));
+          }
+        });
         userChannel.bind("pusher:subscription_succeeded", refreshCallsRealtime);
         pusher.connection?.bind("connected", refreshCallsRealtime);
         const resolveChatIdByLink = (chatType: "group" | "channel", link: string) => {

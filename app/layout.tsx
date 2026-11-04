@@ -1,6 +1,7 @@
 
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
+import "./fonts.css";
 import { ThemeProvider } from "next-themes";
 import AppToastViewport from "@/app/app/AppToastViewport";
 import { LocaleProvider } from "@/components/LocaleProvider";
@@ -42,6 +43,8 @@ export default async function RootLayout({
   return (
     <html lang={locale} suppressHydrationWarning>
       <head>
+        <link rel="preload" href="/fonts/app/inter-latin-3100e775e8.woff2" as="font" type="font/woff2" crossOrigin="anonymous" />
+        {locale === "ru" && <link rel="preload" href="/fonts/app/inter-cyrillic-71d5ee93cc.woff2" as="font" type="font/woff2" crossOrigin="anonymous" />}
         <link rel="manifest" href="/manifest.webmanifest" crossOrigin="use-credentials" />
         <link rel="preconnect" href="https://cdn.jsdelivr.net" crossOrigin="anonymous" />
         <link rel="dns-prefetch" href="https://cdn.jsdelivr.net" />

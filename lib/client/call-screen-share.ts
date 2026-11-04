@@ -1,6 +1,6 @@
-import type { Participant, Track } from "livekit-client";
+import type { CallParticipant, CallTrackSource, CallMediaTrack } from "./call-media-session";
 
-export function visibleCallTrack(person: Participant | undefined, source: Track.Source): Track | undefined {
+export function visibleCallTrack(person: Pick<CallParticipant, "getTrackPublication"> | undefined, source: CallTrackSource): CallMediaTrack | undefined {
   const publication = person?.getTrackPublication(source);
   return publication && !publication.isMuted ? publication.track : undefined;
 }

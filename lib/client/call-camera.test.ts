@@ -1,10 +1,10 @@
 import { describe, expect, it, vi } from "vitest";
 import { switchCallCamera } from "./call-camera";
-import type { VideoCaptureOptions } from "livekit-client";
+import type { CameraRestartOptions } from "./call-media-session";
 
 function camera(initial: MediaTrackSettings) {
   let settings = initial;
-  const track = { mediaStreamTrack: { getSettings: () => settings }, restartTrack: vi.fn<(options: VideoCaptureOptions) => Promise<void>>().mockResolvedValue(undefined), stop: vi.fn() };
+  const track = { mediaStreamTrack: { getSettings: () => settings }, restartTrack: vi.fn<(options: CameraRestartOptions) => Promise<void>>().mockResolvedValue(undefined), stop: vi.fn() };
   return { track, set: (next: MediaTrackSettings) => { settings = next; } };
 }
 

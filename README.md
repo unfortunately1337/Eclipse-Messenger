@@ -37,8 +37,9 @@ an independent instance with your own infrastructure.
 | Music playback, mini-player and sharing | Responsive mobile and desktop layouts | English and Russian interfaces |
 
 Personal chats also support voice and video calls, screen sharing, a minimized
-call player, per-person volume and call privacy with exceptions. Calls use an
-optional LiveKit Cloud project; group-call controls are not exposed in this release.
+call player, per-person volume and call privacy with exceptions. Personal calls
+support WebRTC P2P with coturn fallback; LiveKit remains available for rollback
+and legacy clients. Group-call controls are not exposed in this release.
 Search within chats highlights matches and lets you navigate between results.
 See [calls and deployment configuration](docs/CALLS.md).
 
@@ -80,7 +81,7 @@ Before signing in or sending media:
 | Email | Configure working `SMTP_*` values in `.env`; registration and login codes need delivery |
 | Realtime | Set your own Pusher Channels credentials and matching `NEXT_PUBLIC_PUSHER_*` values |
 | Push notifications | Optionally configure your own Pusher Beams credentials |
-| Voice/video calls | Optionally set `LIVEKIT_URL`, `LIVEKIT_API_KEY` and `LIVEKIT_API_SECRET` for your own LiveKit Cloud project |
+| Voice/video calls | Configure [P2P and coturn](docs/CALLS_P2P_MIGRATION.md), or use your own LiveKit Cloud project as the fallback |
 
 ```sh
 npm run db:migrate
@@ -109,7 +110,7 @@ HTTPS origins. Preserve the intended host and protocol information. Changes to
 ## For developers
 
 **Stack:** Next.js 16 · React 19 · TypeScript · Tailwind CSS · PostgreSQL / Prisma ·
-Redis · S3-compatible storage · Pusher · LiveKit · Lottie.
+Redis · S3-compatible storage · Pusher · WebRTC/coturn · LiveKit fallback · Lottie.
 
 | Directory | Contents |
 | --- | --- |
