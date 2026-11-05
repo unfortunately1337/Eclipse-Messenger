@@ -7,11 +7,26 @@
 
 const MAX_CACHED_ITEMS = 120;
 const mediaBlobCache = new Map<string, string>();
+const mediaPreviewCache = new Map<string, string>();
+
+export function cacheDecodedMediaPreview(src: string, preview: string): void {
+  if (!src || mediaPreviewCache.has(src)) return;
+  if (mediaPreviewCache.size >= MAX_CACHED_ITEMS) {
+    const oldest = mediaPreviewCache.keys().next().value;
+    if (oldest) mediaPreviewCache.delete(oldest);
+  }
+  mediaPreviewCache.set(src, preview);
+}
+
+export function getDecodedMediaPreview(src: string): string | undefined {
+  return mediaPreviewCache.get(src);
+}
 
 export function cacheMediaBlobUrl(serverUrl: string, blobUrl: string): void {
   if (!serverUrl || !blobUrl) return;
   const previous = mediaBlobCache.get(serverUrl);
   if (previous && previous !== blobUrl) {
+    mediaPreviewCache.delete(previous);
     try { URL.revokeObjectURL(previous); } catch {}
   }
 
@@ -21,6 +36,7 @@ export function cacheMediaBlobUrl(serverUrl: string, blobUrl: string): void {
     if (firstKey) {
       const oldBlob = mediaBlobCache.get(firstKey);
       if (oldBlob && oldBlob.startsWith("blob:")) {
+        mediaPreviewCache.delete(oldBlob);
         try {
           URL.revokeObjectURL(oldBlob);
         } catch {
@@ -46,9 +62,11 @@ export function hasCachedMediaUrl(src: string): boolean {
 
 export function invalidateCachedMediaUrl(src: string): void {
   if (!src) return;
+  mediaPreviewCache.delete(src);
   const blobUrl = mediaBlobCache.get(src);
   if (blobUrl) {
     mediaBlobCache.delete(src);
+    mediaPreviewCache.delete(blobUrl);
     if (blobUrl.startsWith("blob:")) {
       try {
         URL.revokeObjectURL(blobUrl);
@@ -61,4 +79,5 @@ export function invalidateCachedMediaUrl(src: string): void {
 
 export function clearMediaBlobCache(): void {
   for (const key of [...mediaBlobCache.keys()]) invalidateCachedMediaUrl(key);
+  mediaPreviewCache.clear();
 }

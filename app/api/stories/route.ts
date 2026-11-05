@@ -16,8 +16,8 @@ import {
   STORY_ALLOWED_TTL_HOURS,
   STORY_DEFAULT_TTL_HOURS,
   STORY_MAX_CAPTION_LENGTH,
-  STORY_MAX_DURATION_MS,
 } from "@/lib/server/stories";
+import { STORY_MAX_DURATION_MS, STORY_MAX_DURATION_SECONDS, STORY_MAX_FILE_BYTES, STORY_MAX_FILE_MB } from "@/lib/story-limits";
 import { parseStoryOverlay, stringifyStoryOverlay } from "@/lib/story-overlay";
 
 const mediaUrlSchema = z
@@ -32,7 +32,7 @@ const mediaUrlSchema = z
 const createStorySchema = z.object({
   mediaUrl: mediaUrlSchema,
   mediaType: z.enum(["image", "video"]),
-  durationMs: z.number().int().min(0).max(STORY_MAX_DURATION_MS).optional().nullable(),
+  durationMs: z.number().int().min(0).optional().nullable(),
   ttlHours: z.union([z.literal(6), z.literal(12), z.literal(24), z.literal(48)]).optional().default(STORY_DEFAULT_TTL_HOURS),
   caption: z.string().trim().max(STORY_MAX_CAPTION_LENGTH).optional().nullable(),
   overlay: z.unknown().optional().nullable(),
@@ -63,11 +63,17 @@ export async function POST(req: NextRequest) {
     if (!STORY_ALLOWED_TTL_HOURS.includes(body.ttlHours)) {
       throw new Error("Некорректное время жизни истории");
     }
-    if (body.mediaType === "video" && (!body.durationMs || body.durationMs > STORY_MAX_DURATION_MS)) {
-      throw new HttpError(400, "История с видео может быть не длиннее 15 секунд");
+    if (body.mediaType === "video" && !body.durationMs) {
+      throw new HttpError(400, "Не удалось определить длительность видео");
     }
 
-    await requireOwnedPublicMedia(body.mediaUrl, user.id, body.mediaType);
+    const asset = await requireOwnedPublicMedia(body.mediaUrl, user.id, body.mediaType);
+    if (asset.size > STORY_MAX_FILE_BYTES) {
+      throw new HttpError(413, `Файл слишком большой. Максимум ${STORY_MAX_FILE_MB} МБ.`);
+    }
+    if (body.mediaType === "video" && Math.max(body.durationMs ?? 0, asset.durationMs ?? 0) > STORY_MAX_DURATION_MS) {
+      throw new HttpError(400, `История с видео может быть не длиннее ${STORY_MAX_DURATION_SECONDS} секунд`);
+    }
 
     const fortyEightHoursAgo = new Date();
     fortyEightHoursAgo.setHours(fortyEightHoursAgo.getHours() - 48);

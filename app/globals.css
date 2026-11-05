@@ -492,3 +492,15 @@ html[data-app-transparent-visual] [data-chat-context-menu].app-panel-surface {
 }
 .composer-round-action { width: var(--composer-action-size); height: var(--composer-action-size); }
 .composer-inline-action { margin-bottom: var(--composer-control-inset, 4px); }
+@keyframes media-preview-sheen {
+  from { transform: translateX(0); }
+  to { transform: translateX(300%); }
+}
+
+.media-preview-sheen {
+  animation: media-preview-sheen 1.55s ease-in-out .16s infinite backwards;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .media-preview-sheen { display: none; }
+}

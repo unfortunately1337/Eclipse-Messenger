@@ -10,7 +10,7 @@ import { cn } from "@/lib/utils";
 
 const colors = ["#ffffff", "#000000", "#ef4444", "#f97316", "#eab308", "#22c55e", "#06b6d4", "#3b82f6", "#a855f7", "#ec4899"];
 
-export function StoryColorPicker({ color, onChange, label }: { color: string; onChange: (color: string) => void; label: string }) {
+export function StoryColorPicker({ color, onChange, label, compact = false }: { color: string; onChange: (color: string) => void; label: string; compact?: boolean }) {
   const t = useTranslation();
   const [open, setOpen] = useState(false);
   const [hexDraft, setHex] = useState<string | null>(null);
@@ -55,18 +55,23 @@ export function StoryColorPicker({ color, onChange, label }: { color: string; on
     setHex(null);
   }
 
-  return <div ref={root} className="relative grid h-12 w-full grid-cols-[repeat(11,minmax(0,1fr))] items-center rounded-full border border-white/[0.08] bg-[#181818]/65 px-1 shadow-[0_4px_18px_rgba(0,0,0,0.16),inset_0_1px_0_rgba(255,255,255,0.06)] backdrop-blur-[20px]">
+  return <div ref={root} className={compact ? undefined : "relative"}>
+    <div className={cn("grid w-full items-center rounded-full border border-white/[0.08] bg-[#181818]/65 px-1 shadow-[0_4px_18px_rgba(0,0,0,0.16),inset_0_1px_0_rgba(255,255,255,0.06)] backdrop-blur-[20px]",
+      compact ? "no-scrollbar h-11 grid-cols-[repeat(11,minmax(22px,1fr))] overflow-x-auto" : "h-12 grid-cols-[repeat(11,minmax(0,1fr))]")}>
     <button type="button" aria-label={t("Свой цвет: {0}", { 0: label })} aria-expanded={open}
       onClick={() => { if (!open && hsv.s > 0) setHue(hsv.h); setOpen(!open); }}
       className="group grid h-11 min-w-0 place-items-center rounded-full">
-      <span className={cn("h-6 w-6 rounded-full shadow-[0_2px_8px_rgba(0,0,0,0.3)] bg-[conic-gradient(#ff3b30,#ffcc00,#34c759,#007aff,#af52de,#ff3b30)] transition-transform duration-200 group-active:scale-90", open && "ring-2 ring-white/80 ring-offset-2 ring-offset-[#181818]")} />
+      <span className={cn("rounded-full shadow-[0_2px_8px_rgba(0,0,0,0.3)] bg-[conic-gradient(#ff3b30,#ffcc00,#34c759,#007aff,#af52de,#ff3b30)] transition-transform duration-200 group-active:scale-90",
+        compact ? "size-4" : "size-6", open && "ring-2 ring-white/80 ring-offset-2 ring-offset-[#181818]")} />
     </button>
     {colors.map(value => <button key={value} type="button" aria-label={`${label}: ${value}`} aria-pressed={color.toLowerCase() === value}
       onClick={() => { onChange(value); if (storyColorToHsv(value).s > 0) setHue(storyColorToHsv(value).h); }}
       className="group grid h-11 min-w-0 place-items-center rounded-full">
-      <span className={cn("grid h-5 w-5 place-items-center rounded-full border border-white/25 shadow-[0_2px_8px_rgba(0,0,0,0.35)] transition-transform duration-200 group-active:scale-90", color.toLowerCase() === value && "scale-110 ring-2 ring-white ring-offset-[3px] ring-offset-transparent")}
+      <span className={cn("rounded-full border border-white/25 shadow-[0_2px_8px_rgba(0,0,0,0.35)] transition-transform duration-200 group-active:scale-90",
+        compact ? "size-3.5" : "size-5", color.toLowerCase() === value && (compact ? "ring-1 ring-white ring-offset-2 ring-offset-transparent" : "scale-110 ring-2 ring-white ring-offset-[3px] ring-offset-transparent"))}
         style={{ backgroundColor: value }} />
     </button>)}
+    </div>
     <AnimatePresence>
       {open && <motion.div role="dialog" aria-label={t("Выбор цвета: {0}", { 0: label })}
         initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 6 }} transition={{ duration: .22, ease: [0.22, 1, 0.36, 1] }}

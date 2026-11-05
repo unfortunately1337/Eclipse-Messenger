@@ -6,7 +6,6 @@ import { parseStoryOverlay } from "@/lib/story-overlay";
 
 export const STORY_TTL_MS = 24 * 60 * 60 * 1000;
 export const STORY_MAX_CAPTION_LENGTH = 280;
-export const STORY_MAX_DURATION_MS = 15_000;
 export const STORY_DEFAULT_TTL_HOURS = 24;
 export const STORY_ALLOWED_TTL_HOURS = [6, 12, 24, 48] as const;
 export const STORY_ALLOWED_MEDIA_TYPES = new Set(["image", "video"] as const);

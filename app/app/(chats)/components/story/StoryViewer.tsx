@@ -11,6 +11,10 @@ import { Button } from "@/components/ui/button";
 import { Heart, CircleEllipsis, X, Eye } from "lucide-react";
 import { MdDelete } from "react-icons/md";
 import { Spinner } from "@/components/ui/spinner";
+import { MediaLoadingPreview } from "@/components/MediaLoadingPreview";
+import { getCachedMediaUrl, getDecodedMediaPreview } from "@/lib/client/media-cache";
+import { rememberDecodedMediaPreview } from "@/lib/client/media-preview";
+import type { StoryOverlay } from "@/lib/story-overlay";
 import { StoryDrawingCanvas } from "./StoryDrawingCanvas";
 import { StoryLayerContent } from "./StoryLayerContent";
 import { StoryAvatarRing } from "./StoryAvatarRing";
@@ -21,8 +25,6 @@ import {
   buildStoryMediaTransformStyle,
 } from "../../helpers";
 import type { StoryFeedGroup, StoryFeedItem, StoryViewerStats } from "../../types";
-
-const loadedStoryMediaUrls = new Set<string>();
 
 export function StoryViewer({
   isOpen,
@@ -102,32 +104,21 @@ export function StoryViewer({
     dismissing.current = true;
     closeStoryViewer();
   }, [closeStoryViewer, present]);
-  const isAlreadyLoaded = React.useMemo(() => {
-    return Boolean(activeStory?.mediaUrl && loadedStoryMediaUrls.has(activeStory.mediaUrl));
-  }, [activeStory?.mediaUrl]);
+  const mediaSrc = getCachedMediaUrl(activeStory.mediaUrl);
+  const [loadedSrc, setLoadedSrc] = React.useState<string | null>(null);
+  const [failedSrc, setFailedSrc] = React.useState<string | null>(null);
+  const mediaLoaded = loadedSrc === mediaSrc;
+  const mediaFailed = failedSrc === mediaSrc;
 
-  const [mediaLoaded, setMediaLoaded] = React.useState(isAlreadyLoaded);
-
-  const handleMediaReady = React.useCallback(() => {
-    if (activeStory?.mediaUrl) {
-      loadedStoryMediaUrls.add(activeStory.mediaUrl);
-    }
-    setMediaLoaded(true);
+  const handleMediaReady = React.useCallback((event: React.SyntheticEvent<HTMLImageElement | HTMLVideoElement>) => {
+    rememberDecodedMediaPreview(mediaSrc, event.currentTarget);
+    setLoadedSrc(mediaSrc);
     if (entered.current && present) onMediaLoaded?.();
-  }, [activeStory?.mediaUrl, onMediaLoaded, present]);
-
-  React.useEffect(() => {
-    if (activeStory?.mediaUrl && loadedStoryMediaUrls.has(activeStory.mediaUrl)) {
-      setMediaLoaded(true);
-      if (entered.current && present) onMediaLoaded?.();
-    } else {
-      setMediaLoaded(false);
-    }
-  }, [activeStory?.id, activeStory?.mediaUrl, onMediaLoaded, present]);
+  }, [mediaSrc, onMediaLoaded, present]);
 
   if (!isOpen || !activeStory || !activeStoryGroup) return null;
 
-  const activeStoryOverlay = activeStory.overlay ?? { strokes: [], texts: [], media: { scale: 1, x: 0, y: 0 } };
+  const activeStoryOverlay: StoryOverlay = activeStory.overlay ?? { strokes: [], texts: [], media: { scale: 1, x: 0, y: 0 } };
 
   return (
     <motion.div
@@ -205,11 +196,11 @@ export function StoryViewer({
                 <p className="truncate text-[15px] font-semibold leading-tight text-white">
                   {activeStoryGroup.author.id === selfId ? t("Моя история") : activeStoryGroup.author.displayName}
                 </p>
-                <p className="truncate text-sm text-white/68">{formatStoryPublishedAt(activeStory.createdAt)}</p>
+                <p className="truncate text-sm text-white/68">{activeStory.pendingUpload ? t("Публикация…") : formatStoryPublishedAt(activeStory.createdAt)}</p>
               </div>
             </div>
             <div className="flex items-center gap-1">
-              {activeStory.isMine ? (
+              {activeStory.isMine && !activeStory.pendingUpload ? (
                 <>
                   <button
                     type="button"
@@ -318,16 +309,16 @@ export function StoryViewer({
             onPointerCancel={releaseStoryViewer}
             onPointerLeave={releaseStoryViewer}
           >
-            {!mediaLoaded && (
-              <div className="absolute inset-0 z-10 flex items-center justify-center pointer-events-none">
-                <Spinner className="h-9 w-9 text-white/70" />
-              </div>
-            )}
+            <MediaLoadingPreview preview={activeStoryOverlay.preview ?? getDecodedMediaPreview(mediaSrc)} fit="contain"
+              loading={!mediaLoaded && !mediaFailed}
+              mediaStyle={buildStoryMediaTransformStyle(activeStoryOverlay.media)}
+              className={cn("transition-opacity duration-150", mediaLoaded && !mediaFailed ? "opacity-0" : "opacity-100")} />
+            {mediaFailed && <p role="status" className="pointer-events-none absolute z-[3] rounded-full bg-black/65 px-4 py-2 text-sm text-white">{t("Файл недоступен")}</p>}
             {activeStory.mediaType === "video" ? (
               <video
                 ref={storyViewerVideoRef}
                 key={activeStory.id}
-                src={activeStory.mediaUrl}
+                src={mediaSrc}
                 className={cn("h-full w-full object-contain transition-opacity duration-200", mediaLoaded ? "opacity-100" : "opacity-0")}
                 style={buildStoryMediaTransformStyle(activeStoryOverlay.media)}
                 autoPlay
@@ -339,18 +330,20 @@ export function StoryViewer({
                 disableRemotePlayback
                 onLoadedData={handleMediaReady}
                 onCanPlay={handleMediaReady}
+                onError={() => setFailedSrc(mediaSrc)}
                 onEnded={() => stepStoryViewer(1)}
               />
             ) : (
               <img
                 key={activeStory.id}
-                src={activeStory.mediaUrl}
+                src={mediaSrc}
                 alt={activeStory.caption ?? activeStoryGroup.author.displayName}
                 className={cn("h-full w-full object-contain transition-opacity duration-200", mediaLoaded ? "opacity-100" : "opacity-0")}
                 style={buildStoryMediaTransformStyle(activeStoryOverlay.media)}
                 decoding="async"
                 loading="eager"
                 onLoad={handleMediaReady}
+                onError={() => setFailedSrc(mediaSrc)}
               />
             )}
             <StoryDrawingCanvas overlay={activeStoryOverlay} />
@@ -361,7 +354,7 @@ export function StoryViewer({
                 <div
                   key={layer.id}
                   className={cn(
-                    "pointer-events-none absolute select-none whitespace-pre-wrap font-semibold max-w-[86%]",
+                    "pointer-events-none absolute w-max max-w-[86%] select-none whitespace-pre-wrap font-semibold",
                     align === "left" ? "text-left" : align === "right" ? "text-right" : "text-center",
                     bgStyle === "badge"
                       ? "bg-black/65 backdrop-blur-md rounded-2xl px-3.5 py-1.5 shadow-lg"

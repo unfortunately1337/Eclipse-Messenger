@@ -291,6 +291,7 @@ export type AppBootstrapResponse = {
 
 export type StoryFeedItem = {
   id: string;
+  pendingUpload?: boolean;
   mediaUrl: string;
   mediaType: "image" | "video";
   durationMs?: number | null;
@@ -785,12 +786,12 @@ export type PusherFactory = new (
 export type ParsedMessageContent =
   | { kind: "text"; text: string; isSingleEmoji?: boolean; isOnlyEmojis?: boolean; emojiCount?: number }
   | { kind: "story_reply"; text: string; authorName: string; storyId?: string; previewText?: string; isOwn?: boolean }
-  | { kind: "image"; src: string; caption: string }
+  | { kind: "image"; src: string; caption: string; preview?: string }
   | { kind: "poll"; question: string; options: string[]; quizMode: boolean; correctOptionIndex: number | null; expiresAt: string | null }
-  | { kind: "album"; items: Array<{ src: string; kind: "image" | "video"; durationMs?: number; mode?: string }>; caption: string }
+  | { kind: "album"; items: Array<{ src: string; kind: "image" | "video"; durationMs?: number; mode?: string; preview?: string }>; caption: string }
   | { kind: "sticker"; src: string; source?: "greeting_button" | "picker"; emoji?: string }
   | { kind: "voice"; src: string; durationMs: number; waveform?: number[] }
-  | { kind: "video"; src: string; durationMs: number; caption: string; mode: "note" | "file" }
+  | { kind: "video"; src: string; durationMs: number; caption: string; mode: "note" | "file"; preview?: string }
   | { kind: "file"; src: string; name: string; size: number; mimeType: string; caption: string }
   | { kind: "music"; url: string; title: string; caption: string; author?: string; coverUrl?: string; durationMs?: number };
 

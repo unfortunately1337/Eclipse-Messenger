@@ -6,18 +6,27 @@ import { STORY_FONTS, normalizeStoryFont, storyFontStyle, type StoryFont } from 
 import React, { useState, useEffect, useLayoutEffect, useRef, useCallback} from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { cn } from "@/lib/utils";
-import { Pencil, Type, Eraser, X, Download, Smile, Upload, Check, Undo2 } from "lucide-react";
+import { Pencil, Type, Eraser, X, Smile, Check, Undo2 } from "lucide-react";
+import { IoSend } from "react-icons/io5";
 import { PencilSparkles } from "./PencilSparkles";
-import { StorySizeButton } from "./StorySizeButton";
 import { StoryColorPicker } from "./StoryColorPicker";
-import { StoryEmojiGlyph } from "./StoryEmojiGlyph";
+import { StoryPackPicker } from "./StoryPackPicker";
 import { StoryLayerContent } from "./StoryLayerContent";
-import { TELEGRAM_COMPOSER_EMOJIS, getTelegramEmojiGifUrl } from "@/lib/client/telegram-emoji-gifs";
-import { singleStoryEmoji, storyEmojiGraphemes } from "@/lib/story-editor";
+import { singleStoryEmoji } from "@/lib/story-editor";
 import { MdDelete, MdEdit } from "react-icons/md";
-import { Spinner } from "@/components/ui/spinner";
 
 type ReactPointerEvent<T> = React.PointerEvent<T>;
+type LayerPoint = { x: number; y: number };
+type LayerExtent = { width: number; height: number };
+
+function clampLayerPosition(point: LayerPoint, layer: LayerExtent, stage: LayerExtent): LayerPoint {
+  const insetX = Math.min(.5, (layer.width / 2 + 6) / Math.max(1, stage.width));
+  const insetY = Math.min(.5, (layer.height / 2 + 6) / Math.max(1, stage.height));
+  return {
+    x: Math.max(insetX, Math.min(1 - insetX, point.x)),
+    y: Math.max(insetY, Math.min(1 - insetY, point.y)),
+  };
+}
 
 import {
   clampStoryMediaTransform,
@@ -43,8 +52,6 @@ import type {
   StoryMediaTransform,
 } from "../../types";
 
-const storyPickerEmojis = Array.from(new Set(TELEGRAM_COMPOSER_EMOJIS)).filter(emoji => getTelegramEmojiGifUrl(emoji) !== null);
-
 type StoryEditorProps = {
   isOpen: boolean;
   isDesktop: boolean;
@@ -67,7 +74,7 @@ function StoryEditorSession({ isDesktop, initialDraft, closeStoryDraft, storyUpl
   const [storyDraft, setStoryDraft] = useState<StoryDraft | null>(initialDraft);
   const isOpen = true;
   const [emojiPickerOpen, setEmojiPickerOpen] = useState(false);
-  const [emojiDraft, setEmojiDraft] = useState("");
+  const [packTab, setPackTab] = useState<"emoji" | "sticker">("emoji");
   const [emojiEditingId, setEmojiEditingId] = useState<string | null>(null);
   const [alignmentGuides, setAlignmentGuides] = useState({ x: false, y: false });
   const mediaPendingRef = useRef<Partial<StoryMediaTransform> | null>(null);
@@ -76,7 +83,7 @@ function StoryEditorSession({ isDesktop, initialDraft, closeStoryDraft, storyUpl
   const eraseRafRef = useRef<number | null>(null);
   const erasePointsRef = useRef<{ x: number; y: number }[]>([]);
   const pinchRafRef = useRef<number | null>(null);
-  const pinchPendingRef = useRef<{ id: string; size: number } | null>(null);
+  const pinchPendingRef = useRef<{ id: string; size: number; x: number; y: number } | null>(null);
   const gestureMovedRef = useRef(false);
   // Local States
   const [editorMode, setEditorModeState] = useState<"none" | "draw" | "text">("none");
@@ -116,9 +123,9 @@ function StoryEditorSession({ isDesktop, initialDraft, closeStoryDraft, storyUpl
   useLayoutEffect(() => { storyDraftRef.current = storyDraft; }, [storyDraft]);
   const storyOverlayDrawingRef = useRef<StoryOverlayStroke | null>(null);
   const storyOverlayLastDrawPointRef = useRef<{ x: number; y: number } | null>(null);
-  const storyOverlayTextDragRef = useRef<{ id: string; pointerId: number; startX: number; startY: number; baseX: number; baseY: number } | null>(null);
+  const storyOverlayTextDragRef = useRef<{ id: string; pointerId: number; startX: number; startY: number; baseX: number; baseY: number; extent: LayerExtent } | null>(null);
   const storyOverlayTextPointersRef = useRef<Record<number, { x: number; y: number }>>({});
-  const storyOverlayTextPinchRef = useRef<{ id: string; distance: number; baseSize: number } | null>(null);
+  const storyOverlayTextPinchRef = useRef<{ id: string; distance: number; baseSize: number; layer: LayerPoint; center: LayerPoint; extent: LayerExtent; maxSize: number } | null>(null);
   const storyMediaPointersRef = useRef<Record<number, { x: number; y: number }>>({});
   const storyMediaPinchRef = useRef<{ distance: number; baseScale: number } | null>(null);
   const storyMediaDragRef = useRef<{ pointerId: number; startX: number; startY: number; baseX: number; baseY: number } | null>(null);
@@ -150,16 +157,6 @@ function StoryEditorSession({ isDesktop, initialDraft, closeStoryDraft, storyUpl
       setStoryDraftKeyboardInset(0);
     };
   }, [isOpen]);
-
-  const handleDownloadMedia = () => {
-    if (!storyDraft) return;
-    const a = document.createElement("a");
-    a.href = storyDraft.previewUrl;
-    a.download = `story_${Date.now()}.${storyDraft.mediaType === "video" ? "mp4" : "jpg"}`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-  };
 
   const updateStageRect = useCallback(() => {
     const stage = storyOverlayStageRef.current;
@@ -269,15 +266,22 @@ function StoryEditorSession({ isDesktop, initialDraft, closeStoryDraft, storyUpl
     }
   }, []);
 
-  function addEmojiLayer() {
-    if (!emojiDraft || storyEmojiGraphemes(emojiDraft).length > 12) return;
-    const layer = { ...createStoryOverlayTextLayer(emojiDraft), kind: "emoji" as const, size: 64 };
-    setStoryDraft(prev => prev ? { ...prev, overlay: { ...prev.overlay, texts: emojiEditingId ? prev.overlay.texts.map(existing => existing.id === emojiEditingId ? { ...existing, text: emojiDraft } : existing) : [...prev.overlay.texts, layer] } } : prev);
-    setStoryOverlaySelectedTextId(emojiEditingId ?? layer.id);
-    setStoryTextSize(layer.size);
+  function choosePackLayer(kind: "emoji" | "sticker", text: string) {
+    const current = storyDraftRef.current?.overlay.texts.find(layer => layer.id === emojiEditingId);
+    const layer: StoryOverlayTextLayer = {
+      ...(current ?? createStoryOverlayTextLayer(text)),
+      kind,
+      text,
+      size: current?.kind === kind ? current.size : kind === "sticker" ? 120 : 64,
+    };
     activateEditorMode("text");
+    setStoryDraft(prev => prev ? { ...prev, overlay: {
+      ...prev.overlay,
+      texts: current ? prev.overlay.texts.map(existing => existing.id === current.id ? layer : existing) : [...prev.overlay.texts, layer],
+    } } : prev);
+    setStoryOverlaySelectedTextId(layer.id);
+    setStoryTextSize(layer.size);
     setEmojiPickerOpen(false);
-    setEmojiDraft("");
   }
 
   function addStoryTextLayer() {
@@ -297,7 +301,12 @@ function StoryEditorSession({ isDesktop, initialDraft, closeStoryDraft, storyUpl
     if (!storyDraft) return;
     const current = storyDraft.overlay.texts.find((layer) => layer.id === layerId);
     if (!current) return;
-    if (current.kind === "emoji") { setEmojiEditingId(current.id); setEmojiDraft(current.text); setEmojiPickerOpen(true); return; }
+    if (current.kind === "emoji" || current.kind === "sticker") {
+      setEmojiEditingId(current.id);
+      setPackTab(current.kind);
+      setEmojiPickerOpen(true);
+      return;
+    }
     setStoryOverlaySelectedTextId(layerId);
     setStoryTextEditingId(layerId);
     setStoryTextDraft(current.text);
@@ -462,7 +471,7 @@ function StoryEditorSession({ isDesktop, initialDraft, closeStoryDraft, storyUpl
     pinchPendingRef.current = null;
     if (!pending) return;
     setStoryTextSize(pending.size);
-    setStoryDraft(prev => prev ? { ...prev, overlay: { ...prev.overlay, texts: prev.overlay.texts.map(layer => layer.id === pending.id ? { ...layer, size: pending.size } : layer) } } : prev);
+    setStoryDraft(prev => prev ? { ...prev, overlay: { ...prev.overlay, texts: prev.overlay.texts.map(layer => layer.id === pending.id ? { ...layer, size: pending.size, x: pending.x, y: pending.y } : layer) } } : prev);
   }
 
   const onStoryDrawPointerDown = useCallback((event: ReactPointerEvent<HTMLCanvasElement>) => {
@@ -558,27 +567,7 @@ function StoryEditorSession({ isDesktop, initialDraft, closeStoryDraft, storyUpl
     setStoryTextDragActive(true);
     setStoryTextDragDeleteHover(false);
 
-    if (Object.keys(storyOverlayTextPointersRef.current).length === 0) {
-      storyOverlayTextPointersRef.current = { [event.pointerId]: { x: event.clientX, y: event.clientY } };
-    } else {
-      storyOverlayTextPointersRef.current[event.pointerId] = { x: event.clientX, y: event.clientY };
-    }
-
-    const points = Object.values(storyOverlayTextPointersRef.current);
-    if (points.length >= 2) {
-      const [a, b] = points;
-      const initialDist = Math.hypot(a.x - b.x, a.y - b.y);
-      if (initialDist > 20) {
-        storyOverlayTextPinchRef.current = {
-          id: layer.id,
-          distance: initialDist,
-          baseSize: Math.max(STORY_TEXT_MIN_SIZE, Math.min(STORY_TEXT_MAX_SIZE, Number(layer.size) || STORY_TEXT_DEFAULT_SIZE)),
-        };
-      }
-      storyOverlayTextDragRef.current = null;
-      event.currentTarget.setPointerCapture?.(event.pointerId);
-      return;
-    }
+    storyOverlayTextPointersRef.current = { [event.pointerId]: { x: event.clientX, y: event.clientY } };
     storyOverlayTextDragRef.current = {
       id: layer.id,
       pointerId: event.pointerId,
@@ -586,9 +575,40 @@ function StoryEditorSession({ isDesktop, initialDraft, closeStoryDraft, storyUpl
       startY: point.y,
       baseX: layer.x,
       baseY: layer.y,
+      extent: { width: event.currentTarget.offsetWidth, height: event.currentTarget.offsetHeight },
     };
     event.currentTarget.setPointerCapture?.(event.pointerId);
   }, [editorMode, getStoryOverlayPoint, storyOverlayTool, storyTextEditorOpen, updateStageRect]);
+
+  const onStoryTextSecondPointerDown = (event: ReactPointerEvent<HTMLDivElement>) => {
+    const points = storyOverlayTextPointersRef.current;
+    if (event.pointerType !== "touch" || Object.keys(points).length === 0) return;
+    event.preventDefault();
+    event.stopPropagation();
+    if (storyOverlayTextPinchRef.current) return;
+    const drag = storyOverlayTextDragRef.current;
+    const layer = storyDraftRef.current?.overlay.texts.find(item => item.id === drag?.id);
+    if (!layer || !drag) return;
+    const first = Object.values(points)[0];
+    points[event.pointerId] = { x: event.clientX, y: event.clientY };
+    if (storyTextDragRafRef.current !== null) cancelAnimationFrame(storyTextDragRafRef.current);
+    storyTextDragRafRef.current = null;
+    storyTextPendingDragRef.current = null;
+    storyOverlayTextDragRef.current = null;
+    storyOverlayTextPinchRef.current = {
+      id: layer.id,
+      distance: Math.max(1, Math.hypot(first.x - event.clientX, first.y - event.clientY)),
+      baseSize: layer.size,
+      layer,
+      center: { x: (first.x + event.clientX) / 2, y: (first.y + event.clientY) / 2 },
+      extent: drag.extent,
+      maxSize: layer.kind === "sticker" || layer.kind === "emoji" ? 384 : STORY_TEXT_MAX_SIZE,
+    };
+    gestureMovedRef.current = true;
+    setStoryTextDragDeleteHover(false);
+    setAlignmentGuides({ x: false, y: false });
+    event.currentTarget.setPointerCapture(event.pointerId);
+  };
 
   const onStoryTextPointerMove = useCallback((event: ReactPointerEvent<HTMLDivElement>) => {
     if (storyOverlayTextPointersRef.current[event.pointerId]) {
@@ -600,13 +620,19 @@ function StoryEditorSession({ isDesktop, initialDraft, closeStoryDraft, storyUpl
       event.preventDefault();
       const [a, b] = textPoints;
       const nextDistance = Math.max(1, Math.hypot(a.x - b.x, a.y - b.y));
-      if (pinch.distance > 0 && Math.abs(nextDistance - pinch.distance) > 1) {
-        const ratio = nextDistance / pinch.distance;
-        const boundedRatio = Math.max(0.6, Math.min(4, ratio));
-        const nextSize = Math.max(STORY_TEXT_MIN_SIZE, Math.min(STORY_TEXT_MAX_SIZE, Math.round(pinch.baseSize * boundedRatio)));
-        pinchPendingRef.current = { id: pinch.id, size: nextSize };
-        if (pinchRafRef.current === null) pinchRafRef.current = requestAnimationFrame(flushTextPinch);
-      }
+      const stage = stageRectRef.current;
+      const scaleLimit = Math.min((stage.width - 12) / Math.max(1, pinch.extent.width), (stage.height - 12) / Math.max(1, pinch.extent.height));
+      const size = Math.max(STORY_TEXT_MIN_SIZE, Math.min(pinch.maxSize, Math.floor(pinch.baseSize * scaleLimit), Math.round(pinch.baseSize * nextDistance / pinch.distance)));
+      const ratio = size / pinch.baseSize;
+      const center = clampLayerPosition({
+        x: pinch.layer.x + ((a.x + b.x) / 2 - pinch.center.x) / Math.max(1, stage.width),
+        y: pinch.layer.y + ((a.y + b.y) / 2 - pinch.center.y) / Math.max(1, stage.height),
+      }, {
+        width: Math.max(pinch.extent.width * ratio, pinch.extent.width - pinch.baseSize + size),
+        height: Math.max(pinch.extent.height * ratio, pinch.extent.height - pinch.baseSize + size),
+      }, stage);
+      pinchPendingRef.current = { id: pinch.id, size, ...center };
+      if (pinchRafRef.current === null) pinchRafRef.current = requestAnimationFrame(flushTextPinch);
       setStoryTextDragDeleteHover(false);
       return;
     }
@@ -618,7 +644,9 @@ function StoryEditorSession({ isDesktop, initialDraft, closeStoryDraft, storyUpl
     const dx = point.x - drag.startX;
     const dy = point.y - drag.startY;
     if (Math.hypot(dx * stageRectRef.current.width, dy * stageRectRef.current.height) > 4) gestureMovedRef.current = true;
-    const rawX = clampStoryOverlayUnit(drag.baseX + dx), rawY = clampStoryOverlayUnit(drag.baseY + dy);
+    const { x: rawX, y: rawY } = clampLayerPosition(
+      { x: drag.baseX + dx, y: drag.baseY + dy }, drag.extent, stageRectRef.current,
+    );
     const snapX = Math.abs(rawX - .5) * stageRectRef.current.width < 7;
     const snapY = Math.abs(rawY - .5) * stageRectRef.current.height < 7;
     const nextX = snapX ? .5 : rawX, nextY = snapY ? .5 : rawY;
@@ -655,9 +683,8 @@ function StoryEditorSession({ isDesktop, initialDraft, closeStoryDraft, storyUpl
   }, [editorMode, getStoryOverlayPoint, storyDraft, storyOverlayTool]);
 
   const onStoryTextPointerUp = useCallback((event?: ReactPointerEvent<HTMLDivElement>) => {
-    if (event) {
-      delete storyOverlayTextPointersRef.current[event.pointerId];
-    }
+    if (!event || !storyOverlayTextPointersRef.current[event.pointerId]) return;
+    delete storyOverlayTextPointersRef.current[event.pointerId];
     if (storyTextDragRafRef.current !== null) {
       window.cancelAnimationFrame(storyTextDragRafRef.current);
       storyTextDragRafRef.current = null;
@@ -674,7 +701,7 @@ function StoryEditorSession({ isDesktop, initialDraft, closeStoryDraft, storyUpl
     const pending = storyTextPendingDragRef.current;
     storyTextPendingDragRef.current = null;
 
-    if (drag && event && event.type !== "pointercancel" && isOverStoryTextDeleteTarget(event.clientX, event.clientY)) {
+    if (drag && event && event.type === "pointerup" && isOverStoryTextDeleteTarget(event.clientX, event.clientY)) {
       setStoryDraft((prev) =>
         prev
           ? {
@@ -708,22 +735,6 @@ function StoryEditorSession({ isDesktop, initialDraft, closeStoryDraft, storyUpl
     setStoryTextDragActive(remainingPointers > 0);
     setStoryTextDragDeleteHover(false);
   }, []);
-
-  const adjustSelectedStoryTextSize = useCallback((delta: number) => {
-    if (storyTextEditorOpen) {
-      setStoryTextSize(prev => Math.max(STORY_TEXT_MIN_SIZE, Math.min(STORY_TEXT_MAX_SIZE, prev + delta)));
-      return;
-    }
-    if (!storyDraft) return;
-    const targetId = storyOverlaySelectedTextId;
-    if (!targetId) return;
-    const targetLayer = storyDraft.overlay.texts.find((l) => l.id === targetId);
-    if (!targetLayer) return;
-    const currentSize = targetLayer.size || storyTextSize;
-    const nextSize = Math.max(STORY_TEXT_MIN_SIZE, Math.min(STORY_TEXT_MAX_SIZE, currentSize + delta));
-    setStoryTextSize(nextSize);
-    updateSelectedStoryTextLayer({ size: nextSize }, targetId);
-  }, [storyDraft, storyOverlaySelectedTextId, storyTextEditingId, storyTextEditorOpen, storyTextSize]);
 
   const deleteSelectedStoryText = useCallback(() => {
     if (!storyDraft) return;
@@ -896,11 +907,10 @@ function StoryEditorSession({ isDesktop, initialDraft, closeStoryDraft, storyUpl
 
 
   const renderDrawColorPickerBar = () => <StoryColorPicker color={storyOverlayColor} label={t("Цвет кисти")} onChange={color => { setStoryOverlayColor(color); setStoryOverlayEraserMode(false); }} />;
-  const renderTextColorPickerBar = () => <StoryColorPicker color={storyTextColor} label={t("Цвет текста")} onChange={handleStoryTextColorChange} />;
 
   if (!storyDraft) return null;
   const selectedLayer = storyDraft.overlay.texts.find(layer => layer.id === (storyTextEditorOpen ? storyTextEditingId : storyOverlaySelectedTextId));
-  const hideTextColors = selectedLayer?.kind === "emoji" || (storyTextEditorOpen && singleStoryEmoji(storyTextDraft) !== null);
+  const hideTextColors = selectedLayer?.kind === "emoji" || selectedLayer?.kind === "sticker" || (storyTextEditorOpen && singleStoryEmoji(storyTextDraft) !== null);
   return (
 <motion.div
             className="fixed inset-0 z-[87] flex items-center justify-center"
@@ -916,7 +926,8 @@ function StoryEditorSession({ isDesktop, initialDraft, closeStoryDraft, storyUpl
               aria-label={t("Закрыть")}
             />
             <motion.div
-              className="relative z-[1] flex h-full w-full touch-none select-none flex-col overflow-hidden bg-black md:h-[min(calc(100dvh-24px),820px)] md:w-[min(430px,calc(100vw-40px))] md:max-w-[calc(100vw-40px)] md:rounded-[34px] md:bg-zinc-950/94 md:shadow-[0_28px_90px_rgba(0,0,0,0.62)]"
+              data-story-editor
+              className="relative z-[1] flex h-full w-full select-none flex-col overflow-hidden bg-black md:h-[min(calc(100dvh-24px),820px)] md:w-[min(430px,calc(100vw-40px))] md:max-w-[calc(100vw-40px)] md:rounded-[34px] md:bg-zinc-950/94 md:shadow-[0_28px_90px_rgba(0,0,0,0.62)]"
               inert={storyUploading}
               initial={{ opacity: 0, y: 12, scale: 0.985 }}
               animate={{ opacity: 1, y: 0, scale: 1 }}
@@ -945,26 +956,18 @@ function StoryEditorSession({ isDesktop, initialDraft, closeStoryDraft, storyUpl
                   <X size={20} />
                 </button>
 
-                {/* Download Button on the right matching reference */}
-                <button
-                  type="button"
-                  onClick={handleDownloadMedia}
-                  title={t("Скачать")}
-                  aria-label={t("Скачать")}
-                  className="flex h-10 w-10 items-center justify-center rounded-full border border-white/[0.08] bg-[#181818]/72 text-white shadow-[0_14px_34px_rgba(0,0,0,0.24),inset_0_1px_0_rgba(255,255,255,0.055)] backdrop-blur-[16px] transition-all hover:bg-[#222224]/80 active:scale-95 cursor-pointer"
-                >
-                  <Download size={20} />
-                </button>
               </div>
 
               <div className="flex min-h-0 flex-1 items-center justify-center bg-[radial-gradient(circle_at_top,rgba(46,46,54,0.46),rgba(0,0,0,0.98)_64%)] p-0">
                 <div
                   ref={storyOverlayStageRef}
-                  className="relative h-full w-full overflow-hidden bg-[#121214] md:h-full md:max-h-[820px] md:rounded-[28px] md:shadow-[0_18px_60px_rgba(0,0,0,0.48)]"
+                  className="relative h-full w-full touch-none overflow-hidden bg-[#121214] md:h-full md:max-h-[820px] md:rounded-[28px] md:shadow-[0_18px_60px_rgba(0,0,0,0.48)]"
                   style={{ backgroundColor: clampStoryMediaTransform(storyDraft.overlay.media).bgColor ?? "#151515" }}
+                  onPointerDownCapture={onStoryTextSecondPointerDown}
                   onPointerMove={onStoryTextPointerMove}
                   onPointerUp={onStoryTextPointerUp}
                   onPointerCancel={onStoryTextPointerUp}
+                  onLostPointerCapture={onStoryTextPointerUp}
                 >
                   <div className="pointer-events-none absolute inset-x-0 top-0 z-[1] h-36 bg-gradient-to-b from-black/58 via-black/16 to-transparent" />
                   <div className="pointer-events-none absolute inset-x-0 bottom-0 z-[1] h-48 bg-gradient-to-t from-black/68 via-black/18 to-transparent" />
@@ -1028,6 +1031,7 @@ function StoryEditorSession({ isDesktop, initialDraft, closeStoryDraft, storyUpl
                     return (
                       <div
                         key={layer.id}
+                        data-story-layer={layer.kind ?? "text"}
                         role="button"
                         tabIndex={0}
                         onDoubleClick={() => {
@@ -1050,7 +1054,7 @@ function StoryEditorSession({ isDesktop, initialDraft, closeStoryDraft, storyUpl
                           setStoryTtlPickerOpen(false);
                         }}
                         className={cn(
-                          "absolute z-[5] max-w-[86%] select-none whitespace-pre-wrap font-semibold touch-none will-change-transform",
+                          "absolute z-[5] w-max max-w-[86%] select-none whitespace-pre-wrap font-semibold touch-none will-change-transform",
                           storyTextDragActive && isSelected
                             ? "transition-none cursor-grabbing z-20 rounded-lg"
                             : "transition-[box-shadow,opacity] duration-150 cursor-grab",
@@ -1180,15 +1184,7 @@ function StoryEditorSession({ isDesktop, initialDraft, closeStoryDraft, storyUpl
                   transition: "transform 160ms cubic-bezier(0.22, 1, 0.36, 1)",
                 }}
               >
-                {storyTextEditorOpen && <div role="group" aria-label={t("Шрифт текста")} className="no-scrollbar flex gap-1 overflow-x-auto rounded-2xl border border-white/[0.08] bg-[#181818]/72 p-1.5 backdrop-blur-[16px]">
-                  {STORY_FONTS.map(font => <button key={font.id} type="button" aria-pressed={storyTextFont === font.id}
-                    onPointerDown={event => event.preventDefault()}
-                    onClick={() => setStoryTextFont(font.id)}
-                    style={storyFontStyle(font.id)}
-                    className={cn("shrink-0 rounded-xl px-3 py-2 text-sm transition-colors", storyTextFont === font.id ? "bg-white/15 text-white" : "text-zinc-300 hover:bg-white/10")}>{font.label}</button>)}
-                </div>}
-                {/* 1. Liquid Glass Caption Bar <-> Draw Color Bar <-> Text Color Bar */}
-                <div className={cn("relative w-full", editorMode === "text" && hideTextColors ? "h-0" : "h-12")}>
+                <div className={cn("relative w-full", editorMode === "text" && hideTextColors ? "hidden" : "h-12")}>
                   <AnimatePresence mode="wait" initial={false}>
                     {editorMode === "none" ? (
                       <motion.div
@@ -1197,7 +1193,7 @@ function StoryEditorSession({ isDesktop, initialDraft, closeStoryDraft, storyUpl
                         animate={{ opacity: 1, y: 0, scale: 1 }}
                         exit={{ opacity: 0, y: -6, scale: 0.98 }}
                         transition={{ duration: 0.16, ease: "easeOut" }}
-                        className="flex h-12 w-full items-center rounded-full border border-white/[0.08] bg-[#181818]/72 px-4 py-1.5 shadow-[0_14px_34px_rgba(0,0,0,0.24),inset_0_1px_0_rgba(255,255,255,0.055)] backdrop-blur-[16px]"
+                        className="relative top-1.5 mx-auto flex h-10 w-[94%] items-center rounded-full border border-white/[0.08] bg-[#181818]/72 px-3.5 py-1 shadow-[0_14px_34px_rgba(0,0,0,0.24),inset_0_1px_0_rgba(255,255,255,0.055)] backdrop-blur-[16px]"
                       >
                         <input
                           type="text"
@@ -1206,7 +1202,7 @@ function StoryEditorSession({ isDesktop, initialDraft, closeStoryDraft, storyUpl
                             setStoryDraft((prev) => (prev ? { ...prev, caption: event.target.value.slice(0, 280) } : prev))
                           }
                           placeholder={t("Добавить подпись...")}
-                          className="h-full min-w-0 w-full bg-transparent text-[15px] text-white outline-none placeholder:text-zinc-400"
+                          className="h-full min-w-0 w-full bg-transparent text-[14px] text-white outline-none placeholder:text-zinc-400"
                           maxLength={280}
                         />
                       </motion.div>
@@ -1221,23 +1217,37 @@ function StoryEditorSession({ isDesktop, initialDraft, closeStoryDraft, storyUpl
                       >
                         {renderDrawColorPickerBar()}
                       </motion.div>
-                    ) : !hideTextColors ? (
+                    ) : storyTextEditorOpen && !hideTextColors ? (
                       <motion.div
-                        key="text-color-bar"
+                        key="text-font-bar"
+                        role="group"
+                        aria-label={t("Шрифт текста")}
                         initial={{ opacity: 0, y: 6, scale: 0.98 }}
                         animate={{ opacity: 1, y: 0, scale: 1 }}
                         exit={{ opacity: 0, y: -6, scale: 0.98 }}
                         transition={{ duration: 0.16, ease: "easeOut" }}
-                        className="w-full"
+                        className="no-scrollbar flex h-12 gap-1 overflow-x-auto rounded-full border border-white/[0.08] bg-[#181818]/72 p-1.5 backdrop-blur-[16px]"
                       >
-                        {renderTextColorPickerBar()}
+                        {STORY_FONTS.map(font => (
+                          <button key={font.id} type="button" aria-pressed={storyTextFont === font.id}
+                            onPointerDown={event => event.preventDefault()}
+                            onClick={() => setStoryTextFont(font.id)}
+                            style={storyFontStyle(font.id)}
+                            className={cn("shrink-0 rounded-full px-3 text-sm transition-colors", storyTextFont === font.id ? "bg-white/15 text-white" : "text-zinc-300 hover:bg-white/10")}>
+                            {font.label}
+                          </button>
+                        ))}
+                      </motion.div>
+                    ) : !hideTextColors ? (
+                      <motion.div key="selected-text-colors" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: .15 }}>
+                        <StoryColorPicker color={storyTextColor} label={t("Цвет текста")} onChange={handleStoryTextColorChange} />
                       </motion.div>
                     ) : null}
                   </AnimatePresence>
                 </div>
 
                 {/* 2. Liquid Glass Bottom Controls Row matching reference */}
-                <div className="flex w-full items-center justify-between gap-2.5">
+                <div className="relative flex w-full items-center justify-between gap-2.5">
                   {/* Left: Time To Live picker (24ч / 48ч) or Cancel mode button */}
                   <div className="relative shrink-0">
                     <AnimatePresence mode="wait" initial={false}>
@@ -1273,7 +1283,7 @@ function StoryEditorSession({ isDesktop, initialDraft, closeStoryDraft, storyUpl
                             onClick={cancelStoryAction}
                             aria-label={t("Отменить режим")}
                             title={t("Отменить")}
-                            className="grid h-11 w-11 place-items-center text-zinc-300 hover:text-white active:scale-95 transition-all cursor-pointer"
+                            className="grid h-11 w-11 place-items-center rounded-full border border-white/[0.08] bg-[#181818]/72 text-white shadow-[0_14px_34px_rgba(0,0,0,0.24),inset_0_1px_0_rgba(255,255,255,0.055)] backdrop-blur-[16px] transition-[background-color,transform] hover:bg-[#222224]/80 active:scale-95 cursor-pointer"
                           >
                             <X size={23} />
                           </button>
@@ -1356,7 +1366,7 @@ function StoryEditorSession({ isDesktop, initialDraft, closeStoryDraft, storyUpl
                           onClick={() => {
                             setStoryTtlPickerOpen(false);
                             setEmojiEditingId(null);
-                            setEmojiDraft("");
+                            setPackTab("emoji");
                             setEmojiPickerOpen(true);
                           }}
                           aria-label={t("Эмодзи")}
@@ -1437,20 +1447,12 @@ function StoryEditorSession({ isDesktop, initialDraft, closeStoryDraft, storyUpl
                           <MdDelete size={22} />
                         </button>
                       </motion.div>
-                    ) : storyTextEditorOpen ? (
-                      <motion.div
-                        key="text-typing-tools"
-                        initial={{ opacity: 0, scale: 0.95 }}
-                        animate={{ opacity: 1, scale: 1 }}
-                        exit={{ opacity: 0, scale: 0.95 }}
-                        transition={{ duration: 0.15 }}
-                        className="flex flex-1 items-center justify-center gap-3 h-11 rounded-full border border-white/[0.08] bg-[#181818]/72 px-4 shadow-[0_14px_34px_rgba(0,0,0,0.24),inset_0_1px_0_rgba(255,255,255,0.055)] backdrop-blur-[16px]"
-                      >
-                        <StorySizeButton delta={-4} onStep={adjustSelectedStoryTextSize} />
-                        <span className="text-xs font-semibold text-zinc-400 min-w-[34px] text-center">{storyTextSize}px</span>
-                        <StorySizeButton delta={4} onStep={adjustSelectedStoryTextSize} />
+                    ) : storyTextEditorOpen ? (!hideTextColors && (
+                      <motion.div key="text-colors" className="min-w-0 flex-1"
+                        initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: .15 }}>
+                        <StoryColorPicker compact color={storyTextColor} label={t("Цвет текста")} onChange={handleStoryTextColorChange} />
                       </motion.div>
-                    ) : (
+                    )) : (
                       <motion.div
                         key="text-mode-tools"
                         initial={{ opacity: 0, scale: 0.95 }}
@@ -1459,12 +1461,6 @@ function StoryEditorSession({ isDesktop, initialDraft, closeStoryDraft, storyUpl
                         transition={{ duration: 0.15 }}
                         className="flex flex-1 items-center justify-around h-11 rounded-full border border-white/[0.08] bg-[#181818]/72 px-2 shadow-[0_14px_34px_rgba(0,0,0,0.24),inset_0_1px_0_rgba(255,255,255,0.055)] backdrop-blur-[16px]"
                       >
-                        {/* 1. Size smaller */}
-                        <StorySizeButton delta={-4} onStep={adjustSelectedStoryTextSize} />
-
-                        {/* 2. Size bigger */}
-                        <StorySizeButton delta={4} onStep={adjustSelectedStoryTextSize} />
-
                         {/* 3. Edit text content */}
                         <button
                           type="button"
@@ -1512,11 +1508,7 @@ function StoryEditorSession({ isDesktop, initialDraft, closeStoryDraft, storyUpl
                           transition={{ duration: 0.15 }}
                           className="grid h-11 w-11 place-items-center rounded-full bg-white hover:bg-zinc-200 text-zinc-950 shadow-[0_10px_28px_rgba(255,255,255,0.25)] active:scale-95 transition-all cursor-pointer disabled:opacity-60"
                         >
-                          {storyUploading ? (
-                            <Spinner className="h-4 w-4 text-zinc-950 animate-spin" />
-                          ) : (
-                            <Upload size={20} />
-                          )}
+                          <IoSend size={19} />
                         </motion.button>
                       ) : (
                         <motion.button
@@ -1553,13 +1545,12 @@ function StoryEditorSession({ isDesktop, initialDraft, closeStoryDraft, storyUpl
                 </div>
               </div>
               <AnimatePresence>
-                {emojiPickerOpen && <motion.div className="absolute inset-0 z-40 flex items-end bg-black/35" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={event => { if (event.target === event.currentTarget) setEmojiPickerOpen(false); }}>
-                  <motion.div role="dialog" aria-label={t("Выбрать эмодзи")} initial={{ y: 30 }} animate={{ y: 0 }} exit={{ y: 30 }} transition={{ duration: .2, ease: "easeOut" }} className="flex max-h-[65%] w-full flex-col rounded-t-[28px] border-t border-white/10 bg-[#242424]/95 p-4 pb-[max(env(safe-area-inset-bottom),20px)] backdrop-blur-[16px]">
-                    <div className="mb-4 text-[16px] font-semibold text-white">{t("Эмодзи")}</div>
-                    <div className="mb-3 flex items-center gap-3"><div className="no-scrollbar flex h-10 min-w-0 flex-1 items-center gap-1 overflow-x-auto rounded-full border border-white/[0.08] bg-[#181818]/72 px-3 shadow-[0_8px_24px_rgba(0,0,0,0.24),inset_0_1px_0_rgba(255,255,255,0.055)] backdrop-blur-[16px]">{emojiDraft ? storyEmojiGraphemes(emojiDraft).map((emoji, index) => <StoryEmojiGlyph key={`${index}:${emoji}`} emoji={emoji} size={26} animated={storyEmojiGraphemes(emojiDraft).length === 1} />) : <span className="text-sm text-zinc-400">{t("Выберите эмодзи")}</span>}</div><button type="button" aria-label={t("Убрать последний эмодзи")} onClick={() => setEmojiDraft(prev => storyEmojiGraphemes(prev).slice(0, -1).join(""))} className="grid h-10 w-10 place-items-center text-zinc-300"><Undo2 size={20} /></button><button type="button" aria-label={t("Добавить эмодзи на историю")} disabled={!emojiDraft} onClick={addEmojiLayer} className="grid h-10 w-10 place-items-center rounded-full bg-white text-black disabled:opacity-40"><Check size={20} /></button></div>
-                    <div className="no-scrollbar grid min-h-0 grid-cols-8 gap-1 overflow-y-auto">{storyPickerEmojis.map(emoji => <button key={emoji} type="button" aria-label={emoji} onClick={() => setEmojiDraft(prev => storyEmojiGraphemes(prev).length < 12 ? prev + emoji : prev)} className="grid h-11 place-items-center rounded-xl text-2xl transition-colors hover:bg-white/10 active:bg-white/15"><StoryEmojiGlyph emoji={emoji} size={28} animated lazyAnimation /></button>)}</div>
-                  </motion.div>
-                </motion.div>}
+                {emojiPickerOpen && <StoryPackPicker
+                  initialTab={packTab}
+                  onClose={() => setEmojiPickerOpen(false)}
+                  onEmoji={value => choosePackLayer("emoji", value)}
+                  onSticker={item => choosePackLayer("sticker", item.id)}
+                />}
               </AnimatePresence>
             </motion.div>
           </motion.div>

@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { setImmediate as yieldImmediate } from "node:timers/promises";
-import { clearEncryptedMedia, collectLegacyMediaUrls, encryptMediaBlob, resolveEncryptedMediaUrl, resolveMessageMedia } from "./media-crypto";
+import { clearEncryptedMedia, collectLegacyMediaUrls, encryptMediaBlob, getEncryptedMediaPreview, resolveEncryptedMediaUrl, resolveMessageMedia } from "./media-crypto";
 import { clearMediaBlobCache, hasCachedMediaUrl } from "./media-cache";
 const nativeFetch = globalThis.fetch;
 
@@ -23,6 +23,18 @@ describe("client attachment encryption", () => {
     clearEncryptedMedia();
     const src = encrypted.protectUrl("/media/video.bin", "direct:test", null, { cacheOriginal: true });
     expect(hasCachedMediaUrl(src)).toBe(false);
+  });
+  it("exposes an attachment preview before downloading bytes and hides it after expiry", async () => {
+    vi.useFakeTimers();
+    const encrypted = await encryptMediaBlob(new Blob(["video"], { type: "video/mp4" }));
+    const preview = "data:image/jpeg;base64,AA==";
+    const src = encrypted.protectUrl("/media/video.bin", "secret:test", new Date(Date.now() + 3000).toISOString(), { preview });
+    const fetcher = vi.fn();
+    vi.stubGlobal("fetch", fetcher);
+    expect(getEncryptedMediaPreview(src)).toBe(preview);
+    expect(fetcher).not.toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(3001);
+    expect(getEncryptedMediaPreview(src)).toBeUndefined();
   });
   it("keeps downloading a video beyond 45 seconds while chunks continue arriving", async () => {
     const encrypted = await encryptMediaBlob(new Blob(["a progressively downloaded video"], { type: "video/mp4" }));

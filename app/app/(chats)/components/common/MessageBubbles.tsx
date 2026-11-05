@@ -11,7 +11,9 @@ import { getMessageTailColor } from "@/lib/message-surface";
 import { renderEmojiText } from "@/components/EmojiText";
 import { MessageMeta } from "./MessageStatus";
 import { VoiceWaveformBars } from "../../VoiceWaveformBars";
-import { getCachedMediaUrl, invalidateCachedMediaUrl } from "@/lib/client/media-cache";
+import { getCachedMediaUrl, getDecodedMediaPreview, invalidateCachedMediaUrl } from "@/lib/client/media-cache";
+import { MediaLoadingPreview } from "@/components/MediaLoadingPreview";
+import { rememberDecodedMediaPreview } from "@/lib/client/media-preview";
 import { recoverMusicMessageMetadata } from "@/lib/client/music-message-metadata";
 
 export function MessageBubbleTail({
@@ -384,6 +386,7 @@ export function VoiceMessageBubble({
 
 export function VideoCircleBubble({
   src,
+  preview,
   durationMs,
   timeText,
   showDeliveryStatus,
@@ -394,6 +397,7 @@ export function VideoCircleBubble({
   isMine,
 }: {
   src: string;
+  preview?: string;
   durationMs: number;
   timeText?: string;
   showDeliveryStatus?: boolean;
@@ -413,6 +417,7 @@ export function VideoCircleBubble({
   const [progress, setProgress] = useState(0);
   const [isVisible, setIsVisible] = useState(false);
   const [hasError, setHasError] = useState(false);
+  const [loadedSrc, setLoadedSrc] = useState<string | null>(null);
 
   // Sync currentSrc when src prop changes
   useEffect(() => {
@@ -622,7 +627,10 @@ export function VideoCircleBubble({
             : "w-[160px] h-[160px] sm:w-[175px] sm:h-[175px] border-[1.5px] border-white/20 shadow-[0_8px_24px_rgba(0,0,0,0.4)]"
         )}
       >
-        {isVisible ? (
+        {(!currentSrc || !isVisible || loadedSrc !== currentSrc) && (
+          <MediaLoadingPreview preview={preview ?? getDecodedMediaPreview(currentSrc)} loading={isVisible && !hasError} />
+        )}
+        {isVisible && currentSrc ? (
           <video
             ref={videoRef}
             src={currentSrc}
@@ -630,13 +638,15 @@ export function VideoCircleBubble({
             muted={!expanded}
             loop={!expanded}
             preload="auto"
+            onLoadedData={event => {
+              rememberDecodedMediaPreview(currentSrc, event.currentTarget);
+              setLoadedSrc(currentSrc);
+            }}
             onError={handleVideoError}
             onCanPlay={handleCanPlay}
-            className="w-full h-full object-cover rounded-full"
+            className={cn("h-full w-full rounded-full object-cover transition-opacity duration-150", loadedSrc !== currentSrc && "opacity-0")}
           />
-        ) : (
-          <div className="w-full h-full rounded-full bg-zinc-900/80 animate-pulse" />
-        )}
+        ) : null}
 
         {hasError && (
           <div className="absolute inset-0 z-[3] flex flex-col items-center justify-center bg-black/60 rounded-full text-white/90">

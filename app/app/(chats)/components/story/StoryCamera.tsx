@@ -7,6 +7,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { X, Paperclip, RotateCcw, AlertCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Spinner } from "@/components/ui/spinner";
+import { STORY_MAX_DURATION_MS } from "@/lib/story-limits";
 
 interface StoryCameraProps {
   isOpen: boolean;
@@ -188,7 +189,7 @@ export function StoryCamera({
         const blob = new Blob(recordedChunksRef.current, { type: mimeType });
         const ext = mimeType.includes("mp4") ? "mp4" : "webm";
         const file = new File([blob], `story_video_${Date.now()}.${ext}`, { type: mimeType });
-        const durationMs = Date.now() - recordingStartTimeRef.current;
+        const durationMs = Math.min(STORY_MAX_DURATION_MS, Date.now() - recordingStartTimeRef.current);
         stopStream();
         onCapture(file, "video", durationMs);
       };
@@ -200,14 +201,10 @@ export function StoryCamera({
       recorder.start(250);
 
       recordingTimerRef.current = setInterval(() => {
-        setRecordingSeconds((prev) => {
-          if (prev >= 60) {
-            stopRecording();
-            return prev;
-          }
-          return prev + 1;
-        });
-      }, 1000);
+        const elapsedMs = Date.now() - recordingStartTimeRef.current;
+        setRecordingSeconds(Math.floor(Math.min(elapsedMs, STORY_MAX_DURATION_MS) / 1000));
+        if (elapsedMs >= STORY_MAX_DURATION_MS) stopRecording();
+      }, 100);
     } catch (err) {
       console.error("Start recording error:", err);
       setIsRecording(false);

@@ -161,12 +161,15 @@ import { STICKER_PACKS, ALL_STICKER_SRCS, fetchStickerAnimationData, getStickerE
 import {
   invalidateE2EServerStateCache,
 } from "@/lib/client/e2e-server-sync";
+import { makeMediaPreview, rememberDecodedMediaPreview } from "@/lib/client/media-preview";
+import { MediaLoadingPreview } from "@/components/MediaLoadingPreview";
 import { normalizeStoryOverlay, type StoryMediaTransform, type StoryOverlay, type StoryOverlayStroke, type StoryOverlayTextLayer } from "@/lib/story-overlay";
+import { STORY_MAX_DURATION_MS, STORY_MAX_DURATION_SECONDS, STORY_MAX_FILE_BYTES, STORY_MAX_FILE_MB } from "@/lib/story-limits";
 import { broadcastSelfProfileUpdated, broadcastProfileUpdated, subscribeProfileUpdated } from "@/lib/client/local-updates";
 import { getEffectiveProfileGradient, getEffectiveProfileAccentColor, isMediaBackgroundUrl } from "@/lib/profile-gradients";
 import { compressImageFile, verifyFileMagicBytes } from "@/lib/client/media-compression";
-import { loadEncryptedMediaBlob, encryptMediaBlob, resolveEncryptedMediaUrl, resolveMessageMedia, clearEncryptedMedia, collectLegacyMediaUrls, markLegacyMediaRestored } from "@/lib/client/media-crypto";
-import { cacheMediaBlobUrl, getCachedMediaUrl, clearMediaBlobCache } from "@/lib/client/media-cache";
+import { loadEncryptedMediaBlob, encryptMediaBlob, getEncryptedMediaPreview, resolveEncryptedMediaUrl, resolveMessageMedia, clearEncryptedMedia, collectLegacyMediaUrls, markLegacyMediaRestored } from "@/lib/client/media-crypto";
+import { cacheMediaBlobUrl, getCachedMediaUrl, getDecodedMediaPreview, clearMediaBlobCache } from "@/lib/client/media-cache";
 import { isSafeUrl, sanitizeExternalUrl, getSafeHostname } from "@/lib/client/safe-content";
 
 
@@ -1534,176 +1537,81 @@ function canPlayVideoFile(file: File) {
   return result === "probably" || result === "maybe";
 }
 
-function MediaImage({
-  src,
-  alt,
-  className,
-}: {
-  src: string;
-  alt: string;
-  className?: string;
-}) {
-  const t = useTranslation();
-  const resolvedSrc = getCachedMediaUrl(src);
-  const [loaded, setLoaded] = useState(false);
-  const [error, setError] = useState(false);
-  if (error) {
-    return (
-      <div className="flex min-h-[140px] w-full max-w-[260px] md:max-w-[420px] items-center justify-center bg-zinc-100 text-xs text-zinc-500 dark:bg-zinc-900 dark:text-zinc-400">
-        {t("Файл недоступен")}</div>
-    );
-  }
-  return (
-    <div className="relative flex items-center justify-center overflow-hidden">
-      {!loaded && (
-        <div className="absolute inset-0 bg-white/5 animate-pulse rounded-2xl" />
-      )}
-      <img
-        src={resolvedSrc}
-        alt={alt}
-        className={cn(
-          className,
-          "transition-opacity duration-150 ease-out",
-          !loaded ? "opacity-0" : "opacity-100"
-        )}
-        onLoad={() => setLoaded(true)}
-        onError={() => {
-          setLoaded(true);
-          setError(true);
-        }}
-      />
-    </div>
-  );
-}
-
 function ChatImageThumb({
-  src,
-  alt,
-  className,
+  src, preview, alt, className, viewer = false,
 }: {
   src: string;
+  preview?: string;
   alt: string;
   className?: string;
+  viewer?: boolean;
 }) {
   const t = useTranslation();
   const resolvedSrc = getCachedMediaUrl(src);
-  const imageRef = useRef<HTMLImageElement | null>(null);
-  const [loaded, setLoaded] = useState(false);
-  const [error, setError] = useState(false);
-
-  useEffect(() => {
-    setError(false);
-    const image = imageRef.current;
-    if (!image || !resolvedSrc) {
-      setLoaded(false);
-      return;
-    }
-    if (image.complete && image.naturalWidth > 0) {
-      setLoaded(true);
-      setError(false);
-      return;
-    }
-    setLoaded(false);
-    setError(false);
-  }, [resolvedSrc]);
-
-  if (error) {
-    return (
-      <div className="flex min-h-[140px] w-full max-w-[260px] md:max-w-[420px] items-center justify-center rounded-[inherit] bg-zinc-100 text-xs text-zinc-500 dark:bg-zinc-900 dark:text-zinc-400">
-        {t("Файл недоступен")}</div>
-    );
-  }
-
+  const [loadedSrc, setLoadedSrc] = useState<string | null>(null);
+  const [failedSrc, setFailedSrc] = useState<string | null>(null);
+  const loaded = Boolean(resolvedSrc && loadedSrc === resolvedSrc);
+  const failed = Boolean(resolvedSrc && failedSrc === resolvedSrc);
   return (
-    <div className="relative h-full w-full overflow-hidden rounded-[inherit] bg-zinc-900/60">
-      {!loaded && (
-        <div className="absolute inset-0 bg-gradient-to-tr from-zinc-800/70 via-zinc-700/40 to-zinc-800/70 animate-pulse rounded-[inherit]" />
-      )}
-      <img
-        ref={imageRef}
-        src={resolvedSrc || undefined}
-        alt={alt}
-        className={cn(
-          "h-full w-full object-cover rounded-[inherit] transition-opacity duration-150 ease-out",
-          className,
-          !loaded ? "opacity-0" : "opacity-100"
-        )}
-        onLoad={() => {
-          setLoaded(true);
-          setError(false);
+    <div aria-busy={!loaded && !failed} className={cn(
+      "relative h-full w-full overflow-hidden rounded-[inherit]",
+      viewer ? "flex items-center justify-center" : "bg-zinc-900/60",
+      !viewer && !loaded && "min-h-[132px] min-w-[144px]",
+    )}>
+      {!loaded && <MediaLoadingPreview
+        preview={preview ?? getDecodedMediaPreview(resolvedSrc)}
+        fit={viewer || className?.includes("object-contain") ? "contain" : "cover"}
+        loading={!failed}
+      />}
+      {resolvedSrc && !failed && <img
+        src={resolvedSrc} alt={alt} draggable={false}
+        className={cn("h-full w-full rounded-[inherit] transition-opacity duration-150 ease-out", className,
+          loaded ? "opacity-100" : "opacity-0")}
+        onLoad={event => {
+          rememberDecodedMediaPreview(resolvedSrc, event.currentTarget);
+          setLoadedSrc(resolvedSrc);
         }}
-        onError={() => {
-          setLoaded(true);
-          setError(true);
-        }}
-      />
+        onError={() => setFailedSrc(resolvedSrc)}
+      />}
+      {failed && <span role="status" className="absolute inset-0 grid place-items-center text-xs text-zinc-300">{t("Файл недоступен")}</span>}
     </div>
   );
 }
 
-function ChatVideoThumb({
-  src,
-  className,
-}: {
+function ChatVideoThumb({ src, preview, className }: {
   src: string;
+  preview?: string;
   className?: string;
 }) {
   const t = useTranslation();
   const resolvedSrc = getCachedMediaUrl(src);
-  const videoRef = useRef<HTMLVideoElement | null>(null);
-  const [loaded, setLoaded] = useState(false);
-  const [error, setError] = useState(false);
-
-  useEffect(() => {
-    setError(false);
-    const video = videoRef.current;
-    if (!video || !resolvedSrc) {
-      setLoaded(false);
-      return;
-    }
-    // Mobile browsers often report metadata before a visible frame is decoded.
-    if (video.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA) {
-      setLoaded(true);
-      setError(false);
-      return;
-    }
-    setLoaded(false);
-    setError(false);
-    video.load();
-  }, [resolvedSrc]);
-
-  if (error) {
-    return (
-      <div className="flex min-h-[140px] w-full max-w-[260px] md:max-w-[420px] items-center justify-center rounded-[inherit] bg-zinc-100 text-xs text-zinc-500 dark:bg-zinc-900 dark:text-zinc-400">
-        {t("Видео недоступно")}</div>
-    );
-  }
-
+  const [loadedSrc, setLoadedSrc] = useState<string | null>(null);
+  const [failedSrc, setFailedSrc] = useState<string | null>(null);
+  const loaded = Boolean(resolvedSrc && loadedSrc === resolvedSrc);
+  const failed = Boolean(resolvedSrc && failedSrc === resolvedSrc);
   return (
-    <div className="relative h-full w-full overflow-hidden rounded-[inherit] bg-zinc-900/60">
-      {!loaded && (
-        <div className="absolute inset-0 bg-gradient-to-tr from-zinc-800/70 via-zinc-700/40 to-zinc-800/70 animate-pulse rounded-[inherit]" />
-      )}
-      <video
-        ref={videoRef}
-        src={resolvedSrc || undefined}
-        className={cn(
-          "h-full w-full object-cover rounded-[inherit] transition-opacity duration-150 ease-out",
-          className,
-          !loaded ? "opacity-0" : "opacity-100"
-        )}
-        autoPlay
-        loop
-        playsInline
-        muted
-        preload="auto"
-        onCanPlay={() => setLoaded(true)}
-        onLoadedData={() => setLoaded(true)}
-        onError={() => {
-          setLoaded(true);
-          setError(true);
+    <div aria-busy={!loaded && !failed} className={cn(
+      "relative h-full w-full overflow-hidden rounded-[inherit] bg-zinc-900/60",
+      !loaded && "min-h-[132px] min-w-[144px]",
+    )}>
+      {!loaded && <MediaLoadingPreview
+        preview={preview ?? getDecodedMediaPreview(resolvedSrc)}
+        fit={className?.includes("object-contain") ? "contain" : "cover"}
+        loading={!failed}
+      />}
+      {resolvedSrc && !failed && <video
+        src={resolvedSrc}
+        className={cn("h-full w-full rounded-[inherit] transition-opacity duration-150 ease-out", className,
+          loaded ? "opacity-100" : "opacity-0")}
+        autoPlay loop playsInline muted preload="auto"
+        onCanPlay={() => setLoadedSrc(resolvedSrc)}
+        onLoadedData={event => {
+          rememberDecodedMediaPreview(resolvedSrc, event.currentTarget);
+          setLoadedSrc(resolvedSrc);
         }}
-      />
+        onError={() => setFailedSrc(resolvedSrc)}
+      />}
+      {failed && <span role="status" className="absolute inset-0 grid place-items-center text-xs text-zinc-300">{t("Видео недоступно")}</span>}
     </div>
   );
 }
@@ -3095,6 +3003,16 @@ const decryptedPayloadTextCache = new Map<string, string>();
 const decryptedPayloadTextInFlight = new Map<string, Promise<string>>();
 const decryptedPayloadFailureCache = new Map<string, { at: number; text: string }>();
 
+function withOwnStory(groups: StoryFeedGroup[], author: StoryFeedGroup["author"], story: StoryFeedItem) {
+  const group = groups.find(entry => entry.author.id === author.id);
+  if (!group) return [...groups, { author, hasUnviewed: false, stories: [story] }];
+  return groups.map(entry => entry !== group ? entry : {
+    ...entry,
+    stories: [...entry.stories.filter(existing => existing.id !== story.id), story]
+      .sort((a, b) => Date.parse(a.createdAt) - Date.parse(b.createdAt)),
+  });
+}
+
 function buildStoryFeedSignature(groups: StoryFeedGroup[]) {
   return groups
     .map((group) =>
@@ -4062,7 +3980,10 @@ export default function ChatsPageClient() {
   const [messageText, setMessageText] = useState("");
 
 
-  const [storyFeed, setStoryFeed] = useState<StoryFeedGroup[]>([]);
+  const [publishedStoryFeed, setStoryFeed] = useState<StoryFeedGroup[]>([]);
+  const [pendingStory, setPendingStory] = useState<{ author: StoryFeedGroup["author"]; story: StoryFeedItem } | null>(null);
+  const pendingStoryUploadRef = useRef<string | null>(null);
+  const visibleStoryIdRef = useRef<string | null>(null);
   const [storiesLoading, setStoriesLoading] = useState(false);
   const [storyViewer, setStoryViewer] = useState<{ groupIndex: number; storyIndex: number; startGroupIndex?: number } | null>(null);
   const [storyViewerOrigin, setStoryViewerOrigin] = useState<{ x: number; y: number; scale: number } | null>(null);
@@ -4237,6 +4158,11 @@ export default function ChatsPageClient() {
   const suppressMessageEntranceRef = useRef(true);
   const [selfId, setSelfId] = useState<string | null>(null);
   const [selfProfile, setSelfProfile] = useState<SelfProfile | null>(null);
+  const storyAccountRef = useRef(selfId);
+  useLayoutEffect(() => { storyAccountRef.current = selfId; }, [selfId]);
+  const storyFeed = useMemo(() => pendingStory && pendingStory.author.id === selfId
+    ? withOwnStory(publishedStoryFeed, pendingStory.author, pendingStory.story)
+    : publishedStoryFeed, [pendingStory, publishedStoryFeed, selfId]);
   const [selfPublicKey, setSelfPublicKey] = useState<string | null>(null);
   const [privateKey, setPrivateKey] = useState<CryptoKey | null>(null);
   const [e2eBootstrapCompleted, setE2EBootstrapCompleted] = useState(false);
@@ -20605,6 +20531,11 @@ export default function ChatsPageClient() {
       file instanceof File && file.name
         ? file.name
         : `media-${Date.now()}${extensionByType ? `.${extensionByType}` : ""}`;
+    // Attach the tiny first frame to the encrypted message envelope. It never
+    // needs a public URL or a separate request.
+    const previewPromise = scope && !scope.bot && (kind === "image" || kind === "video" || kind === "video_note")
+      ? makeMediaPreview(payloadBlob, kind === "image" ? "image" : "video")
+      : undefined;
     const encrypted = scope && !scope.bot ? await encryptMediaBlob(payloadBlob) : null;
     form.append("file", encrypted?.blob ?? payloadBlob, encrypted ? "encrypted.bin" : safeName);
     if (encrypted) form.append("clientEncrypted", "1");
@@ -20621,7 +20552,7 @@ export default function ChatsPageClient() {
       // let fetch set multipart boundary
       skipCsrf: false,
     });
-    return encrypted && scope ? { ...res, url: encrypted.protectUrl(res.url, `${scope.scopeType}:${scope.scopeId}`, res.expiresAt, { cacheOriginal: true }) } : res;
+    return encrypted && scope ? { ...res, url: encrypted.protectUrl(res.url, `${scope.scopeType}:${scope.scopeId}`, res.expiresAt, { cacheOriginal: true, preview: await previewPromise }) } : res;
   }
 
 
@@ -20690,15 +20621,15 @@ export default function ChatsPageClient() {
   }, [loadStories, selfId, storyViewer]);
 
   useEffect(() => {
-    if (!selfId || storyFeed.length === 0) return;
+    if (!selfId || publishedStoryFeed.length === 0) return;
     const snapshot: StoryFeedCacheSnapshot = {
       savedAt: Date.now(),
-      stories: storyFeed,
+      stories: publishedStoryFeed,
     };
     storyFeedInMemoryCache.set(selfId, snapshot);
     saveStoryFeedSessionCache(selfId, snapshot);
     saveStoryFeedPersistentCache(selfId, snapshot);
-  }, [selfId, storyFeed]);
+  }, [selfId, publishedStoryFeed]);
 
   useEffect(() => {
     if (storyFeed.length) {
@@ -20708,14 +20639,14 @@ export default function ChatsPageClient() {
   }, [Boolean(storyFeed.length)]);
   useEffect(() => { if (settingsPanelOpen) void loadStories(true); }, [settingsPanelOpen, loadStories]);
 
-  // Aggressive background preloading of story media so stories open instantaneously
+  // Warm a small number of nearby stories without reloading a local upload.
   useEffect(() => {
     if (!storyFeed || storyFeed.length === 0) return;
 
     const candidateUrls: Array<{ url: string; isVideo: boolean }> = [];
     storyFeed.forEach((group) => {
       group.stories.slice(0, 2).forEach((story) => {
-        if (!preloadedStoryUrlsRef.current.has(story.mediaUrl)) {
+        if (!story.pendingUpload && getCachedMediaUrl(story.mediaUrl) === story.mediaUrl && !preloadedStoryUrlsRef.current.has(story.mediaUrl)) {
           candidateUrls.push({ url: story.mediaUrl, isVideo: story.mediaType === "video" });
         }
       });
@@ -20740,6 +20671,7 @@ export default function ChatsPageClient() {
   const markStoryMediaReady = useCallback(() => setStoryMediaReady(true), []);
   const activeStoryGroup = storyViewer ? storyFeed[storyViewer.groupIndex] ?? null : null;
   const activeStory = activeStoryGroup ? activeStoryGroup.stories[storyViewer?.storyIndex ?? -1] ?? null : null;
+  useLayoutEffect(() => { visibleStoryIdRef.current = activeStory?.id ?? null; }, [activeStory?.id]);
   const activeStoryOverlay = useMemo(() => normalizeStoryOverlay(activeStory?.overlay), [activeStory?.overlay]);
   const storyViewerInteractionLocked = storyViewerStatsOpen || storyViewerMoreOpen;
   const selfStoryGroup = useMemo(
@@ -20862,9 +20794,9 @@ export default function ChatsPageClient() {
   );
 
   const deleteActiveStory = useCallback(() => {
-    if (!activeStory?.isMine) return;
+    if (!activeStory?.isMine || activeStory.pendingUpload) return;
     const targetStoryId = activeStory.id;
-    const previousStoryFeed = storyFeed;
+    const previousStoryFeed = publishedStoryFeed;
 
     setStoryViewerMoreOpen(false);
 
@@ -20909,7 +20841,7 @@ export default function ChatsPageClient() {
         setErrorText(error instanceof Error ? error.message : t("Не удалось удалить историю"));
       }
     })();
-  }, [activeStory, setStoryViewerMoreOpen, storyFeed, storyViewer?.groupIndex, t]);
+  }, [activeStory, setStoryViewerMoreOpen, publishedStoryFeed, storyFeed, storyViewer?.groupIndex, t]);
 
   const stepStoryViewer = useCallback(
     (direction: 1 | -1) => {
@@ -21050,7 +20982,7 @@ export default function ChatsPageClient() {
 
   const loadActiveStoryViewers = useCallback(
     async (full = false) => {
-      if (!activeStory?.id || !activeStory.isMine) return;
+      if (!activeStory?.id || !activeStory.isMine || activeStory.pendingUpload) return;
       if (full) {
         setStoryViewerStatsFullLoading(true);
       } else {
@@ -21072,7 +21004,7 @@ export default function ChatsPageClient() {
         setStoryViewerStatsFullLoading(false);
       }
     },
-    [activeStory?.id, activeStory?.isMine, t],
+    [activeStory?.id, activeStory?.isMine, activeStory?.pendingUpload, t],
   );
 
   const holdStoryViewer = useCallback(() => {
@@ -21257,238 +21189,140 @@ export default function ChatsPageClient() {
     setStoryDraft(null);
   }, []);
 
-  async function handleStoryCameraCapture(file: File, mediaType: "image" | "video", durationMs?: number) {
-    if (isDesktop || !file || storyUploading) return;
-    try {
-      setStoryCameraOpen(false);
-      setErrorText(null);
-      const isImage = mediaType === "image";
-      const isVideo = mediaType === "video";
-      const storyFile = isImage ? await optimizeStoryImageFile(file) : file;
-      const mediaBgColor = isImage ? await resolveImageAverageColor(storyFile) : await resolveVideoAverageColor(storyFile);
-      let calculatedDurationMs = durationMs || 0;
-      if (isVideo && !calculatedDurationMs) {
-        calculatedDurationMs = await new Promise<number>((resolve) => {
-          const url = URL.createObjectURL(file);
-          const probe = document.createElement("video");
-          probe.preload = "metadata";
-          probe.src = url;
-          const timeout = setTimeout(() => { cleanup(); resolve(0); }, 5000);
-          const cleanup = () => {
-            clearTimeout(timeout);
-            probe.onloadedmetadata = null;
-            probe.onerror = null;
-            URL.revokeObjectURL(url);
-            probe.removeAttribute("src");
-            probe.load();
-          };
-          probe.onloadedmetadata = () => {
-            const duration = Number.isFinite(probe.duration) ? Math.round(probe.duration * 1000) : 0;
-            cleanup();
-            resolve(duration);
-          };
-          probe.onerror = () => {
-            cleanup();
-            resolve(0);
-          };
-        });
-      }
-      setStoryDraft({
-        file: storyFile,
-        previewUrl: URL.createObjectURL(storyFile),
-        mediaType: isVideo ? "video" : "image",
-        durationMs: calculatedDurationMs,
-        caption: "",
-        ttlHours: 24,
-        overlay: { media: { scale: 1, x: 0, y: 0, bgColor: mediaBgColor }, texts: [], strokes: [] },
-      });
-    } catch (error) {
-      setErrorText(error instanceof Error ? error.message : t("Не удалось обработать медиа для истории"));
-    }
-  }
-
-  async function createStoryFromSelection(event: ChangeEvent<HTMLInputElement>) {
-    const file = event.target.files?.[0];
-    event.target.value = "";
-    if (!file || storyUploading) return;
-    const isVideo = file.type.startsWith("video/");
-    const isImage = file.type.startsWith("image/");
-    if (!isVideo && !isImage) {
-      setErrorText(t("Истории поддерживают только фото и видео."));
+  async function prepareStoryDraft(file: File, mediaType: "image" | "video", recordedDurationMs?: number) {
+    if (storyUploading) return;
+    setStoryCameraOpen(false);
+    if (file.size > STORY_MAX_FILE_BYTES) {
+      showAppToast({ title: t("Файл слишком большой. Максимум {0} МБ.", { 0: STORY_MAX_FILE_MB }), type: "error" });
       return;
     }
     try {
-      setStoryCameraOpen(false);
       setErrorText(null);
-      const storyFile = isImage ? await optimizeStoryImageFile(file) : file;
-      const mediaBgColor = isImage ? await resolveImageAverageColor(storyFile) : await resolveVideoAverageColor(storyFile);
-      let durationMs = 0;
-      if (isVideo) {
-        durationMs = await new Promise<number>((resolve) => {
-          const url = URL.createObjectURL(file);
-          const probe = document.createElement("video");
-          probe.preload = "metadata";
-          probe.src = url;
-          const timeout = setTimeout(() => { cleanup(); resolve(0); }, 5000);
-          const cleanup = () => {
-            clearTimeout(timeout);
-            probe.onloadedmetadata = null;
-            probe.onerror = null;
-            URL.revokeObjectURL(url);
-            probe.removeAttribute("src");
-            probe.load();
-          };
-          probe.onloadedmetadata = () => {
-            const duration = Number.isFinite(probe.duration) ? Math.round(probe.duration * 1000) : 0;
-            cleanup();
-            resolve(duration);
-          };
-          probe.onerror = () => {
-            cleanup();
-            resolve(0);
-          };
-        });
+      const isVideo = mediaType === "video";
+      const durationMs = isVideo ? recordedDurationMs || await getVideoDurationMs(file) : 0;
+      if (isVideo && !durationMs) {
+        showAppToast({ title: t("Не удалось определить длительность видео"), type: "error" });
+        return;
       }
+      if (durationMs > STORY_MAX_DURATION_MS) {
+        showAppToast({ title: t("История с видео может быть не длиннее {0} секунд", { 0: STORY_MAX_DURATION_SECONDS }), type: "error" });
+        return;
+      }
+      const storyFile = isVideo ? file : await optimizeStoryImageFile(file);
+      const mediaBgColor = isVideo ? await resolveVideoAverageColor(storyFile) : await resolveImageAverageColor(storyFile);
       setStoryDraft({
         file: storyFile,
         previewUrl: URL.createObjectURL(storyFile),
-        mediaType: isVideo ? "video" : "image",
+        mediaType,
         durationMs,
         caption: "",
         ttlHours: 24,
         overlay: { media: { scale: 1, x: 0, y: 0, bgColor: mediaBgColor }, texts: [], strokes: [] },
       });
     } catch (error) {
-      setErrorText(error instanceof Error ? error.message : t("Не удалось создать историю"));
+      showAppToast({ title: t("Не удалось обработать медиа для истории"), description: error instanceof Error ? error.message : undefined, type: "error" });
     }
+  }
+
+  async function createStoryFromSelection(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) return;
+    const isVideo = file.type.startsWith("video/");
+    const isImage = file.type.startsWith("image/");
+    if (!isVideo && !isImage) {
+      showAppToast({ title: t("Истории поддерживают только фото и видео."), type: "error" });
+      return;
+    }
+    await prepareStoryDraft(file, isVideo ? "video" : "image");
   }
 
   async function submitStoryDraft(editedDraft?: StoryDraft) {
     const draft = editedDraft ?? storyDraft;
-    if (!draft || storyUploading) return;
+    if (!draft || !selfProfile || pendingStoryUploadRef.current) return;
     if (selfStoryGroup && selfStoryGroup.stories.length >= 6) {
       setErrorText(t("Превышен лимит: вы не можете опубликовать более 6 активных историй."));
       return;
     }
 
-    const draftToPublish = { ...draft };
+    const author = {
+      id: selfProfile.id,
+      link: selfProfile.link,
+      displayName: selfProfile.displayName,
+      avatarUrl: selfProfile.avatarUrl ?? null,
+    };
+    const pendingId = `pending:${crypto.randomUUID()}`;
+    const localUrl = URL.createObjectURL(draft.file);
+    const now = Date.now();
+    const localStory: StoryFeedItem = {
+      id: pendingId,
+      pendingUpload: true,
+      mediaUrl: localUrl,
+      mediaType: draft.mediaType,
+      durationMs: draft.mediaType === "video" ? draft.durationMs : null,
+      caption: draft.caption.trim() || null,
+      overlay: draft.overlay,
+      createdAt: new Date(now).toISOString(),
+      expiresAt: new Date(now + draft.ttlHours * 3600_000).toISOString(),
+      viewed: false,
+      isMine: true,
+      viewsCount: 0,
+      viewersPreview: [],
+      likedByMe: false,
+      likesCount: 0,
+    };
+    pendingStoryUploadRef.current = pendingId;
+    setPendingStory({ author, story: localStory });
     closeStoryDraft();
     setStoryUploading(true);
     setAnimateSelfStoryRing(true);
     setErrorText(null);
 
-    void (async () => {
-      try {
-        let fileToUpload: Blob = draftToPublish.file;
-        if (draftToPublish.mediaType === "image" && fileToUpload instanceof File) {
-          try {
-            const compressed = await compressImageFile(fileToUpload, {
-              maxWidth: 1920,
-              maxHeight: 1080,
-              quality: 0.85,
-            });
-            if (compressed?.file) {
-              fileToUpload = compressed.file;
-            }
-          } catch (compErr) {
-            console.warn("Story image compression fallback:", compErr);
-          }
-        }
-
-        const uploaded = await uploadMediaFile(
-          fileToUpload,
-          draftToPublish.mediaType === "video" ? "video" : "image",
-          draftToPublish.mediaType === "video" ? draftToPublish.durationMs || undefined : undefined,
-        );
-        const created = await apiRequest<{
-          story: {
-            id: string;
-            mediaUrl: string;
-            mediaType: "image" | "video";
-            durationMs?: number | null;
-            caption: string | null;
-            overlay?: StoryOverlay | null;
-            createdAt: string;
-            expiresAt: string;
-          };
-        }>("/api/stories", {
-          method: "POST",
-          body: JSON.stringify({
-            mediaUrl: uploaded.url,
-            mediaType: draftToPublish.mediaType,
-            durationMs: draftToPublish.mediaType === "video" ? draftToPublish.durationMs : null,
-            ttlHours: draftToPublish.ttlHours,
-            caption: draftToPublish.caption.trim() || null,
-            overlay: draftToPublish.overlay,
-          }),
-        });
-        const optimisticStory: StoryFeedItem = {
-          id: created.story.id,
-          mediaUrl: created.story.mediaUrl,
-          mediaType: created.story.mediaType,
-          durationMs: created.story.durationMs ?? null,
-          caption: created.story.caption ?? null,
-          overlay: normalizeStoryOverlay(created.story.overlay),
-          createdAt: created.story.createdAt,
-          expiresAt: created.story.expiresAt,
-          viewed: false,
-          isMine: true,
-          viewsCount: 0,
-          viewersPreview: [],
-          likedByMe: false,
-          likesCount: 0,
-        };
-        setStoryFeed((prev) => {
-          const existingGroupIndex = prev.findIndex((group) => group.author.id === selfId);
-          if (existingGroupIndex >= 0) {
-            return prev.map((group, index) =>
-              index !== existingGroupIndex
-                ? group
-                : {
-                  ...group,
-                  hasUnviewed: group.hasUnviewed,
-                  stories: [...group.stories, optimisticStory].sort(
-                    (a, b) => Date.parse(a.createdAt) - Date.parse(b.createdAt),
-                  ),
-                },
-            );
-          }
-          if (!selfProfile) {
-            return prev;
-          }
-          return [
-            {
-              author: {
-                id: selfProfile.id,
-                link: selfProfile.link,
-                displayName: selfProfile.displayName,
-                avatarUrl: selfProfile.avatarUrl ?? null,
-              },
-              hasUnviewed: false,
-              stories: [optimisticStory],
-            },
-            ...prev,
-          ];
-        });
-        showAppToast({
-          title: t("История опубликована"),
-          type: "success",
-        });
-      } catch (error) {
-        console.error("Story publish error:", error);
-        showAppToast({
-          title: t("Не удалось опубликовать историю"),
-          description: error instanceof Error ? error.message : t("Ошибка загрузки"),
-          type: "error",
-        });
-        setErrorText(error instanceof Error ? error.message : t("Не удалось создать историю"));
-      } finally {
-        setStoryUploading(false);
-        setTimeout(() => {
-          setAnimateSelfStoryRing(false);
-        }, 1500);
-      }
-    })();
+    let keepLocalUrl = false;
+    try {
+      const [uploaded, preview] = await Promise.all([
+        uploadMediaFile(draft.file, draft.mediaType, localStory.durationMs ?? undefined),
+        makeMediaPreview(draft.file, draft.mediaType),
+      ]);
+      if (storyAccountRef.current !== author.id) return;
+      const created = await apiRequest<{ story: Pick<StoryFeedItem, "id" | "mediaUrl" | "mediaType" | "durationMs" | "caption" | "overlay" | "createdAt" | "expiresAt"> }>("/api/stories", {
+        method: "POST",
+        body: JSON.stringify({
+          mediaUrl: uploaded.url,
+          mediaType: draft.mediaType,
+          durationMs: localStory.durationMs,
+          ttlHours: draft.ttlHours,
+          caption: localStory.caption,
+          overlay: { ...draft.overlay, preview },
+        }),
+      });
+      if (storyAccountRef.current !== author.id) return;
+      cacheMediaBlobUrl(created.story.mediaUrl, localUrl);
+      keepLocalUrl = true;
+      const published: StoryFeedItem = {
+        ...localStory,
+        ...created.story,
+        pendingUpload: false,
+        overlay: normalizeStoryOverlay(created.story.overlay),
+      };
+      setStoryFeed(prev => withOwnStory(prev, author, published));
+      showAppToast({ title: t("История опубликована"), type: "success" });
+    } catch (error) {
+      if (storyAccountRef.current !== author.id) return;
+      if (visibleStoryIdRef.current === pendingId) closeStoryViewer();
+      setStoryDraft({ ...draft, previewUrl: URL.createObjectURL(draft.file) });
+      showAppToast({
+        title: t("Не удалось опубликовать историю"),
+        description: error instanceof Error ? error.message : t("Ошибка загрузки"),
+        type: "error",
+      });
+    } finally {
+      if (!keepLocalUrl) URL.revokeObjectURL(localUrl);
+      pendingStoryUploadRef.current = null;
+      setPendingStory(null);
+      setStoryUploading(false);
+      setAnimateSelfStoryRing(false);
+    }
   }
 
   const activeChannel = activeConversation?.chatType === "channel" ? activeConversation.channel : null;
@@ -21889,7 +21723,7 @@ export default function ChatsPageClient() {
         <div className="relative">
           {helperForwardHeader}
           <VideoCircleBubble
-            src={helperParsed.src}
+            src={helperParsed.src} preview={helperParsed.preview}
             durationMs={helperParsed.durationMs}
             timeText={helperTimeText}
             showDeliveryStatus={helperShowDeliveryStatus}
@@ -21909,7 +21743,7 @@ export default function ChatsPageClient() {
           {replyPreviewBlock}
           <button type="button" aria-label={t("Открыть изображение")} className="block w-full text-left">
           <ChatImageThumb
-            src={helperParsed.src}
+            src={helperParsed.src} preview={helperParsed.preview}
             alt={t("Изображение")}
             className="block max-h-[360px] max-w-[260px] md:max-w-[420px] object-contain"
           />
@@ -21943,13 +21777,13 @@ export default function ChatsPageClient() {
               <div data-album-media key={`${item.src}-${mediaIndex}`} className={`relative block overflow-hidden ${albumGridItemClass(helperParsed.items.length, mediaIndex)}`}>
                 {item.kind === "video" ? (
                   <>
-                    <ChatVideoThumb src={item.src} className="h-full w-full object-cover" />
+                    <ChatVideoThumb src={item.src} preview={item.preview} className="h-full w-full object-cover" />
                     <span className="absolute left-2 top-2 rounded-md bg-black/60 p-1 text-white">
                       <SquarePlay size={12} />
                     </span>
                   </>
                 ) : (
-                  <ChatImageThumb src={item.src} alt={t("Изображение")} className="h-full w-full object-cover" />
+                  <ChatImageThumb src={item.src} preview={item.preview} alt={t("Изображение")} className="h-full w-full object-cover" />
                 )}
               </div>
             ))}
@@ -22019,7 +21853,7 @@ export default function ChatsPageClient() {
           {replyPreviewBlock}
           <button type="button" aria-label={t("Открыть видео")} className="block w-full text-left">
           <ChatVideoThumb
-            src={helperParsed.src}
+            src={helperParsed.src} preview={helperParsed.preview}
             className="block max-h-[360px] max-w-[260px] md:max-w-[420px] object-contain bg-black"
           />
           </button>
@@ -23962,7 +23796,8 @@ export default function ChatsPageClient() {
                             const rawIsMine = message.pending ? true : (effectiveSelfId ? message.senderId === effectiveSelfId : false);
                             const isChannelChat = activeConversation?.chatType === "channel";
                             const isMine = isChannelChat ? false : (activeConversation?.chatType === "saved" || rawIsMine);
-                            const parsed = parseMessageContentCached(message.text);
+                            const rawParsed = parseMessageContentCached(message.text, false);
+                            const parsed = resolveMessageMedia(rawParsed);
                             const isGroupChat = activeConversation?.chatType === "group";
                             const canModerateGroupMessages =
                               isGroupChat &&
@@ -24537,7 +24372,7 @@ export default function ChatsPageClient() {
                                                       onClick={() => {
                                                         if (item.kind === "video") {
                                                           setVideoViewer({
-                                                            src: item.src,
+                                                            src: rawParsed.kind === "album" ? rawParsed.items[mediaIndex]?.src ?? item.src : item.src,
                                                             caption: parsed.caption || "",
                                                             timeText,
                                                             dateText: formatMediaViewerDate(message.createdAt),
@@ -24553,7 +24388,7 @@ export default function ChatsPageClient() {
                                                           return;
                                                         }
                                                         openImageViewer({
-                                                          src: item.src,
+                                                          src: rawParsed.kind === "album" ? rawParsed.items[mediaIndex]?.src ?? item.src : item.src,
                                                           caption: parsed.caption || "",
                                                           timeText,
                                                           dateText: formatMediaViewerDate(message.createdAt),
@@ -24569,7 +24404,7 @@ export default function ChatsPageClient() {
                                                       {item.kind === "video" ? (
                                                         <>
                                                           <ChatVideoThumb
-                                                            src={item.src}
+                                                            src={item.src} preview={item.preview}
                                                             className="h-full w-full object-cover"
                                                           />
                                                           <span className="absolute left-2 top-2 rounded-md bg-black/60 p-1 text-white">
@@ -24578,7 +24413,7 @@ export default function ChatsPageClient() {
                                                         </>
                                                       ) : (
                                                         <ChatImageThumb
-                                                          src={item.src}
+                                                          src={item.src} preview={item.preview}
                                                           alt={t("Изображение")}
                                                           className="h-full w-full object-cover"
                                                         />
@@ -24664,7 +24499,7 @@ export default function ChatsPageClient() {
                                                         type="button"
                                                         onClick={() => {
                                                           openImageViewer({
-                                                            src: parsed.src,
+                                                            src: "src" in rawParsed ? rawParsed.src : parsed.src,
                                                             caption: parsed.caption,
                                                             timeText,
                                                             dateText: formatMediaViewerDate(message.createdAt),
@@ -24680,7 +24515,7 @@ export default function ChatsPageClient() {
                                                         aria-label={t("Открыть изображение")}
                                                       >
                                                         <ChatImageThumb
-                                                          src={parsed.src}
+                                                          src={parsed.src} preview={parsed.preview}
                                                           alt={t("Изображение")}
                                                           className="block max-h-[360px] max-w-[260px] md:max-w-[420px] object-contain bg-black"
                                                         />
@@ -24754,7 +24589,7 @@ export default function ChatsPageClient() {
                                                         type="button"
                                                         onClick={() => {
                                                           openImageViewer({
-                                                            src: parsed.src,
+                                                            src: "src" in rawParsed ? rawParsed.src : parsed.src,
                                                             caption: parsed.caption,
                                                             timeText,
                                                             dateText: formatMediaViewerDate(message.createdAt),
@@ -24770,7 +24605,7 @@ export default function ChatsPageClient() {
                                                         aria-label={t("Открыть изображение")}
                                                       >
                                                         <ChatImageThumb
-                                                          src={parsed.src}
+                                                          src={parsed.src} preview={parsed.preview}
                                                           alt={t("Изображение")}
                                                           className="block max-h-[360px] max-w-[260px] md:max-w-[420px] object-contain"
                                                         />
@@ -24886,7 +24721,7 @@ export default function ChatsPageClient() {
                                                         type="button"
                                                         onClick={() => {
                                                           setVideoViewer({
-                                                            src: parsed.src,
+                                                            src: "src" in rawParsed ? rawParsed.src : parsed.src,
                                                             caption: parsed.caption,
                                                             timeText,
                                                             dateText: formatMediaViewerDate(message.createdAt),
@@ -24904,7 +24739,7 @@ export default function ChatsPageClient() {
                                                         aria-label={t("Открыть видео")}
                                                       >
                                                         <ChatVideoThumb
-                                                          src={parsed.src}
+                                                          src={parsed.src} preview={parsed.preview}
                                                           className="block max-h-[360px] max-w-[260px] md:max-w-[420px] object-contain bg-black"
                                                         />
                                                       </button>
@@ -24977,7 +24812,7 @@ export default function ChatsPageClient() {
                                                         type="button"
                                                         onClick={() => {
                                                           setVideoViewer({
-                                                            src: parsed.src,
+                                                            src: "src" in rawParsed ? rawParsed.src : parsed.src,
                                                             caption: parsed.caption,
                                                             timeText,
                                                             dateText: formatMediaViewerDate(message.createdAt),
@@ -24995,7 +24830,7 @@ export default function ChatsPageClient() {
                                                         aria-label={t("Открыть видео")}
                                                       >
                                                         <ChatVideoThumb
-                                                          src={parsed.src}
+                                                          src={parsed.src} preview={parsed.preview}
                                                           className="block max-h-[360px] max-w-[260px] bg-black md:max-w-[420px] object-contain"
                                                         />
                                                         <div className={`pointer-events-none absolute bottom-3 ${isMine ? "right-3" : "left-3"}`}>
@@ -25026,7 +24861,7 @@ export default function ChatsPageClient() {
                                                   >
                                                     {forwardHeader}
                                                     <VideoCircleBubble
-                                                      src={parsed.src}
+                                                      src={parsed.src} preview={parsed.preview}
                                                       durationMs={parsed.durationMs}
                                                       timeText={timeText}
                                                       showDeliveryStatus={showDeliveryStatus}
@@ -29268,7 +29103,7 @@ export default function ChatsPageClient() {
               authorName={videoViewer.authorName}
               authorAvatarUrl={videoViewer.authorAvatarUrl}
               dateText={videoViewer.dateText}
-              src={videoViewer.src}
+              src={resolveEncryptedMediaUrl(videoViewer.src)}
               downloadLabel={t("Сохранить видео")}
               isMine={Boolean(videoViewer.isMine || activeConversation?.chatType === "saved" || videoViewer.authorName === "Вы")}
               onAuthorClick={handleVideoViewerAuthorClick}
@@ -29309,7 +29144,8 @@ export default function ChatsPageClient() {
               >
                 <Skiper91
                   ref={videoViewerRef}
-                  src={videoViewer.src}
+                  src={resolveEncryptedMediaUrl(videoViewer.src)}
+                  poster={getEncryptedMediaPreview(videoViewer.src) ?? getDecodedMediaPreview(getCachedMediaUrl(videoViewer.src))}
                   autoPlay
                   accentColor={
                     liveBackgroundPreset !== "none" && THEME_SOLID_COLOR_MAP[liveBackgroundPreset]
@@ -29430,11 +29266,12 @@ export default function ChatsPageClient() {
                     transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
                     className="flex h-full w-full items-center justify-center"
                   >
-                    <img
-                      src={resolveEncryptedMediaUrl(imageViewer.src) || undefined}
+                    <ChatImageThumb
+                      src={resolveEncryptedMediaUrl(imageViewer.src)}
+                      preview={getEncryptedMediaPreview(imageViewer.src)}
+                      viewer
                       alt={t("Фотография")}
                       className="h-full w-full max-h-[calc(100dvh-150px)] max-w-[calc(100vw-16px)] sm:max-w-[calc(100vw-32px)] md:max-h-[calc(100dvh-160px)] md:max-w-[min(88vw,1200px)] object-contain rounded-2xl md:rounded-3xl shadow-2xl select-none pointer-events-none"
-                      draggable={false}
                     />
                   </motion.div>
                 </AnimatePresence>
@@ -29467,7 +29304,7 @@ export default function ChatsPageClient() {
         <StoryCamera
           isOpen={storyCameraOpen}
           onClose={() => setStoryCameraOpen(false)}
-          onCapture={handleStoryCameraCapture}
+          onCapture={prepareStoryDraft}
           onSelectFromFile={createStoryFromSelection}
         />
       ) : null}

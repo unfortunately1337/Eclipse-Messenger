@@ -1,4 +1,5 @@
 import { normalizeStoryFont, type StoryFont } from "./story-fonts";
+import { normalizeMediaPreview } from "./media-preview";
 
 export type StoryOverlayTextLayer = {
   id: string;
@@ -10,7 +11,7 @@ export type StoryOverlayTextLayer = {
   font?: StoryFont;
   align?: "left" | "center" | "right";
   bgStyle?: "none" | "badge" | "inverted";
-  kind?: "text" | "emoji";
+  kind?: "text" | "emoji" | "sticker";
 };
 
 export type StoryOverlayStrokePoint = {
@@ -34,6 +35,7 @@ export type StoryMediaTransform = {
 
 export type StoryOverlay = {
   media?: StoryMediaTransform;
+  preview?: string;
   texts: StoryOverlayTextLayer[];
   strokes: StoryOverlayStroke[];
 };
@@ -56,7 +58,8 @@ function isColor(value: unknown): value is string {
 
 export function normalizeStoryOverlay(value: unknown): StoryOverlay {
   if (!value || typeof value !== "object") return EMPTY_OVERLAY;
-  const raw = value as { media?: unknown; texts?: unknown; strokes?: unknown };
+  const raw = value as { media?: unknown; preview?: unknown; texts?: unknown; strokes?: unknown };
+  const preview = normalizeMediaPreview(raw.preview);
 
   const media = (() => {
     if (!raw.media || typeof raw.media !== "object") return undefined;
@@ -78,6 +81,8 @@ export function normalizeStoryOverlay(value: unknown): StoryOverlay {
       const layer = item as Partial<StoryOverlayTextLayer>;
       const text = typeof layer.text === "string" ? layer.text.trim().slice(0, 140) : "";
       if (!text) continue;
+      const kind = layer.kind === "sticker" || layer.kind === "emoji" ? layer.kind : undefined;
+      if (kind === "sticker" && !/^tg-[a-f0-9]{24}$/.test(text)) continue;
       const color = isColor(layer.color) ? layer.color.trim() : "#ffffff";
       const size = Number.isFinite(layer.size) ? Math.max(8, Math.min(384, Number(layer.size))) : 36;
       const id = typeof layer.id === "string" && layer.id ? layer.id : `text-${Math.random().toString(36).slice(2)}`;
@@ -90,10 +95,9 @@ export function normalizeStoryOverlay(value: unknown): StoryOverlay {
         y: clampUnit(Number(layer.y)),
         color,
         size,
-        ...(layer.kind !== "emoji" ? { font: normalizeStoryFont(layer.font) } : {}),
+        ...(!kind ? { font: normalizeStoryFont(layer.font) } : { kind }),
         align,
         bgStyle,
-        ...(layer.kind === "emoji" ? { kind: "emoji" as const } : {}),
       });
     }
   }
@@ -122,7 +126,7 @@ export function normalizeStoryOverlay(value: unknown): StoryOverlay {
     }
   }
 
-  return { ...(media ? { media } : {}), texts, strokes };
+  return { ...(media ? { media } : {}), ...(preview ? { preview } : {}), texts, strokes };
 }
 
 export function parseStoryOverlay(value: string | null | undefined): StoryOverlay | null {
@@ -130,7 +134,7 @@ export function parseStoryOverlay(value: string | null | undefined): StoryOverla
   try {
     const parsed = JSON.parse(value);
     const normalized = normalizeStoryOverlay(parsed);
-    if (!normalized.media && normalized.texts.length === 0 && normalized.strokes.length === 0) {
+    if (!normalized.media && !normalized.preview && normalized.texts.length === 0 && normalized.strokes.length === 0) {
       return null;
     }
     return normalized;
@@ -141,7 +145,7 @@ export function parseStoryOverlay(value: string | null | undefined): StoryOverla
 
 export function stringifyStoryOverlay(value: unknown): string | null {
   const normalized = normalizeStoryOverlay(value);
-  if (!normalized.media && normalized.texts.length === 0 && normalized.strokes.length === 0) {
+  if (!normalized.media && !normalized.preview && normalized.texts.length === 0 && normalized.strokes.length === 0) {
     return null;
   }
   return JSON.stringify(normalized);

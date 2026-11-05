@@ -1,6 +1,7 @@
 "use client";
 import { translate as t } from "@/lib/i18n/translate";
 import { useTranslation } from "@/components/LocaleProvider";
+import { MediaLoadingPreview } from "@/components/MediaLoadingPreview";
 
 
 import React, {
@@ -708,6 +709,7 @@ export const Skiper91 = forwardRef<HTMLVideoElement, Skiper91Props>(
     const [playbackRate, setPlaybackRate] = useState(1);
     const [isFullscreen, setIsFullscreen] = useState(false);
     const [hasError, setHasError] = useState(false);
+    const [readySrc, setReadySrc] = useState<string | null>(null);
 
     const controlsVisibleRef = useRef(true);
     const [controlsVisible, setControlsVisible] = useState(true);
@@ -1009,18 +1011,21 @@ export const Skiper91 = forwardRef<HTMLVideoElement, Skiper91Props>(
               <>
                 <video
                   ref={innerVideoRef}
-                  src={src}
-                  poster={poster}
+                  src={src || undefined}
                   autoPlay={autoPlay}
                   muted={defaultMuted}
                   loop={loop}
                   playsInline={playsInline}
                   preload="metadata"
+                  onLoadedData={() => setReadySrc(src)}
+                  onCanPlay={() => setReadySrc(src)}
                   className={cn(
                     "w-full h-full max-h-[calc(100dvh-180px)] max-w-[calc(100vw-16px)] sm:max-w-[calc(100vw-32px)] md:max-h-[calc(100dvh-190px)] md:max-w-[min(90vw,1200px)] object-contain transition-all rounded-2xl md:rounded-3xl shadow-2xl",
-                    videoClassName
+                    videoClassName,
+                    readySrc !== src && "opacity-0"
                   )}
                 />
+                {readySrc !== src && <MediaLoadingPreview preview={poster} fit="contain" />}
 
                 {/* Liquid Glass Center On-Screen Controls: Exact dead center */}
                 <CenterVideoControlsOverlay

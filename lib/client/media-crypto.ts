@@ -1,6 +1,7 @@
 "use client";
 
 import { cacheMediaBlobUrl, getCachedMediaUrl, hasCachedMediaUrl, invalidateCachedMediaUrl } from "./media-cache";
+import { normalizeMediaPreview } from "@/lib/media-preview";
 
 const PREFIX = "#eclipse-e2e=";
 const aad = new TextEncoder().encode("eclipse-media-v1");
@@ -63,7 +64,7 @@ async function fetchAttachment(url: string, requestedGeneration: number) {
 
 function encode(bytes: Uint8Array) { return btoa(String.fromCharCode(...bytes)); }
 function decode(value: string) { return Uint8Array.from(atob(value), c => c.charCodeAt(0)); }
-type Envelope = { v: 1; k: string; i: string; m: string; s: string; e: number | null };
+type Envelope = { v: 1; k: string; i: string; m: string; s: string; e: number | null; p?: string };
 
 export async function encryptMediaBlob(blob: Blob) {
   const uploadGeneration = generation;
@@ -73,9 +74,12 @@ export async function encryptMediaBlob(blob: Blob) {
   const ciphertext = await crypto.subtle.encrypt({ name: "AES-GCM", iv, additionalData: aad }, key, await blob.arrayBuffer());
   return {
     blob: new Blob([ciphertext], { type: "application/octet-stream" }),
-    protectUrl(url: string, scope: string, expiresAt?: string | null, options?: { cacheOriginal?: boolean }) {
+    protectUrl(url: string, scope: string, expiresAt?: string | null, options?: { cacheOriginal?: boolean; preview?: string }) {
       const envelope: Envelope = { v: 1, k: encode(rawKey), i: encode(iv), m: blob.type || "application/octet-stream", s: scope, e: expiresAt ? Date.parse(expiresAt) : null };
-      const protectedUrl = url + PREFIX + encodeURIComponent(JSON.stringify(envelope));
+      const preview = normalizeMediaPreview(options?.preview);
+      const withPreview = preview ? url + PREFIX + encodeURIComponent(JSON.stringify({ ...envelope, p: preview })) : "";
+      const protectedUrl = withPreview && withPreview.length <= 4000
+        ? withPreview : url + PREFIX + encodeURIComponent(JSON.stringify(envelope));
       if (options?.cacheOriginal && uploadGeneration === generation && (envelope.e === null || envelope.e > Date.now())) {
         const urls = scopedUrls.get(scope) ?? new Set<string>(); urls.add(protectedUrl); scopedUrls.set(scope, urls);
         cacheMediaBlobUrl(protectedUrl, URL.createObjectURL(blob));
@@ -95,6 +99,15 @@ function readEnvelope(src: string): Envelope | null {
   // Never create an executable document from a decrypted attachment.
   if (!/^(image\/(jpeg|png|webp|gif|bmp|avif|heic|heif)|audio\/[a-z0-9.+-]+|video\/[a-z0-9.+-]+)(;.*)?$/i.test(data.m)) data.m = "application/octet-stream";
   return data;
+}
+
+export function getEncryptedMediaPreview(src: string): string | undefined {
+  try {
+    const envelope = readEnvelope(src);
+    if (envelope && (envelope.e === null || envelope.e > Date.now())) return normalizeMediaPreview(envelope.p);
+  } catch {
+    // Treat malformed or expired attachment previews as absent.
+  }
 }
 
 export function resolveEncryptedMediaUrl(src: string): string {
@@ -173,10 +186,13 @@ export function collectLegacyMediaUrls(text: string): string[] {
 export function resolveMessageMedia<T extends { kind: string }>(parsed: T): T {
   const value = parsed as T & { src?: string; url?: string; coverUrl?: string; items?: Array<{ src: string }> };
   return { ...value,
-    ...(typeof value.src === "string" ? { src: resolveEncryptedMediaUrl(value.src) } : {}),
+    ...(typeof value.src === "string" ? {
+      src: resolveEncryptedMediaUrl(value.src),
+      ...(value.kind === "image" || value.kind === "video" ? { preview: getEncryptedMediaPreview(value.src) } : {}),
+    } : {}),
     ...(typeof value.url === "string" ? { url: resolveEncryptedMediaUrl(value.url) } : {}),
     ...(typeof value.coverUrl === "string" ? { coverUrl: resolveEncryptedMediaUrl(value.coverUrl) } : {}),
-    ...(value.items ? { items: value.items.map(item => ({ ...item, src: resolveEncryptedMediaUrl(item.src) })) } : {}),
+    ...(value.items ? { items: value.items.map(item => ({ ...item, src: resolveEncryptedMediaUrl(item.src), preview: getEncryptedMediaPreview(item.src) })) } : {}),
   };
 }
 

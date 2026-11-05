@@ -8,7 +8,7 @@ import assets from "@/lib/client/inline-emoji-assets.json";
 import { useAnimationVisibility } from "@/lib/client/use-animation-visibility";
 import { LottieSticker } from "@/app/app/(chats)/components/common/LottieSticker";
 
-export const InlineEmoji = memo(function InlineEmoji({ emoji, id, size, className }: { emoji?: string; id?: string; size?: number; className?: string }) {
+export const InlineEmoji = memo(function InlineEmoji({ emoji, id, size, className, vector = false }: { emoji?: string; id?: string; size?: number; className?: string; vector?: boolean }) {
   const ref = useRef<HTMLSpanElement>(null);
   const visible = useAnimationVisibility(ref);
   const reduced = useReducedMotion();
@@ -24,7 +24,7 @@ export const InlineEmoji = memo(function InlineEmoji({ emoji, id, size, classNam
     className={`${className ?? "inline-block shrink-0 align-[-0.15em] mx-[0.025em]"} relative [&:has(svg)>img]:opacity-0`}
     onClick={entry?.packId ? event => { if (event.currentTarget.closest('[contenteditable="true"]')) return; event.stopPropagation(); openImportedPack({ packId: entry.packId }); } : undefined}
     style={{ width: size ?? "1.15em", height: size ?? "1.15em", verticalAlign: "-0.15em", lineHeight: 0 }}>
-    {entry?.packId && entry.format ? <PackMedia item={{ id: entry.id, packId: entry.packId, src: entry.animation, thumbnail: entry.thumbnail, format: entry.format, emoji: entry.emoji, adaptive: entry.adaptive }} playing={animate} /> : src && failed !== src ? <img src={src} alt="" draggable={false} loading="lazy" decoding="async" onError={()=>setFailed(src)} className="block size-full object-contain" style={{filter:entry?.adaptive ? "var(--inline-emoji-filter, brightness(0) invert(1))" : undefined}} />
+    {entry?.packId && entry.format ? <PackMedia item={{ id: entry.id, packId: entry.packId, src: entry.animation, thumbnail: entry.thumbnail, format: entry.format, emoji: entry.emoji, adaptive: entry.adaptive }} playing={animate} vector={vector} /> : src && failed !== src ? <img src={src} alt="" draggable={false} loading="lazy" decoding="async" onError={()=>setFailed(src)} className="block size-full object-contain" style={{filter:entry?.adaptive ? "var(--inline-emoji-filter, brightness(0) invert(1))" : undefined}} />
       : <span className={animate ? "inline-block animate-emoji-idle" : "inline-block"} style={{lineHeight:1.15,fontSize:size}}>{label}</span>}
     {entry && !entry.packId && large ? <LottieSticker src={entry.animation} playing={!reduced} className="absolute inset-0 size-full [&_svg]:!size-full" style={{filter:entry.adaptive ? "var(--inline-emoji-filter, brightness(0) invert(1))" : undefined}} /> : null}
   </span>;
