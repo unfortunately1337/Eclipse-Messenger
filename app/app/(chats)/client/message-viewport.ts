@@ -65,10 +65,10 @@ export function renderedMessagesView({ selfId, selfProfile, currentUserIdRef, me
       }
       const chainWithPrevious = Boolean(
         previousMessage &&
-        previousMessage.senderId === message.senderId &&
+        previousMessage.senderId === message.senderId && previousMessage.systemPayload?.eventType !== "call" && message.systemPayload?.eventType !== "call" &&
         dayKeyFromIso(previousMessage.createdAt) === dayKey,
       );
-      const chainWithNext = Boolean(nextMessage && nextMessage.senderId === message.senderId && nextDayKey === dayKey);
+      const chainWithNext = Boolean(nextMessage && nextMessage.senderId === message.senderId && nextMessage.systemPayload?.eventType !== "call" && message.systemPayload?.eventType !== "call" && nextDayKey === dayKey);
       const rowSpacingClassName = showDateSeparator
         ? "pb-2"
         : chainWithNext
@@ -107,9 +107,9 @@ export function renderedMessagesView({ selfId, selfProfile, currentUserIdRef, me
       }
     }
     const chainWithPrevious = Boolean(
-      prevMessage && prevMessage.senderId === message.senderId && dayKeyFromIso(prevMessage.createdAt) === dayKey,
+      prevMessage && prevMessage.senderId === message.senderId && prevMessage.systemPayload?.eventType !== "call" && message.systemPayload?.eventType !== "call" && dayKeyFromIso(prevMessage.createdAt) === dayKey,
     );
-    const chainWithNext = Boolean(nextMessage && nextMessage.senderId === message.senderId && nextDayKey === dayKey);
+    const chainWithNext = Boolean(nextMessage && nextMessage.senderId === message.senderId && nextMessage.systemPayload?.eventType !== "call" && message.systemPayload?.eventType !== "call" && nextDayKey === dayKey);
     const rowSpacingClassName = showDateSeparator
       ? "pb-2"
       : chainWithNext

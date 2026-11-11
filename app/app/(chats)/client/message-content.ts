@@ -2,11 +2,13 @@
 
 import { translate as t } from "@/lib/i18n/translate";
 import { readForwardedContent } from "@/lib/client/message-forwarding";
+import { readCallMessage } from "@/lib/call-history";
 import { renderStaticEmojiText } from "@/components/StaticEmojiText";
 import { splitCustomEmoji, emojiPlainText } from "@/lib/custom-emoji";
 import { getStickerEmojiBySrc } from "@/lib/client/stickers";
 import { resolveMessageMedia } from "@/lib/client/media-crypto";
 import { type DecryptedMessage, type EditTarget, type ParsedMessageContent } from "../types";
+import { normalizeMediaPreview, normalizeMediaAspectRatio } from "@/lib/media-preview";
 import { isImagePayload, isAudioPayload, isVideoPayload, isRenderableMediaUrl } from "../helpers";
 import { deriveMusicLabel, MAX_MEDIA_ALBUM_ITEMS, MEDIA_PREFIX, serializeMusicContent } from "../chat-message-transport";
 import { getAlbumPreviewLabel } from "./message-format";
@@ -76,7 +78,9 @@ export function parseMessageContent(value: string): ParsedMessageContent {
         label?: string;
         mapUrl?: string;
         previewUrl?: string;
-        items?: Array<{ src?: string; kind?: "image" | "video"; durationMs?: number }>;
+        items?: Array<{ src?: string; kind?: "image" | "video"; durationMs?: number; preview?: string }>;
+        preview?: string;
+        aspectRatio?: number;
         url?: string;
         name?: string;
         size?: number;
@@ -123,6 +127,8 @@ export function parseMessageContent(value: string): ParsedMessageContent {
           kind: "image",
           src: parsed.src,
           caption: parsed.caption?.trim() ?? "",
+          preview: normalizeMediaPreview(parsed.preview),
+          aspectRatio: normalizeMediaAspectRatio(parsed.aspectRatio),
         };
       }
       if (
@@ -140,7 +146,7 @@ export function parseMessageContent(value: string): ParsedMessageContent {
         };
       }
       if (parsed.type === "album" && Array.isArray(parsed.items) && parsed.items.length > 0) {
-        const items: Array<{ src: string; kind: "image" | "video"; durationMs?: number }> = parsed.items
+        const items: Array<{ src: string; kind: "image" | "video"; durationMs?: number; preview?: string }> = parsed.items
           .slice(0, MAX_MEDIA_ALBUM_ITEMS)
           .map((item) => {
             if (!item?.src || !isRenderableMediaUrl(item.src)) return null;
@@ -150,11 +156,13 @@ export function parseMessageContent(value: string): ParsedMessageContent {
                 src: item.src,
                 kind,
                 durationMs: Math.max(0, Number(item.durationMs) || 0),
+                preview: normalizeMediaPreview(item.preview),
               };
             }
             return {
               src: item.src,
               kind,
+              preview: normalizeMediaPreview(item.preview),
             };
           })
           .filter(Boolean) as Array<{ src: string; kind: "image" | "video"; durationMs?: number }>;
@@ -184,6 +192,8 @@ export function parseMessageContent(value: string): ParsedMessageContent {
         return {
           kind: "video",
           src: parsed.src,
+          preview: normalizeMediaPreview(parsed.preview),
+          aspectRatio: normalizeMediaAspectRatio(parsed.aspectRatio),
           durationMs: Math.max(0, Number(parsed.durationMs) || 0),
           caption: parsed.caption?.trim() ?? "",
           mode: parsed.mode === "file" ? "file" : "note",
@@ -457,7 +467,7 @@ export function canEditMessageContent(parsed: ParsedMessageContent) {
 }
 
 export function canEditMessage(message: DecryptedMessage, parsed: ParsedMessageContent, isMine: boolean) {
-  if (!isMine) return false;
+  if (!isMine || readCallMessage(message.systemPayload)) return false;
   const createdAtMs = Date.parse(message.createdAt);
   if (Number.isNaN(createdAtMs) || Date.now() - createdAtMs > MESSAGE_EDIT_WINDOW_MS) {
     return false;

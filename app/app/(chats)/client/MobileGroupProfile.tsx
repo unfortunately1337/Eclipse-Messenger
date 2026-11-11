@@ -102,7 +102,7 @@ export const MobileGroupProfile = memo(function MobileGroupProfile({ isDesktop, 
               <div className="relative z-[1] p-6 text-sm text-red-500">{t(groupModalError ?? "")}</div>
             ) : groupModalData?.group ? (
               <div className="relative z-[1] flex h-full min-h-0 flex-col">
-                <PanelNavigation direction={groupNavDirection} className={groupSubView === "qrcode" ? "min-h-0 flex-1 h-full" : ""}>
+                <PanelNavigation direction={groupNavDirection} className="min-h-0 flex-1 h-full grid-rows-[minmax(0,1fr)]">
                   {groupSubView === "members" ? (
                     /* Group Members View */
                     <motion.div

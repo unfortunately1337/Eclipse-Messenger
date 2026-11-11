@@ -508,7 +508,7 @@ export function useChatDirectory(sources: ChatDirectorySources, deferred: ChatDi
         const estimate = (() => { try {
           if (message.systemPayload) {
             const eventType = (message.systemPayload as any)?.eventType;
-            if (eventType === "call") return 64;
+            if (eventType === "call") return 68;
             if (eventType === "wallpaper_change") {
               const currentUserId = selfId ?? selfProfile?.id ?? currentUserIdRef.current ?? "";
               const senderId = (message.systemPayload as any)?.metadata?.senderId;

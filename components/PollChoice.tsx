@@ -2,7 +2,7 @@
 
 import { useEffect } from "react";
 import { AnimatePresence, animate, motion, useMotionValue, useReducedMotion, useTransform } from "framer-motion";
-import { Check, Loader2, X } from "lucide-react";
+import { Check, X } from "lucide-react";
 
 function Percentage({ value }: { value: number }) {
   const reduced = useReducedMotion();
@@ -26,13 +26,13 @@ export function PollChoice({ option, index, percentage, selected, correct, wrong
   return <motion.button data-poll-choice={index} layout="position" type="button" tabIndex={disabled ? -1 : 0} aria-label={option} aria-pressed={selected}
     disabled={disabled} onClick={onVote} whileTap={reduced || disabled ? undefined : { scale: 0.985 }} transition={transition}
     className="group grid w-full grid-cols-[32px_minmax(0,1fr)] items-start gap-2.5 rounded-[13px] px-1.5 py-2 text-left outline-none transition-colors hover:bg-current/[0.05] focus-visible:ring-2 focus-visible:ring-current/30 disabled:cursor-default disabled:hover:bg-transparent">
-    <div className="relative grid min-h-5 place-items-center pt-px" style={{ color }}>
+    <div className="relative grid min-h-5 place-items-center" style={{ color }}>
       <AnimatePresence initial={false} mode="popLayout">
         {showResults ? <motion.div key="percentage" initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -4 }} transition={transition}>
           <Percentage value={percentage} />
-        </motion.div> : <motion.span key="radio" initial={{ opacity: 0, scale: 0.75 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.75 }} transition={transition}
-          className="grid size-5 place-items-center rounded-full border-[1.5px] border-current/40 transition-colors group-hover:border-current/80">
-          {pending && <Loader2 size={13} className="animate-spin motion-reduce:animate-none" />}
+        </motion.div> : <motion.span key="checkbox" initial={{ opacity: 0, scale: 0.75 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.75 }} transition={transition}
+          className="grid size-5 place-items-center rounded-[5px] border-[1.5px] border-current/40 transition-colors group-hover:border-current/80">
+          {pending && <Check size={13} strokeWidth={2.5} />}
         </motion.span>}
       </AnimatePresence>
     </div>

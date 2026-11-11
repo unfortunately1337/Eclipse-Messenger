@@ -27,9 +27,10 @@ interface ChatPollProps {
   bubbleStyle?: React.CSSProperties;
   stackedBubbleShapeClass?: string;
   bubbleTailClass?: string;
+  tailSlot?: React.ReactNode;
   isRemoving?: boolean;
   replyPreviewBlock?: React.ReactNode;
-  reactions?: any[];
+  reactions?: readonly unknown[];
   renderInlineReactions?: (align: "start" | "end") => React.ReactNode;
   renderBubbleMeta?: (props: { isReadDone?: boolean }) => React.ReactNode;
   isMine?: boolean;
@@ -41,7 +42,6 @@ export default function ChatPoll({
   options,
   quizMode,
   correctOptionIndex,
-  expiresAt,
   myVoteIndex,
   totalVotes,
   optionCounts,
@@ -52,6 +52,7 @@ export default function ChatPoll({
   bubbleStyle,
   stackedBubbleShapeClass = "",
   bubbleTailClass = "",
+  tailSlot,
   isRemoving = false,
   replyPreviewBlock,
   reactions = [],
@@ -63,13 +64,13 @@ export default function ChatPoll({
   const [votingIdx, setVotingIdx] = useState<number | null>(null);
   const voteInFlight = useRef(false);
 
-  useEffect(() => {
-    onFetchResults();
-  }, [messageId]);
+  const fetchResultsRef = useRef(onFetchResults);
+  useEffect(() => { fetchResultsRef.current = onFetchResults; }, [onFetchResults]);
+  useEffect(() => { fetchResultsRef.current(); }, [messageId]);
 
   const hasVoted = myVoteIndex !== null;
   const showResults = hasVoted || isClosed;
-  const isDisableVoting = isClosed || (quizMode && hasVoted);
+  const isDisableVoting = isClosed || hasVoted;
 
   async function handleVote(optionIdx: number) {
     if (isDisableVoting || voteInFlight.current) return;
@@ -91,28 +92,17 @@ export default function ChatPoll({
     return Math.max(0, Math.min(100, Math.round((count / totalVotes) * 100)));
   };
 
-  const getExpiryText = () => {
-    if (isClosed) return t("Опрос завершен");
-    if (!expiresAt) return t("Активный опрос");
-    const diffMs = new Date(expiresAt).getTime() - Date.now();
-    if (diffMs <= 0) return t("Опрос завершен");
-    const diffHrs = Math.ceil(diffMs / (1000 * 60 * 60));
-    if (diffHrs > 24) {
-      return t("Осталось {0} дн.", { 0: Math.round(diffHrs / 24) });
-    }
-    return t("Осталось {0} ч.", { 0: diffHrs });
-  };
-
   return (
     <div data-chat-poll
-      className={`relative flex flex-col gap-1.5 transition-opacity duration-75 ${
+      className={`relative flex max-w-full flex-col gap-1.5 transition-opacity duration-75 ${
         isRemoving ? `message-dissolve-target ${isMine ? "message-dissolve-target-mine" : "message-dissolve-target-incoming"}` : ""
       }`}
     >
       <div
         style={bubbleStyle}
-        className={cn("relative z-10 flex min-h-[44px] w-[min(84vw,370px)] md:w-[350px] lg:w-[370px] flex-col gap-2.5 rounded-[22px] p-4 text-zinc-100 shadow-sm", bubbleClassName, stackedBubbleShapeClass, bubbleTailClass)}
+        className={cn("relative z-10 flex min-h-[44px] max-w-full w-[min(84vw,370px)] md:w-[350px] lg:w-[370px] flex-col gap-2.5 rounded-[22px] p-4 text-zinc-100 shadow-sm", bubbleClassName, stackedBubbleShapeClass, bubbleTailClass)}
       >
+        {tailSlot}
         {replyPreviewBlock}
 
         {/* Telegram-style Question & Subtitle Header */}
@@ -125,7 +115,7 @@ export default function ChatPoll({
           </p>
         </div>
 
-        <div className="-mx-1.5 flex flex-col gap-0.5">
+        <div className="-mx-1.5 flex flex-col gap-1">
           {options.map((option, idx) => <PollChoice key={idx} option={option} index={idx}
             percentage={getPercentage(idx)} selected={myVoteIndex === idx}
             correct={quizMode && showResults && correctOptionIndex === idx}
@@ -134,44 +124,14 @@ export default function ChatPoll({
             pending={votingIdx === idx} isMine={isMine} onVote={() => void handleVote(idx)} />)}
         </div>
 
-        <div className="flex flex-col gap-1.5 mt-1 select-none pb-0.5">
-          {reactions && reactions.length > 0 ? (
-            <>
-              {/* Row 1: Votes and Expiry */}
-              <div className="flex items-center text-[12px] font-normal opacity-65">
-                <span>
-                  {plural(totalVotes, ["голос", "голоса", "голосов"], "vote")}
-                </span>
-                <span className="mx-1 opacity-50">·</span>
-                <span>{getExpiryText()}</span>
-              </div>
-
-              {/* Row 2: Reactions and Meta aligned */}
-              <div className="flex items-center justify-between gap-2 mt-0.5">
-                <div className="flex-1 min-w-0">
-                  {renderInlineReactions(isMine ? "end" : "start")}
-                </div>
-                <div className="flex items-center gap-1 shrink-0">
-                  {renderBubbleMeta({})}
-                </div>
-              </div>
-            </>
-          ) : (
-            /* Single Row: Votes + Expiry on left, Meta on right */
-            <div className="flex items-end justify-between text-[12px] font-normal opacity-65">
-              <div className="flex items-center gap-1.5">
-                <span>
-                  {plural(totalVotes, ["голос", "голоса", "голосов"], "vote")}
-                </span>
-                <span className="opacity-50">·</span>
-                <span>{getExpiryText()}</span>
-              </div>
-
-              <div className="flex items-center gap-1 shrink-0">
-                {renderBubbleMeta({})}
-              </div>
-            </div>
-          )}
+        <div className="mt-1 flex flex-col gap-2 select-none pb-0.5">
+          {reactions.length > 0 && <div className="min-w-0">{renderInlineReactions(isMine ? "end" : "start")}</div>}
+          <div className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-baseline gap-1 text-[11px] font-medium leading-4 tabular-nums">
+            <span />
+            <span data-poll-vote-count className="text-center opacity-65">{plural(totalVotes, ["голос", "голоса", "голосов"], "vote")}</span>
+            <div className="flex items-baseline justify-end gap-1">{renderBubbleMeta({})}</div>
+          </div>
+          <span className="sr-only" role="status">{hasVoted ? t("Голос засчитан") : ""}</span>
         </div>
       </div>
     </div>

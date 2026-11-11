@@ -1,9 +1,17 @@
 import { describe, expect, it } from "vitest";
 import { serializeForwardedContent } from "@/lib/client/message-forwarding";
 import { MEDIA_PREFIX } from "../chat-message-transport";
-import { buildEditedMessagePayload, getEmojisInfo, parseMessageContentCached } from "./message-content";
+import { buildEditedMessagePayload, canEditMessage, getEmojisInfo, parseMessageContentCached } from "./message-content";
+import type { DecryptedMessage } from "../types";
 
 describe("message rendering across extracted chat surfaces", () => {
+  it("allows editing a recent own text but never a call history record", () => {
+    const message: DecryptedMessage = { id: "call:call", senderId: "self", text: "Call", createdAt: new Date().toISOString() };
+    const parsed = parseMessageContentCached(message.text);
+    expect(canEditMessage(message, parsed, true)).toBe(true);
+    message.systemPayload = { eventType: "call", title: "Call", body: "", metadata: { call: { id: "call", callerId: "self", calleeId: "peer", mode: "audio", status: "ended", outcome: "completed", durationSeconds: 35, startedAt: 1, endedAt: 2 } } };
+    expect(canEditMessage(message, parsed, true)).toBe(false);
+  });
   it("keeps a forwarded video's caption, encrypted URL and playback mode", () => {
     const src = "/media/example.bin#eclipse-e2e=opaque-envelope";
     const content = MEDIA_PREFIX + JSON.stringify({

@@ -37,7 +37,7 @@ import type { ChatPageCallbacks } from "./chat-page-callbacks";
 
 export interface ChatBootstrapSources {
   active: Pick<ActiveConversationModel, "activeChat" | "selectedChat">;
-  page: Pick<ChatPageStateModel, "t" | "settingsPanelOpen" | "router" | "setProfileData" | "searchParams" | "pathname" | "sharedKeyWarmupAtRef" | "requestedChatLink" | "requestedChatType" | "setErrorText" | "setProfileModalOpen"> & {
+  page: Pick<ChatPageStateModel, "t" | "router" | "setProfileData" | "searchParams" | "pathname" | "sharedKeyWarmupAtRef" | "requestedChatLink" | "requestedChatType" | "setErrorText" | "setProfileModalOpen"> & {
     conversation: Pick<ChatPageStateModel["conversation"], "activeConversation" | "setChats" | "setActiveConversation" | "messages" | "setMessages" | "chatsRef" | "chats" | "activeConversationRef">;
     account: Pick<ChatPageStateModel["account"], "selfId" | "animatedMessageIdsRef" | "suppressMessageEntranceRef" | "setSelfId" | "setSelfProfile">;
     mediaAndChannel: Pick<ChatPageStateModel["mediaAndChannel"], "channelModalData" | "setChannelSubView" | "setChannelNameEditing">;
@@ -94,7 +94,7 @@ export interface ChatBootstrapModel {
 /** Owns this stage of the chat lifecycle; cleanup and hook order match the page. */
 export function useChatBootstrap(sources: ChatBootstrapSources, deferred: ChatBootstrapDeferred): ChatBootstrapModel {
   const { activeChat, selectedChat } = sources.active;
-  const { t, settingsPanelOpen, router, setProfileData, searchParams, pathname, sharedKeyWarmupAtRef, requestedChatLink, requestedChatType, setErrorText, setProfileModalOpen } = sources.page;
+  const { t, router, setProfileData, searchParams, pathname, sharedKeyWarmupAtRef, requestedChatLink, requestedChatType, setErrorText, setProfileModalOpen } = sources.page;
   const { activeConversation, setChats, setActiveConversation, messages, setMessages, chatsRef, chats, activeConversationRef } = sources.page.conversation;
   const { selfId, animatedMessageIdsRef, suppressMessageEntranceRef, setSelfId, setSelfProfile } = sources.page.account;
   const { channelModalData, setChannelSubView, setChannelNameEditing } = sources.page.mediaAndChannel;
@@ -204,14 +204,6 @@ export function useChatBootstrap(sources: ChatBootstrapSources, deferred: ChatBo
     setGroupNameEditing(false);
     setChannelNameEditing(false);
   }, [activeChat?.link]);
-
-  useEffect(() => {
-    if (settingsPanelOpen) {
-      setChannelSubView(null);
-      setGroupSubView(null);
-      setProfileSubView(null);
-    }
-  }, [settingsPanelOpen]);
 
   useEffect(() => {
     return refreshActiveChatDetails({ activeChat, activeConversation, router, selfId, setProfileData, setContactEditorTarget, setContactExists, setChats, profileDetailsInFlightRef, setActiveConversation, groupModalCacheRef, groupDetailsInFlightRef, channelModalCacheRef, channelDetailsInFlightRef });

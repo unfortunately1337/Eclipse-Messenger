@@ -14,6 +14,8 @@ vi.mock("./prisma", () => ({ prisma: { $transaction: (run: (tx: unknown) => unkn
 }) } }));
 import { readMessagePins, writeMessagePin } from "./message-pins";
 
+const callPayload = { eventType: "call", metadata: { call: { id: "call", callerId: "member", calleeId: "peer", mode: "audio", status: "ended", outcome: "completed", durationSeconds: 35 } } };
+
 beforeEach(() => {
   vi.clearAllMocks();
   mocks.community.mockResolvedValue({ ownerId: "owner", isPublic: false });
@@ -74,4 +76,14 @@ it("can unpin and enforces the accepted session and expiration of secret chats",
   await expect(readMessagePins(scope, "member", "other-session")).rejects.toMatchObject({ status: 403 });
   mocks.secret.mockResolvedValue({ isApproved: true, expiresAt: new Date(0), participants: [] });
   await expect(readMessagePins(scope, "member", "session")).rejects.toMatchObject({ status: 404 });
+});
+
+it("rejects pinning a call, hides old call pins and allows removing them", async () => {
+  const scope = { chatType: "direct" as const, chatId: "chat" };
+  mocks.find.mockResolvedValue({ id: "call:call", systemPayload: callPayload });
+  await expect(writeMessagePin(scope, "call:call", true, "member", "session")).rejects.toMatchObject({ status: 400 });
+  expect(mocks.write).not.toHaveBeenCalled();
+  await expect(writeMessagePin(scope, "call:call", false, "member", "session")).resolves.toBeDefined();
+  mocks.list.mockResolvedValue([{ id: "call:call", systemPayload: callPayload, createdAt: new Date(0), pinnedAt: new Date(1) }]);
+  expect((await readMessagePins(scope, "member", "session")).pins).toEqual([]);
 });

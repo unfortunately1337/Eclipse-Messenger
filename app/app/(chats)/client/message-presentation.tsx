@@ -267,8 +267,8 @@ export function renderBubbleMeta(options: {
   const { timeText, showChannelViews, channelViewsText, showDeliveryStatus, isRead, overlay = false, overlayClassName } = options;
   return (
     <span
-      className={`inline-flex translate-y-[1px] items-center gap-1 text-[10px] leading-none ${overlay
-        ? "rounded-full px-2 py-1 text-white [&_.message-status-ticks]:text-white"
+      data-message-meta className={`inline-flex min-h-4 items-center gap-1 font-sans text-[11px] font-medium leading-4 tabular-nums ${overlay
+        ? "h-5 rounded-full px-1.5 py-0 text-white [&_.message-status-ticks]:text-white"
         : "text-inherit opacity-70"
         } ${overlayClassName ?? ""}`}
       style={overlay ? {

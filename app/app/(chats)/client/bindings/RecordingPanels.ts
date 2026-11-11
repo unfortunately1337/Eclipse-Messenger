@@ -12,7 +12,7 @@ import type { ChatPagePresentationModel } from "../controllers/useChatPagePresen
 import type { ChatPageCallbacks } from "../controllers/chat-page-callbacks";
 
 export interface RecordingPanelsSources {
-  readonly page: Pick<ChatPageStateModel, "t" | "reducedPanelMotion" | "messageHelperReadListOpen" | "setMessageHelperReadListOpen"> & {
+  readonly page: Pick<ChatPageStateModel, "t" | "reducedPanelMotion" | "messageHelperReadListOpen" | "setMessageHelperReadListOpen" | "pollResults" | "handlePollVote"> & {
     appearance: Pick<ChatPageStateModel["appearance"], "messageHelperId" | "setMessageHelperId" | "messageHelperAnchor" | "desktopMessageHelperRef">;
     mediaAndChannel: Pick<ChatPageStateModel["mediaAndChannel"], "isCoarsePointer">;
     profileNavigation: Pick<ChatPageStateModel["profileNavigation"], "messageHelperAllReactionsOpen" | "setMessageHelperAllReactionsOpen">;
@@ -33,7 +33,7 @@ export interface RecordingPanelsSources {
 
 /** Projects only the props this memoized view consumes. */
 export function bindRecordingPanels(sources: RecordingPanelsSources): React.ComponentProps<typeof RecordingPanels> {
-  const { t, reducedPanelMotion, messageHelperReadListOpen, setMessageHelperReadListOpen } = sources.page;
+  const { t, reducedPanelMotion, messageHelperReadListOpen, setMessageHelperReadListOpen, pollResults, handlePollVote } = sources.page;
   const { messageHelperId, setMessageHelperId, messageHelperAnchor, desktopMessageHelperRef } = sources.page.appearance;
   const { isCoarsePointer } = sources.page.mediaAndChannel;
   const { messageHelperAllReactionsOpen, setMessageHelperAllReactionsOpen } = sources.page.profileNavigation;
@@ -78,6 +78,8 @@ export function bindRecordingPanels(sources: RecordingPanelsSources): React.Comp
     "setStoryReplyTarget": setStoryReplyTarget,
     "setReplyToMessageId": setReplyToMessageId,
     "helperCanCopy": helperCanCopy,
+    "helperCanRetractVote": Boolean(helperMessage && helperParsed?.kind === "poll" && !helperParsed.quizMode && (!helperParsed.expiresAt || Date.parse(helperParsed.expiresAt) > Date.now()) && pollResults[helperMessage.id]?.userVotedOptionIdx != null),
+    "retractPollVote": () => { if (helperMessage) void handlePollVote(helperMessage.id, null).catch(error => console.error("Failed to retract poll vote:", error)); },
     "copyMessageText": copyMessageText,
     "helperCopyValue": helperCopyValue,
     "messagePins": messagePins,

@@ -9,6 +9,7 @@ import { bindSecretDeviceKey, loadSecretDeviceIdentity } from "@/lib/client/secr
 import { withoutChatLocation } from "@/lib/client/chat-location";
 import { apiRequest } from "@/lib/client/http";
 import { showAppToast } from "@/lib/client/app-toast";
+import { peekFailedMessages, readFailedMessages } from "@/lib/client/failed-message-store";
 import { ECLIPSE_LIST_STATUS } from "@/lib/eclipse-system";
 import { decryptWithSharedKey } from "@/lib/client/e2e";
 import { ENCRYPTED_MESSAGE_UNAVAILABLE_TEXT } from "../chat-message-transport";
@@ -68,6 +69,10 @@ export async function openConversationAction({ chats, selectedSearchTargetRef, o
     openConversationInFlightRef.current.get(candidateKey) === conversationRequestSeqRef.current) return;
   const requestSeq = conversationRequestSeqRef.current + 1;
   conversationRequestSeqRef.current = requestSeq;
+  const failedAccount = currentUserIdRef.current ?? selfId;
+  const failedTarget = `${candidateType ?? "direct"}:${link}`;
+  const localFailed = () => failedAccount && !link.startsWith("secret-") ? peekFailedMessages(failedAccount, failedTarget) : [];
+  const withFailed = (base: DecryptedMessage[]) => sanitizeMessages(mergeMessageWindow(base, localFailed().filter(message => !base.some(existing => existing.id === message.id || existing.localId === message.id))));
 
   const currentLink = selectedLinkRef.current;
   const currentConversation = activeConversationRef.current;
@@ -76,10 +81,17 @@ export async function openConversationAction({ chats, selectedSearchTargetRef, o
   const isSameChat = currentLink === link && Boolean(isSecretLink) === Boolean(wasSecret);
   if (!isSameChat) {
     setActiveConversation(null);
-    setMessages([]);
+    setMessages(withFailed([]));
     setHasMoreMessagesBefore(false);
     setDecryptingConversation(false);
     setInspectedDetailsEntity(null);
+  }
+
+  if (failedAccount && !isSecretLink) {
+    void readFailedMessages(failedAccount, failedTarget).then(() => {
+      if (requestSeq !== conversationRequestSeqRef.current || currentUserIdRef.current !== failedAccount) return;
+      if (localFailed().length) setMessages(previous => withFailed(previous));
+    });
   }
 
   if (link?.startsWith("secret-")) {
@@ -279,7 +291,7 @@ export async function openConversationAction({ chats, selectedSearchTargetRef, o
 
   if ((canUseCachedConversation || isStaleCache) && effectiveCached) {
     setActiveConversation(effectiveCached.conversation);
-    setMessages(sanitizeMessages(effectiveCached.messages));
+    setMessages(withFailed(effectiveCached.messages));
     setHasMoreMessagesBefore(Boolean(effectiveCached.conversation.hasMoreBefore));
     setLoadingConversation(isStaleCache || shouldRefresh);
     const cachedProfileIds = new Set<string>();
@@ -429,9 +441,9 @@ export async function openConversationAction({ chats, selectedSearchTargetRef, o
         Boolean(data.conversationId) &&
         liveConversationId === data.conversationId;
       if (sameConversationLive && messagesRef.current.length > 0) {
-        return messagesRef.current;
+        return withFailed(messagesRef.current);
       }
-      return cachedVisibleMessages;
+      return withFailed(cachedVisibleMessages);
     };
 
     setChats((prev) => {

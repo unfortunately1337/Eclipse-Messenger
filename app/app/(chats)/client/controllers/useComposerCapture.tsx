@@ -17,8 +17,7 @@ import { flushRecorderThenStop } from "../media-recording";
 
 import { decryptSharedChatPreviews, pushOptimisticMessageAction } from "../message-crypto";
 import { sendPreparedMessageAction } from "../send-message";
-import { readFailedMessages, rememberOutgoingMessage, forgetOutgoingMessage } from "@/lib/client/failed-message-store";
-import { mergeMessageWindow } from "../../chat-message-state";
+import { warmFailedMessages, forgetOutgoingMessage } from "@/lib/client/failed-message-store";
 import {
   stopVoiceStreamAction,
   stopVideoStreamAction,
@@ -59,6 +58,7 @@ export interface ComposerCaptureSources {
     panels: Pick<ChatPageStateModel["panels"], "pendingDeleteRef" | "chatActionPanelTimeoutRef">;
     recorderPresentation: Pick<ChatPageStateModel["recorderPresentation"], "setVoiceRecordingStream" | "setVoiceRecording" | "setVoiceRecordingLocked" | "setVideoRecordingStream" | "setVideoRecording" | "setVideoRecordingLocked" | "setVideoRecorderOpen" | "voiceRecordingMs" | "voiceRecording" | "recordingLocksRef" | "setVoiceRecordingMs" | "videoRecording" | "videoRecorderOpen" | "setVideoCameraSwitching" | "setRecordModeHintUntil" | "composerRecordMode" | "voiceRecordingLocked" | "videoRecordingLocked" | "setComposerRecordMode">;
     conversationRequest: Pick<ChatPageStateModel["conversationRequest"], "setSendingMedia" | "syncing" | "sending">;
+    messageInteraction: Pick<ChatPageStateModel["messageInteraction"], "selectionMode">;
 
   };
   elements: Pick<ChatElementStateModel, "sanitizeMessages" | "isMessageMarkedDeleted" | "markMessageDeletedTombstone"> & {
@@ -136,22 +136,9 @@ export function useComposerCapture(sources: ComposerCaptureSources): ComposerCap
   const { rotateSharedKey } = sources.encryption;
   const { uploadChatMediaFile } = sources.callbacks;
 
-  const failedChatLink = activeChat?.link;
-  const failedChatType = activeConversation?.chatType;
-  const failedConversationId = activeConversation?.conversationId;
   useEffect(() => {
-    if (!selfId || !failedChatLink || !failedChatType || failedChatLink.startsWith("secret-")) return;
-    const account = selfId, link = failedChatLink;
-    const target = `${failedChatType}:${link}`;
-    let cancelled = false;
-    void readFailedMessages(account, target).then(failed => {
-      if (cancelled || currentUserIdRef.current !== account || selectedLinkRef.current !== link || !failed.length) return;
-      const visible = failed.filter(message => !isMessageMarkedDeleted(message.id));
-      visible.forEach(rememberOutgoingMessage);
-      setMessages(previous => sanitizeMessages(mergeMessageWindow(previous, visible.filter(message => !previous.some(existing => existing.id === message.id || existing.localId === message.id)))));
-    });
-    return () => { cancelled = true; };
-  }, [selfId, failedChatLink, failedConversationId, failedChatType, currentUserIdRef, selectedLinkRef, isMessageMarkedDeleted, sanitizeMessages, setMessages]);
+    if (selfId) void warmFailedMessages(selfId);
+  }, [selfId]);
 
   useEffect(() => {
     return decryptSharedChatPreviews({ chats, decryptedPreviewFingerprintRef, buildSharedChatKeyId, loadSharedKeyByVersion, ensureSharedKeyFromServer, cryptoDiagnosticRef, setChats });
@@ -292,6 +279,14 @@ export function useComposerCapture(sources: ComposerCaptureSources): ComposerCap
     cancelDuringCall();
     return subscribeCallPlayback(cancelDuringCall);
   }, [cancelVideoRecording, cancelVoiceRecording, clearVoiceHoldStartTimer]);
+
+  const selectionMode = sources.page.messageInteraction.selectionMode;
+  useEffect(() => {
+    if (!selectionMode) return;
+    clearVoiceHoldStartTimer();
+    if (voiceRecorderRef.current || voiceStreamRef.current) cancelVoiceRecording();
+    if (videoRecorderRef.current || videoStreamRef.current) cancelVideoRecording();
+  }, [selectionMode, cancelVideoRecording, cancelVoiceRecording, clearVoiceHoldStartTimer]);
 
   const refreshVideoInputDevices = useCallback(async () => {
     try {

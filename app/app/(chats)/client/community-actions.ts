@@ -1104,7 +1104,17 @@ export function loadDesktopDetails({ isDesktop, desktopDetailsPanelOpen, activeD
 
   async function loadDesktopDetails() {
     if (!activeDetailsLink) return;
-    if (!activeDetailsChatType || activeDetailsChatType === "saved") return;
+    if (!activeDetailsChatType) return;
+    if (activeDetailsChatType === "saved" || activeDetailsChatType === "eclipse") {
+      const saved = activeDetailsChatType === "saved";
+      setProfileData({ id: saved ? "saved" : "eclipse-system", link: saved ? "saved" : "eclipse", displayName: saved ? t("Избранное") : "Eclipse", isBot: !saved, avatarUrl: null, usernameHidden: saved, description: null, createdAt: "" });
+      setProfileLoading(false);
+      setProfileError(null);
+      setContactEditorTarget(null);
+      setContactExists(false);
+      setContactMessage(null);
+      return;
+    }
 
     if (activeDetailsChatType === "group") {
       setProfileActiveTab("members");

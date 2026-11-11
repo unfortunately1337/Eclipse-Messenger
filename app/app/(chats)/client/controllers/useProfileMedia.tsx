@@ -1,8 +1,6 @@
 "use client";
 
-import { schedulePanelIdle } from "@/lib/client/panel-work";
-
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo } from "react";
 
 import { getPresenceStatusText } from "@/lib/client/presence-status";
 
@@ -28,7 +26,7 @@ import type { ChatPageCallbacks } from "./chat-page-callbacks";
 
 export interface ProfileMediaSources {
   presentation: Pick<ConversationPresentationModel, "replyTargetMessage" | "activeTitle" | "groupMembersById" | "activePeerId" | "isSecretChat" | "activeStatusText">;
-  page: Pick<ChatPageStateModel, "t" | "profileModalOpen" | "reducedPanelMotion" | "profileData" | "profileIsSaved" | "profileIsBot" | "onlineUserIds" | "lastOfflineAtByUserId" | "presenceNowTs"> & {
+  page: Pick<ChatPageStateModel, "t" | "profileModalOpen" | "profileData" | "profileIsSaved" | "profileIsBot" | "onlineUserIds" | "lastOfflineAtByUserId" | "presenceNowTs"> & {
     conversation: Pick<ChatPageStateModel["conversation"], "activeConversation" | "messages" | "chats">;
     account: Pick<ChatPageStateModel["account"], "selfId" | "selfProfile">;
     storyDraft: Pick<ChatPageStateModel["storyDraft"], "storyReplyTarget">;
@@ -61,7 +59,7 @@ export interface ProfileMediaModel {
     messageId: string;
     kind: "image" | "video";
     src: string;
-    caption?: string | undefined;
+    caption?: string | undefined; preview?: string;
     durationMs?: number | undefined;
     mode?: "file" | "note" | undefined;
     timeText: string;
@@ -132,7 +130,7 @@ export interface ProfileMediaModel {
 /** Owns this stage of the chat lifecycle; cleanup and hook order match the page. */
 export function useProfileMedia(sources: ProfileMediaSources): ProfileMediaModel {
   const { replyTargetMessage, activeTitle, groupMembersById, activePeerId, isSecretChat, activeStatusText } = sources.presentation;
-  const { t, profileModalOpen, reducedPanelMotion, profileData, profileIsSaved, profileIsBot, onlineUserIds, lastOfflineAtByUserId, presenceNowTs } = sources.page;
+  const { t, profileModalOpen, profileData, profileIsSaved, profileIsBot, onlineUserIds, lastOfflineAtByUserId, presenceNowTs } = sources.page;
   const { activeConversation, messages, chats } = sources.page.conversation;
   const { selfId, selfProfile } = sources.page.account;
   const { storyReplyTarget } = sources.page.storyDraft;
@@ -175,17 +173,7 @@ export function useProfileMedia(sources: ProfileMediaSources): ProfileMediaModel
 
   const detailsPanelOpen = desktopDetailsPanelOpen || profileModalOpen || groupModalOpen || channelModalOpen;
 
-  const [detailsTabsReady, setDetailsTabsReady] = useState(false);
-
-  useEffect(() => {
-    if (!detailsPanelOpen) {
-      setDetailsTabsReady(false);
-      return;
-    }
-    return schedulePanelIdle(() => setDetailsTabsReady(true), reducedPanelMotion ? 0 : undefined);
-  }, [detailsPanelOpen, reducedPanelMotion]);
-
-  const profileMediaVisible = detailsPanelOpen && detailsTabsReady;
+  const profileMediaVisible = detailsPanelOpen;
 
   const chatSharedMediaList = useMemo(() => {
     return chatSharedMediaListAction({ profileMediaVisible, profileActiveTab, selfId, selfProfile, messages, activeConversation, groupMembersById, readProfileFromCache, contactsForAdd, activeChat, selectedLink, activeTitle, t });
@@ -236,7 +224,7 @@ export function useProfileMedia(sources: ProfileMediaSources): ProfileMediaModel
       const raw = parseMessageContentCached(message.text, false);
       if (!["file"].includes(raw.kind)) continue;
       const parsed = resolveMessageMedia(raw);
-      if (parsed.kind === "file" && (parsed.src || (parsed as any).url)) {
+      if (parsed.kind === "file" && raw.kind === "file" && raw.src) {
         const fileUrl = parsed.src || (parsed as any).url || "";
         const fileName = parsed.name || t("Файл");
         const ext = fileName.includes(".") ? fileName.split(".").pop()?.toLowerCase() || "file" : "file";
@@ -304,14 +292,14 @@ export function useProfileMedia(sources: ProfileMediaSources): ProfileMediaModel
       const raw = parseMessageContentCached(message.text, false);
       if (!["music"].includes(raw.kind)) continue;
       const parsed = resolveMessageMedia(raw);
-      if (parsed.kind === "music" && parsed.url) {
+      if (parsed.kind === "music" && raw.kind === "music" && raw.url) {
         list.push({
           id: `${message.id}-music`,
           messageId: message.id,
           url: parsed.url,
           title: parsed.title || t("Музыка"),
           author: parsed.author || t("Аудиозапись"),
-          coverUrl: parsed.coverUrl,
+          coverUrl: raw.coverUrl,
           durationMs: parsed.durationMs,
           dateText: formatMediaViewerDate(message.createdAt),
           timeText: formatMessageTimeLabel(message.createdAt),

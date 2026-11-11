@@ -9,7 +9,7 @@ import { RiMicFill } from "react-icons/ri";
 import { cn } from "@/lib/utils";
 import { getMessageTailColor } from "@/lib/message-surface";
 import { renderEmojiText } from "@/components/EmojiText";
-import { MessageMeta } from "./MessageStatus";
+import { MessageMeta, MESSAGE_META_TEXT_CLASS } from "./MessageStatus";
 import { VoiceWaveformBars } from "../../VoiceWaveformBars";
 import { getCachedMediaUrl, getDecodedMediaPreview, invalidateCachedMediaUrl } from "@/lib/client/media-cache";
 import { MediaLoadingPreview } from "@/components/MediaLoadingPreview";
@@ -47,6 +47,7 @@ export function MessageBubbleTail({
 
   return (
     <svg
+      data-message-tail
       viewBox="0 0 9 20"
       width={compact ? "6.3" : "9"}
       height={compact ? "14" : "20"}
@@ -292,7 +293,7 @@ export function VoiceMessageBubble({
     >
       {headerSlot ? <div className="relative z-[2]">{headerSlot}</div> : null}
       <MessageBubbleTail isMine={isMine} hasTail={Boolean(hasTail)} mineGradientStyle={mineGradientStyle} />
-      <audio ref={audioRef} src={currentSrc} preload="metadata" onError={handleAudioError} />
+      <audio ref={audioRef} src={currentSrc || undefined} preload="metadata" onError={handleAudioError} />
 
       {/* Top: Play button + Waveform & Duration */}
       <div className="relative z-[2] flex items-center gap-3 w-full">
@@ -355,7 +356,7 @@ export function VoiceMessageBubble({
             "flex items-center justify-between gap-2 text-[11px] font-medium leading-4 select-none",
             isLightBubble ? "text-zinc-500" : "text-white/80"
           )}>
-            <span className={cn("tabular-nums leading-4", isLightBubble ? "text-zinc-600" : "text-white/90")}>
+            <span data-voice-duration className={cn(MESSAGE_META_TEXT_CLASS, isLightBubble ? "text-zinc-600" : "text-white/90")}>
               {formatTime(playing ? currentTime : (effectiveDurMs || durationMs))}
             </span>
             {!reactionsSlot ? (
@@ -688,7 +689,7 @@ export function VideoCircleBubble({
 
       {/* Timestamp badge floating on circle */}
       <MessageMeta timeText={timeText} showChannelViews={showChannelViews} channelViewsText={channelViewsText} showDeliveryStatus={showDeliveryStatus} isRead={isRead} className={cn(
-        "absolute px-2 py-0.5 rounded-full bg-black/60 backdrop-blur-md text-[10px] font-medium text-white flex items-center gap-1 shadow-sm pointer-events-none transition-all duration-300",
+        "absolute h-5 px-1.5 py-0 rounded-full bg-black/60 backdrop-blur-md text-[11px] font-medium text-white flex items-center gap-1 shadow-sm pointer-events-none transition-all duration-300",
         isMine
           ? (expanded ? "bottom-2 right-3" : "bottom-1.5 right-2.5")
           : (expanded ? "bottom-2 left-3" : "bottom-1.5 left-2.5")

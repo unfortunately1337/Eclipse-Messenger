@@ -92,13 +92,17 @@ export function MessageStatusTicks({ read }: { read: boolean }) {
   return <MessageStatus status={pending ? "sending" : read ? "read" : "sent"} />;
 }
 
+export const MESSAGE_META_TEXT_CLASS = "font-sans text-[11px] font-medium leading-4 tabular-nums";
+
 export function MessageMeta({ timeText, showChannelViews = false, channelViewsText, showDeliveryStatus = false, isRead = false, className }: {
   timeText?: string; showChannelViews?: boolean; channelViewsText?: string; showDeliveryStatus?: boolean; isRead?: boolean; className?: string;
 }) {
   const pending = useContext(PendingMessageContext);
-  return <span data-message-meta className={cn(className, "inline-flex min-h-4 shrink-0 items-center gap-1 whitespace-nowrap text-[11px] font-medium leading-4 tabular-nums select-none")}>
+  return <span data-message-meta className={cn(className, "inline-flex min-h-4 shrink-0 items-center gap-1 whitespace-nowrap select-none", MESSAGE_META_TEXT_CLASS)}>
     {showChannelViews && !pending && <span className="inline-flex items-center gap-0.5"><IoMdEye size={12} /><span>{channelViewsText}</span></span>}
     <span>{timeText}</span>
     {(showDeliveryStatus || pending) && <MessageStatusTicks read={isRead} />}
   </span>;
 }
+
+

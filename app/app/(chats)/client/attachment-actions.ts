@@ -30,6 +30,8 @@ export interface ResetConversationViewportContext {
   setProfileData: React.Dispatch<React.SetStateAction<ProfilePreview | null>>;
   setContactEditorTarget: React.Dispatch<React.SetStateAction<{ link: string; displayName: string; avatarUrl?: string | null | undefined; } | null>>;
   setDesktopDetailsPanelOpen: React.Dispatch<React.SetStateAction<boolean>>;
+  setInspectedDetailsEntity: React.Dispatch<React.SetStateAction<{ type: "direct" | "group" | "channel"; link: string } | null>>;
+  detailsTargetRef: React.RefObject<{ kind: "direct" | "group" | "channel"; link: string } | null>;
   userScrolledUpRef: React.RefObject<boolean>;
   userSentMessageRef: React.RefObject<boolean>;
   lastObservedMessagesScrollTopRef: React.RefObject<number>;
@@ -47,7 +49,7 @@ export interface ResetConversationViewportContext {
   openConversationRef: React.RefObject<(link: string, options?: { force?: boolean | undefined; revalidate?: boolean | undefined; chatType?: ConversationChatType | undefined; } | undefined) => Promise<void>>;
 }
 
-export function resetConversationViewport({ selectedLink, bottomScrollAnimationRef, isScrollingToBottomRef, programmaticScrollRef, lastHandledSelectedLinkRef, chatScrollRef, setHasMoreMessagesBefore, setLoadingOlderMessages, setShowScrollToBottomButton, selectedSearchTargetRef, selectedChat, requestedChatType, selfId, currentUserIdRef, chatReadingPositionsRef, setProfileData, setContactEditorTarget, setDesktopDetailsPanelOpen, userScrolledUpRef, userSentMessageRef, lastObservedMessagesScrollTopRef, lastCommittedMessagesScrollTopRef, setMessagesScrollTop, messagesAtBottomRef, preservingHistoryScrollRef, prependScrollSnapshotRef, setMessageHelperId, setStickerPickerOpen, setAttachmentMenuOpen, setActiveConversation, setMessages, setDecryptingConversation, openConversationRef }: ResetConversationViewportContext): void {
+export function resetConversationViewport({ selectedLink, bottomScrollAnimationRef, isScrollingToBottomRef, programmaticScrollRef, lastHandledSelectedLinkRef, chatScrollRef, setHasMoreMessagesBefore, setLoadingOlderMessages, setShowScrollToBottomButton, selectedSearchTargetRef, selectedChat, requestedChatType, selfId, currentUserIdRef, chatReadingPositionsRef, setProfileData, setContactEditorTarget, setDesktopDetailsPanelOpen, setInspectedDetailsEntity, detailsTargetRef, userScrolledUpRef, userSentMessageRef, lastObservedMessagesScrollTopRef, lastCommittedMessagesScrollTopRef, setMessagesScrollTop, messagesAtBottomRef, preservingHistoryScrollRef, prependScrollSnapshotRef, setMessageHelperId, setStickerPickerOpen, setAttachmentMenuOpen, setActiveConversation, setMessages, setDecryptingConversation, openConversationRef }: ResetConversationViewportContext): void {
   if (!selectedLink) {
     bottomScrollAnimationRef.current?.cancel();
     bottomScrollAnimationRef.current = null;
@@ -80,9 +82,11 @@ export function resetConversationViewport({ selectedLink, bottomScrollAnimationR
   programmaticScrollRef.current = false;
   lastHandledSelectedLinkRef.current = selectedLink;
 
+  setInspectedDetailsEntity(null);
+  detailsTargetRef.current = { kind: chatType === "group" || chatType === "channel" ? chatType : "direct", link: selectedLink };
+
   setProfileData(null);
   setContactEditorTarget(null);
-  setDesktopDetailsPanelOpen(false);
 
   chatScrollRef.current = { key, link: selectedLink, initial: true };
   const position = chatReadingPositionsRef.current.get(key);

@@ -113,7 +113,7 @@ export interface ConversationMessagesProps {
   openImageViewer: (item: ChatImageGalleryItem) => void;
   renderLinkifiedText: (value: string) => React.ReactNode;
   pollResults: Record<string, { totalVotes: number; optionCounts: Record<number, number>; userVotedOptionIdx: number | null; }>;
-  handlePollVote: (messageId: string, optionIdx: number) => Promise<void>;
+  handlePollVote: (messageId: string, optionIdx: number | null) => Promise<void>;
   fetchPollResults: (messageId: string) => Promise<void>;
   hasAllowedReactions: boolean;
   hoverReactionMessageId: string | null;

@@ -5,6 +5,7 @@ import { useCallback, type ReactNode } from "react";
 import { MessageDeliveryProvider } from "../components/common/MessageStatus";
 import type { MessageRowProps } from "./message-row-equality";
 import { messageDeletionOffset } from "./message-deletion-layout";
+import { readCallMessage } from "@/lib/call-history";
 
 /** Layout moves independently of the expensive bubble/media subtree. */
 export function ConversationMessagePosition({ row, shared, children }: MessageRowProps & { children: ReactNode }) {
@@ -20,8 +21,9 @@ export function ConversationMessagePosition({ row, shared, children }: MessageRo
     animatedMessageIdsRef.current.add(key); animatedMessageIdsRef.current.add(message.id);
     if (enter && node.animate) node.animate([{ opacity: 0, transform: "translateY(6px)" }, { opacity: 1, transform: "translateY(0)" }], { duration: 140, easing: "cubic-bezier(0.2,0.9,0.3,1)" });
   }, [measure, message.id, message.localId, reduced, chatUiSettings.animateMessages, suppressMessageEntranceRef, animatedMessageIdsRef]);
-  if (message.systemPayload && message.systemPayload.botRole !== "user") return children;
-  const mine = shared.activeConversation?.chatType !== "channel" && (message.pending || message.senderId === (shared.selfId ?? shared.selfProfile?.id) || shared.activeConversation?.chatType === "saved");
+  const call = shared.activeConversation?.chatType === "direct" ? readCallMessage(message.systemPayload) : null;
+  if (message.systemPayload && message.systemPayload.botRole !== "user" && !call) return children;
+  const mine = call ? call.callerId === (shared.selfId ?? shared.selfProfile?.id) : shared.activeConversation?.chatType !== "channel" && (message.pending || message.senderId === (shared.selfId ?? shared.selfProfile?.id) || shared.activeConversation?.chatType === "saved");
   const offset = messageDeletionOffset(deletingShift, index);
   const shifted = offset > 0;
   return <MessageDeliveryProvider pending={Boolean(message.pending)} failed={Boolean(message.sendFailure)}>

@@ -113,14 +113,14 @@ export interface ChatSharedMediaListActionContext {
   t: (source: string, values?: TranslationValues | undefined) => string;
 }
 
-export function chatSharedMediaListAction({ profileMediaVisible, profileActiveTab, selfId, selfProfile, messages, activeConversation, groupMembersById, readProfileFromCache, contactsForAdd, activeChat, selectedLink, activeTitle, t }: ChatSharedMediaListActionContext): { id: string; messageId: string; kind: "image" | "video"; src: string; caption?: string | undefined; durationMs?: number | undefined; mode?: "note" | "file" | undefined; timeText: string; dateText: string; authorName: string; authorAvatarUrl: string | null; authorLink: string | null; canDelete: boolean; isMine: boolean; }[] {
+export function chatSharedMediaListAction({ profileMediaVisible, profileActiveTab, selfId, selfProfile, messages, activeConversation, groupMembersById, readProfileFromCache, contactsForAdd, activeChat, selectedLink, activeTitle, t }: ChatSharedMediaListActionContext): { id: string; messageId: string; kind: "image" | "video"; src: string; caption?: string | undefined; preview?: string; durationMs?: number | undefined; mode?: "note" | "file" | undefined; timeText: string; dateText: string; authorName: string; authorAvatarUrl: string | null; authorLink: string | null; canDelete: boolean; isMine: boolean; }[] {
   if (!profileMediaVisible || profileActiveTab !== "media") return [];
   const list: Array<{
     id: string;
     messageId: string;
     kind: "image" | "video";
     src: string;
-    caption?: string;
+    caption?: string; preview?: string;
     durationMs?: number;
     mode?: "note" | "file";
     timeText: string;
@@ -136,7 +136,7 @@ export function chatSharedMediaListAction({ profileMediaVisible, profileActiveTa
   for (const message of messages) {
     const raw = parseMessageContentCached(message.text, false);
     if (!["image", "video", "album"].includes(raw.kind)) continue;
-    const parsed = resolveMessageMedia(raw);
+    const parsed = raw;
     const isMine = activeConversation?.chatType === "saved" || (effectiveSelfId ? message.senderId === effectiveSelfId : false);
     const isChannelMedia = activeConversation?.chatType === "channel";
     const senderMeta = activeConversation?.chatType === "group" ? groupMembersById.get(message.senderId) ?? null : null;
@@ -192,7 +192,7 @@ export function chatSharedMediaListAction({ profileMediaVisible, profileActiveTa
         id: `${message.id}-img`,
         messageId: message.id,
         kind: "image",
-        src: parsed.src,
+        src: parsed.src, preview: parsed.preview,
         caption: parsed.caption || "",
         ...meta,
       });
@@ -202,7 +202,7 @@ export function chatSharedMediaListAction({ profileMediaVisible, profileActiveTa
           id: `${message.id}-vid`,
           messageId: message.id,
           kind: "video",
-          src: parsed.src,
+          src: parsed.src, preview: parsed.preview,
           caption: parsed.caption || "",
           durationMs: parsed.durationMs,
           mode: parsed.mode,
@@ -217,7 +217,7 @@ export function chatSharedMediaListAction({ profileMediaVisible, profileActiveTa
             id: `${message.id}-alb-${itemIdx}`,
             messageId: message.id,
             kind: item.kind === "video" ? "video" : "image",
-            src: item.src,
+            src: item.src, preview: item.preview,
             caption: parsed.caption || "",
             durationMs: item.durationMs,
             ...meta,
@@ -263,7 +263,7 @@ export function chatSharedVoiceListAction({ profileMediaVisible, profileActiveTa
     const raw = parseMessageContentCached(message.text, false);
     if (!["voice"].includes(raw.kind)) continue;
     const parsed = resolveMessageMedia(raw);
-    if (parsed.kind === "voice" && parsed.src) {
+    if (parsed.kind === "voice" && raw.kind === "voice" && raw.src) {
       const isChannel = activeConversation?.chatType === "channel";
       const isMine = activeConversation?.chatType === "saved" || (effectiveSelfId ? message.senderId === effectiveSelfId : false);
       const senderProfile = readProfileFromCache(message.senderId);

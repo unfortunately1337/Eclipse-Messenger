@@ -1,11 +1,12 @@
 "use client";
 import { FailedMessageActions } from "../components/common/FailedMessageActions";
+import { readCallMessage } from "@/lib/call-history";
 
 /* eslint-disable @next/next/no-img-element */
 import { type DecryptedMessage, type ParsedMessageContent, type MessageReadViewer, type StoryReplyTarget } from "../types";
 import { type TranslationValues, translate as t } from "@/lib/i18n/translate";
 import { CSSProperties, memo } from "react";
-import { ChevronDown, ChevronLeft, Eye } from "lucide-react";
+import { ChevronDown, ChevronLeft, Eye, Undo2 } from "lucide-react";
 import { BsPinAngleFill } from "react-icons/bs";
 import { useMessagePins } from "../hooks/useMessagePins";
 import { IoCopy, IoArrowRedo } from "react-icons/io5";
@@ -49,6 +50,8 @@ export interface RecordingPanelsProps {
   setStoryReplyTarget: React.Dispatch<React.SetStateAction<StoryReplyTarget | null>>;
   setReplyToMessageId: React.Dispatch<React.SetStateAction<string | null>>;
   helperCanCopy: boolean;
+  helperCanRetractVote: boolean;
+  retractPollVote: () => void;
   copyMessageText: (value: string) => Promise<void>;
   helperCopyValue: string;
   messagePins: ReturnType<typeof useMessagePins>;
@@ -65,7 +68,10 @@ export interface RecordingPanelsProps {
   renderCenteredMessageHelperPreview: () => React.JSX.Element | null;
 }
 
-export const RecordingPanels = memo(function RecordingPanels({ messageHelperId, helperMessage, helperParsed, setMessageHelperId, isCoarsePointer, t, reactionHelperWidth, messageHelperAnchor, helperIsMine, desktopMessageHelperRef, isSecretChat, hasAllowedReactions, messageHelperAllReactionsOpen, composerInputThemeStyle, reactionGridWidth, reactionGridColumns, allowedReactionEmojis, toggleReaction, setMessageHelperAllReactionsOpen, reducedPanelMotion, helperReactionEmojis, hasMoreReactions, messageHelperReadListOpen, setMessageHelperReadListOpen, helperReadViewers, helperReadPreviewViewers, setStoryReplyTarget, setReplyToMessageId, helperCanCopy, copyMessageText, helperCopyValue, messagePins, selectedLink, beginForwardMessages, helperIsEditable, editSaving, helperEditTargetId, beginEditMessage, beginSelectionMode, removingMessageIds, helperCanDelete, deleteMessage, renderCenteredMessageHelperPreview }: RecordingPanelsProps) {
+export const RecordingPanels = memo(function RecordingPanels({ messageHelperId, helperMessage, helperParsed, setMessageHelperId, isCoarsePointer, t, reactionHelperWidth, messageHelperAnchor, helperIsMine, desktopMessageHelperRef, isSecretChat, hasAllowedReactions, messageHelperAllReactionsOpen, composerInputThemeStyle, reactionGridWidth, reactionGridColumns, allowedReactionEmojis, toggleReaction, setMessageHelperAllReactionsOpen, reducedPanelMotion, helperReactionEmojis, hasMoreReactions, messageHelperReadListOpen, setMessageHelperReadListOpen, helperReadViewers, helperReadPreviewViewers, setStoryReplyTarget, setReplyToMessageId, helperCanCopy, helperCanRetractVote, retractPollVote, copyMessageText, helperCopyValue, messagePins, selectedLink, beginForwardMessages, helperIsEditable, editSaving, helperEditTargetId, beginEditMessage, beginSelectionMode, removingMessageIds, helperCanDelete, deleteMessage, renderCenteredMessageHelperPreview }: RecordingPanelsProps) {
+  const helperIsCall = Boolean(readCallMessage(helperMessage?.systemPayload));
+  const helperIsPoll = helperParsed?.kind === "poll";
+  const canRetractVote = helperCanRetractVote && helperParsed?.kind === "poll" && !helperParsed.quizMode;
   return (
     <AnimatePresence>
       {messageHelperId && helperMessage && helperParsed ? (
@@ -361,7 +367,8 @@ export const RecordingPanels = memo(function RecordingPanels({ messageHelperId, 
                             >
                               <FaReply size={16} className="shrink-0 text-white/80" />
                               {t("Ответить")}</Button>
-                            {!(!helperCanCopy) && (<Button
+                            {canRetractVote && <Button type="button" variant="ghost" size="sm" aria-label={t("Отменить голос")} onClick={() => { setMessageHelperId(null); retractPollVote(); }} className="h-9 w-full justify-start rounded-xl px-2.5 gap-3 text-inherit hover:bg-white/10"><Undo2 size={17} className="shrink-0" />{t("Отменить")}</Button>}
+                            {!helperIsCall && !helperIsPoll && !(!helperCanCopy) && (<Button
                               type="button"
                               variant="ghost"
                               size="sm"
@@ -371,9 +378,9 @@ export const RecordingPanels = memo(function RecordingPanels({ messageHelperId, 
                             >
                               <IoCopy size={17} className="shrink-0 text-white/80" />
                               {t("Скопировать")}</Button>)}
-                            {!(!messagePins.canManage || messagePins.busy || helperMessage.id.startsWith("optimistic:")) && (<Button type="button" variant="ghost" size="sm" disabled={!messagePins.canManage || messagePins.busy || helperMessage.id.startsWith("optimistic:")} onClick={() => { setMessageHelperId(null); void messagePins.toggle((helperMessage!).id); }} className="h-9 w-full justify-start rounded-xl px-2.5 gap-3 text-inherit hover:bg-white/10 disabled:opacity-40"><BsPinAngleFill size={17} className="shrink-0" />{messagePins.pins.some(pin => pin.id === (helperMessage!).id) ? t("Открепить") : t("Закрепить")}</Button>)}
-                            {!(Boolean(selectedLink?.startsWith("secret-"))) && (<Button type="button" variant="ghost" size="sm" disabled={Boolean(selectedLink?.startsWith("secret-"))} onClick={() => beginForwardMessages([helperMessage!])} className="h-9 w-full justify-start rounded-xl px-2.5 gap-3 text-inherit hover:bg-white/10 disabled:opacity-40"><IoArrowRedo size={17} />{t("Переслать")}</Button>)}
-                            {!(!helperIsEditable || editSaving || (helperEditTargetId !== null && helperEditTargetId !== helperMessage.id)) && (<Button
+                            {!helperIsCall && !(!messagePins.canManage || messagePins.busy || helperMessage.id.startsWith("optimistic:")) && (<Button type="button" variant="ghost" size="sm" disabled={!messagePins.canManage || messagePins.busy || helperMessage.id.startsWith("optimistic:")} onClick={() => { setMessageHelperId(null); void messagePins.toggle((helperMessage!).id); }} className="h-9 w-full justify-start rounded-xl px-2.5 gap-3 text-inherit hover:bg-white/10 disabled:opacity-40"><BsPinAngleFill size={17} className="shrink-0" />{messagePins.pins.some(pin => pin.id === (helperMessage!).id) ? t("Открепить") : t("Закрепить")}</Button>)}
+                            {!helperIsCall && !helperIsPoll && !(Boolean(selectedLink?.startsWith("secret-"))) && (<Button type="button" variant="ghost" size="sm" disabled={Boolean(selectedLink?.startsWith("secret-"))} onClick={() => beginForwardMessages([helperMessage!])} className="h-9 w-full justify-start rounded-xl px-2.5 gap-3 text-inherit hover:bg-white/10 disabled:opacity-40"><IoArrowRedo size={17} />{t("Переслать")}</Button>)}
+                            {!helperIsCall && !(!helperIsEditable || editSaving || (helperEditTargetId !== null && helperEditTargetId !== helperMessage.id)) && (<Button
                               type="button"
                               variant="ghost"
                               size="sm"
@@ -635,7 +642,8 @@ export const RecordingPanels = memo(function RecordingPanels({ messageHelperId, 
                             >
                               <FaReply size={16} className="shrink-0 text-white/80" />
                               {t("Ответить")}</Button>
-                            {!(!helperCanCopy) && (<Button
+                            {canRetractVote && <Button type="button" variant="ghost" size="sm" aria-label={t("Отменить голос")} onClick={() => { setMessageHelperId(null); retractPollVote(); }} className="h-9 w-full justify-start rounded-xl px-2.5 gap-3 text-inherit hover:bg-white/10"><Undo2 size={17} className="shrink-0" />{t("Отменить")}</Button>}
+                            {!helperIsCall && !helperIsPoll && !(!helperCanCopy) && (<Button
                               type="button"
                               variant="ghost"
                               size="sm"
@@ -645,9 +653,9 @@ export const RecordingPanels = memo(function RecordingPanels({ messageHelperId, 
                             >
                               <IoCopy size={17} className="shrink-0 text-white/80" />
                               {t("Скопировать")}</Button>)}
-                            {!(!messagePins.canManage || messagePins.busy || helperMessage.id.startsWith("optimistic:")) && (<Button type="button" variant="ghost" size="sm" disabled={!messagePins.canManage || messagePins.busy || helperMessage.id.startsWith("optimistic:")} onClick={() => { setMessageHelperId(null); void messagePins.toggle((helperMessage!).id); }} className="h-9 w-full justify-start rounded-xl px-2.5 gap-3 text-inherit hover:bg-white/10 disabled:opacity-40"><BsPinAngleFill size={17} className="shrink-0" />{messagePins.pins.some(pin => pin.id === (helperMessage!).id) ? t("Открепить") : t("Закрепить")}</Button>)}
-                            {!(Boolean(selectedLink?.startsWith("secret-"))) && (<Button type="button" variant="ghost" size="sm" disabled={Boolean(selectedLink?.startsWith("secret-"))} onClick={() => beginForwardMessages([helperMessage!])} className="h-9 w-full justify-start rounded-xl px-2.5 gap-3 text-inherit hover:bg-white/10 disabled:opacity-40"><IoArrowRedo size={17} />{t("Переслать")}</Button>)}
-                            {!(!helperIsEditable || editSaving || (helperEditTargetId !== null && helperEditTargetId !== helperMessage.id)) && (<Button
+                            {!helperIsCall && !(!messagePins.canManage || messagePins.busy || helperMessage.id.startsWith("optimistic:")) && (<Button type="button" variant="ghost" size="sm" disabled={!messagePins.canManage || messagePins.busy || helperMessage.id.startsWith("optimistic:")} onClick={() => { setMessageHelperId(null); void messagePins.toggle((helperMessage!).id); }} className="h-9 w-full justify-start rounded-xl px-2.5 gap-3 text-inherit hover:bg-white/10 disabled:opacity-40"><BsPinAngleFill size={17} className="shrink-0" />{messagePins.pins.some(pin => pin.id === (helperMessage!).id) ? t("Открепить") : t("Закрепить")}</Button>)}
+                            {!helperIsCall && !helperIsPoll && !(Boolean(selectedLink?.startsWith("secret-"))) && (<Button type="button" variant="ghost" size="sm" disabled={Boolean(selectedLink?.startsWith("secret-"))} onClick={() => beginForwardMessages([helperMessage!])} className="h-9 w-full justify-start rounded-xl px-2.5 gap-3 text-inherit hover:bg-white/10 disabled:opacity-40"><IoArrowRedo size={17} />{t("Переслать")}</Button>)}
+                            {!helperIsCall && !(!helperIsEditable || editSaving || (helperEditTargetId !== null && helperEditTargetId !== helperMessage.id)) && (<Button
                               type="button"
                               variant="ghost"
                               size="sm"

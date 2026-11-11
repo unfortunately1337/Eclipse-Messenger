@@ -2,62 +2,37 @@
 
 import { apiRequest } from "@/lib/client/http";
 
+export type PollResult = { totalVotes: number; optionCounts: Record<number, number>; userVotedOptionIdx: number | null };
 export interface HandlePollVoteActionContext {
-  setPollResults: React.Dispatch<React.SetStateAction<Record<string, { totalVotes: number; optionCounts: Record<number, number>; userVotedOptionIdx: number | null; }>>>;
+  current: PollResult | undefined;
+  setPollResults: React.Dispatch<React.SetStateAction<Record<string, PollResult>>>;
+  mutationQueue?: Map<string, Promise<void>>;
 }
 
-export async function handlePollVoteAction({ setPollResults }: HandlePollVoteActionContext, messageId: string, optionIdx: number): Promise<void> {
+export async function handlePollVoteAction({ current, setPollResults, mutationQueue }: HandlePollVoteActionContext, messageId: string, optionIdx: number | null): Promise<void> {
+  const previous = current ?? { totalVotes: 0, optionCounts: {}, userVotedOptionIdx: null };
+  if (previous.userVotedOptionIdx === optionIdx) return;
+  const counts = { ...previous.optionCounts };
+  if (previous.userVotedOptionIdx !== null) {
+    const index = previous.userVotedOptionIdx;
+    counts[index] = Math.max(0, (counts[index] ?? 0) - 1);
+  }
+  if (optionIdx !== null) counts[optionIdx] = (counts[optionIdx] ?? 0) + 1;
+  const optimistic = { totalVotes: Object.values(counts).reduce((sum, count) => sum + count, 0), optionCounts: counts, userVotedOptionIdx: optionIdx };
+  setPollResults(prev => ({ ...prev, [messageId]: optimistic }));
+  const send = () => apiRequest<PollResult>("/api/polls", { method: "POST", body: JSON.stringify({ messageId, optionIdx }) });
+  const previousRequest = mutationQueue?.get(messageId);
+  const request = previousRequest ? previousRequest.then(send, send) : send();
+  const settled = request.then(() => {}, () => {});
+  mutationQueue?.set(messageId, settled);
   try {
-    // Optimistic update
-    setPollResults((prev) => {
-      const current = prev[messageId] || { totalVotes: 0, optionCounts: {}, userVotedOptionIdx: null };
-      const isRetract = current.userVotedOptionIdx === optionIdx;
-      const newVotedIdx = isRetract ? null : optionIdx;
-      const newCounts = { ...current.optionCounts };
-
-      if (current.userVotedOptionIdx !== null) {
-        const prevIdx = current.userVotedOptionIdx;
-        newCounts[prevIdx] = Math.max(0, (newCounts[prevIdx] || 1) - 1);
-      }
-
-      if (newVotedIdx !== null) {
-        newCounts[newVotedIdx] = (newCounts[newVotedIdx] || 0) + 1;
-      }
-
-      const newTotal = Object.values(newCounts).reduce((a, b) => a + b, 0);
-      return {
-        ...prev,
-        [messageId]: {
-          totalVotes: newTotal,
-          optionCounts: newCounts,
-          userVotedOptionIdx: newVotedIdx,
-        }
-      };
-    });
-
-    const res = await apiRequest<{ totalVotes: number; optionCounts: Record<number, number>; userVotedOptionIdx: number | null }>(
-      "/api/polls",
-      {
-        method: "POST",
-        body: JSON.stringify({ messageId, optionIdx }),
-      }
-    );
-
-    setPollResults((prev) => ({
-      ...prev,
-      [messageId]: res,
-    }));
-  } catch (err) {
-    console.error("Failed to vote in poll:", err);
-    try {
-      const res = await apiRequest<{ totalVotes: number; optionCounts: Record<number, number>; userVotedOptionIdx: number | null }>(
-        `/api/polls?messageId=${encodeURIComponent(messageId)}`,
-        { method: "GET" }
-      );
-      setPollResults((prev) => ({
-        ...prev,
-        [messageId]: res,
-      }));
-    } catch { }
+    const result = await request;
+    setPollResults(prev => prev[messageId] === optimistic ? { ...prev, [messageId]: result } : prev);
+  } catch (error) {
+    // Restore immediately even when the server cannot be reached for a refresh.
+    setPollResults(prev => prev[messageId] === optimistic ? { ...prev, [messageId]: previous } : prev);
+    throw error;
+  } finally {
+    if (mutationQueue?.get(messageId) === settled) mutationQueue.delete(messageId);
   }
 }

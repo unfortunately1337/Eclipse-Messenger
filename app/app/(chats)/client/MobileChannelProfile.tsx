@@ -100,7 +100,7 @@ export const MobileChannelProfile = memo(function MobileChannelProfile({ isDeskt
               <div className="relative z-[1] p-2 text-sm text-red-500">{t(channelModalError ?? "")}</div>
             ) : channelModalData?.channel ? (
               <div className="relative z-[1] flex h-full min-h-0 flex-col">
-                <PanelNavigation direction={channelNavDirection} className={channelSubView === "qrcode" ? "min-h-0 flex-1 h-full" : ""}>
+                <PanelNavigation direction={channelNavDirection} className="min-h-0 flex-1 h-full grid-rows-[minmax(0,1fr)]">
                   {channelSubView === "reactions" ? renderCommunityReactions("channel", true) : channelSubView === "type" ? renderCommunityType("channel", true) : channelSubView === "settings" ? (
                     /* Channel Settings View */
                     <motion.div

@@ -36,6 +36,8 @@ import { formatFileSize } from "./media-files";
 /* eslint-disable @next/next/no-img-element */
 
 export interface MessageComposerProps {
+  selectionMode?: boolean;
+  selectionToolbar?: React.ReactNode;
   footerRef: React.RefObject<HTMLDivElement | null>;
   messageSearch: ReturnType<typeof useMessageSearch>;
   videoRecording: boolean;
@@ -153,7 +155,7 @@ export interface MessageComposerProps {
   openExternalLinkPrompt: (url: string) => void;
 }
 
-export const MessageComposer = memo(function MessageComposer({ footerRef, messageSearch, videoRecording, videoRecorderOpen, stickerPickerOpen, isEclipseConversation, isManagedBotConversation, messages, startActiveBot, startingBot, loadingConversation, t, activeConversation, canPostToChannel, canSubscribeToChannel, subscribeToActiveChannel, activeChat, toggleChatMutedState, composerInputThemeStyle, mutedChatLinkSet, canJoinGroup, joinActiveGroup, joiningGroup, chatActionPanel, chatActionPanelThemeStyle, hasRenderedPicker, isDesktop, mobileEmojiPickerHeight, composerPickerTab, preventPickerCloseOnFocusRef, messageInputRef, sendStickerFromPicker, setComposerPickerTab, attachmentMenuOpen, setAttachmentMenuOpen, imageInputRef, setPollQuestion, setPollOptions, setPollQuizMode, setPollCorrectOptionIndex, setPollExpiresInHours, setPollDialogOpen, syncing, editTarget, onPickMedia, voiceRecording, cancelVoiceRecording, cancelVideoRecording, isSecretChatComposerBlocked, activeTitle, isSecretChatAcceptRequired, acceptSecretChat, acceptingSecretChat, declineSecretChat, setStickerPickerOpen, forwardDraft, replyTargetMessage, storyReplyTarget, pendingMediaBatch, pendingImage, pendingVideo, pendingAudio, pendingFile, selfId, forwardSending, setForwardDraft, activeCustomTheme, replyComposerAuthor, cancelEditMode, setReplyToMessageId, setStoryReplyTarget, setPendingMediaBatch, sendingMedia, setPendingImage, setPendingVideo, setPendingAudio, setPendingFile, voiceRecordingStream, videoRecordingStream, voiceRecordingMs, videoRecordingMs, voiceWaveformSamplesRef, eclipseBots, messageText, setMessageText, messagesAtBottomRef, scrollMessagesToBottom, chatUiSettings, sending, sendingMessageInFlightRef, sendMessage, botChatUi, isSecretChat, sendPreparedMessage, editSaving, flipVideoCamera, videoCameraSwitching, finishVoiceRecording, finishVideoRecording, composerSendButtonToneClassName, composerSendButtonStyle, canSubmitMessage, privateKey, selfPublicKey, composerRecordMode, recordModeHintUntil, transparentVisual, micRecordButtonRef, handleMicPointerDown, handleMicPointerMove, handleMicPointerUp, handleMicPointerCancel, handleMicClick, reducedPanelMotion, openExternalLinkPrompt }: MessageComposerProps) {
+export const MessageComposer = memo(function MessageComposer({ selectionMode = false, selectionToolbar, footerRef, messageSearch, videoRecording, videoRecorderOpen, stickerPickerOpen, isEclipseConversation, isManagedBotConversation, messages, startActiveBot, startingBot, loadingConversation, t, activeConversation, canPostToChannel, canSubscribeToChannel, subscribeToActiveChannel, activeChat, toggleChatMutedState, composerInputThemeStyle, mutedChatLinkSet, canJoinGroup, joinActiveGroup, joiningGroup, chatActionPanel, chatActionPanelThemeStyle, hasRenderedPicker, isDesktop, mobileEmojiPickerHeight, composerPickerTab, preventPickerCloseOnFocusRef, messageInputRef, sendStickerFromPicker, setComposerPickerTab, attachmentMenuOpen, setAttachmentMenuOpen, imageInputRef, setPollQuestion, setPollOptions, setPollQuizMode, setPollCorrectOptionIndex, setPollExpiresInHours, setPollDialogOpen, syncing, editTarget, onPickMedia, voiceRecording, cancelVoiceRecording, cancelVideoRecording, isSecretChatComposerBlocked, activeTitle, isSecretChatAcceptRequired, acceptSecretChat, acceptingSecretChat, declineSecretChat, setStickerPickerOpen, forwardDraft, replyTargetMessage, storyReplyTarget, pendingMediaBatch, pendingImage, pendingVideo, pendingAudio, pendingFile, selfId, forwardSending, setForwardDraft, activeCustomTheme, replyComposerAuthor, cancelEditMode, setReplyToMessageId, setStoryReplyTarget, setPendingMediaBatch, sendingMedia, setPendingImage, setPendingVideo, setPendingAudio, setPendingFile, voiceRecordingStream, videoRecordingStream, voiceRecordingMs, videoRecordingMs, voiceWaveformSamplesRef, eclipseBots, messageText, setMessageText, messagesAtBottomRef, scrollMessagesToBottom, chatUiSettings, sending, sendingMessageInFlightRef, sendMessage, botChatUi, isSecretChat, sendPreparedMessage, editSaving, flipVideoCamera, videoCameraSwitching, finishVoiceRecording, finishVideoRecording, composerSendButtonToneClassName, composerSendButtonStyle, canSubmitMessage, privateKey, selfPublicKey, composerRecordMode, recordModeHintUntil, transparentVisual, micRecordButtonRef, handleMicPointerDown, handleMicPointerMove, handleMicPointerUp, handleMicPointerCancel, handleMicClick, reducedPanelMotion, openExternalLinkPrompt }: MessageComposerProps) {
   const recordingBlocked = useSyncExternalStore(subscribeCallPlayback, isCallPlaybackActive, inactiveCallPlaybackSnapshot);
   return (
     <footer
@@ -167,7 +169,9 @@ export const MessageComposer = memo(function MessageComposer({ footerRef, messag
         stickerPickerOpen ? "pb-0 md:pb-2.5" : "pb-[calc(env(safe-area-inset-bottom)+6px)]"
       )}
     >
-      <div className="pointer-events-auto mx-auto w-full max-w-[700px]" data-eclipse-bot-composer={isEclipseConversation ? "" : undefined}>
+      <AnimatePresence initial={false} mode="wait">
+      {selectionMode ? <motion.div key="selection-actions" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 8 }} transition={{ duration: reducedPanelMotion ? 0 : 0.16, ease: [0.22, 1, 0.36, 1] }}>{selectionToolbar}</motion.div> : (
+      <motion.div key="composer" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 8 }} transition={{ duration: reducedPanelMotion ? 0 : 0.14, ease: [0.22, 1, 0.36, 1] }} className="pointer-events-auto mx-auto w-full max-w-[700px]" data-eclipse-bot-composer={isEclipseConversation ? "" : undefined}>
         {isManagedBotConversation && messages.length === 0 ? (
           <div className="flex items-center justify-center">
             <Button type="button" onClick={() => void startActiveBot()} disabled={startingBot || loadingConversation}
@@ -983,7 +987,8 @@ export const MessageComposer = memo(function MessageComposer({ footerRef, messag
         )}
         {isEclipseConversation && <EclipseBotMenu controller={eclipseBots} material={composerInputThemeStyle} />}
         {isManagedBotConversation && messages.length > 0 && <BotReplyMenu controller={botChatUi} material={composerInputThemeStyle} onMessage={text => { void sendPreparedMessage(text, { resetComposer: false }); }} onUrl={openExternalLinkPrompt} />}
-      </div>
+      </motion.div>)}
+      </AnimatePresence>
     </footer>
   );
 });

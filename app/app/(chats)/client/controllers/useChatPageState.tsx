@@ -47,7 +47,7 @@ import { SETTINGS_LIVE_PRESETS } from "../../constants";
 
 import { chatListPreviewMetaCache } from "../chat-previews";
 import { clearChatMemoryCaches, withOwnStory } from "../chat-cache";
-import { getEmojisInfo, getEmojisList } from "../message-content";
+import { getEmojisInfo, getEmojisList, parseMessageContentCached } from "../message-content";
 
 import { handlePollVoteAction } from "../poll-actions";
 import { loadConnectedAccountsAction, handleSwitchAccountAction, openMessageHelperAction } from "../secret-chat-actions";
@@ -149,7 +149,7 @@ export interface ChatPageStateModel {
 
   }>>>;
   fetchPollResults: (messageId: string) => Promise<void>;
-  handlePollVote: (messageId: string, optionIdx: number) => Promise<void>;
+  handlePollVote: (messageId: string, optionIdx: number | null) => Promise<void>;
   account: ReturnType<typeof useChatAccountState>;
   storyFeed: import("@/app/app/(chats)/types").StoryFeedGroup[];
   identity: ReturnType<typeof useChatIdentityState>;
@@ -409,10 +409,13 @@ export function useChatPageState(deferred: ChatPageStateDeferred): ChatPageState
   }>>({});
 
   const requestedPollsRef = useRef<Set<string>>(new Set());
+  const pollVoteQueueRef = useRef(new Map<string, Promise<void>>());
+  const pollMutationVersionsRef = useRef(new Map<string, number>());
 
   const fetchPollResults = useCallback(async (messageId: string) => {
     if (requestedPollsRef.current.has(messageId)) return;
     requestedPollsRef.current.add(messageId);
+    const version = pollMutationVersionsRef.current.get(messageId);
     try {
       const res = await apiRequest<{
         totalVotes: number;
@@ -423,6 +426,7 @@ export function useChatPageState(deferred: ChatPageStateDeferred): ChatPageState
         `/api/polls?messageId=${encodeURIComponent(messageId)}`,
         { method: "GET" }
       );
+      if (pollMutationVersionsRef.current.get(messageId) !== version) return;
       setPollResults((prev) => ({
         ...prev,
         [messageId]: res,
@@ -433,9 +437,16 @@ export function useChatPageState(deferred: ChatPageStateDeferred): ChatPageState
     }
   }, []);
 
-  const handlePollVote = useCallback(async (messageId: string, optionIdx: number) => {
-    return handlePollVoteAction({ setPollResults }, messageId, optionIdx);
-  }, []);
+  const handlePollVote = useCallback(async (messageId: string, optionIdx: number | null) => {
+    const message = messages.find(item => item.id === messageId);
+    if (!message || message.pending) return;
+    const poll = parseMessageContentCached(message.text);
+    const current = pollResults[messageId];
+    if (poll.kind !== "poll" || (poll.expiresAt && Date.parse(poll.expiresAt) <= Date.now())) return;
+    if (optionIdx === null ? poll.quizMode || current?.userVotedOptionIdx == null : current?.userVotedOptionIdx != null || optionIdx < 0 || optionIdx >= poll.options.length) return;
+    pollMutationVersionsRef.current.set(messageId, (pollMutationVersionsRef.current.get(messageId) ?? 0) + 1);
+    await handlePollVoteAction({ setPollResults, current, mutationQueue: pollVoteQueueRef.current }, messageId, optionIdx);
+  }, [messages, pollResults]);
 
   const accountStateModel = useChatAccountState();
   const {
@@ -700,6 +711,10 @@ export function useChatPageState(deferred: ChatPageStateDeferred): ChatPageState
   const [profileError, setProfileError] = useState<string | null>(null);
 
   const [profileData, setProfileData] = useState<ProfilePreview | null>(null);
+
+  useLayoutEffect(() => {
+    setProfileScrollTop(0);
+  }, [profileData?.id, inspectedDetailsEntity?.link, selectedLink]);
 
   const profileDataRef = useRef(profileData);
 

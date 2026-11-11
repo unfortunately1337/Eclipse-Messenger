@@ -16,11 +16,11 @@ import type { ChatPagePresentationModel } from "./useChatPagePresentation";
 import type { ChatPageCallbacks } from "./chat-page-callbacks";
 
 export interface ConversationNavigationSources {
-  page: Pick<ChatPageStateModel, "requestedChatLink" | "requestedChatType" | "setProfileData" | "setMessageHelperReadListOpen" | "chatListMenuOpen" | "setChatListMenuOpen"> & {
+  page: Pick<ChatPageStateModel, "requestedChatLink" | "requestedChatType" | "setProfileData" | "setMessageHelperReadListOpen" | "chatListMenuOpen" | "setChatListMenuOpen" | "detailsTargetRef"> & {
     selection: Pick<ChatPageStateModel["selection"], "selectedLinkRef" | "selectedLinkChangedAtRef" | "setSelectedLink" | "selectedLink" | "selectedSearchTargetRef">;
     account: Pick<ChatPageStateModel["account"], "selfId">;
     contactEditor: Pick<ChatPageStateModel["contactEditor"], "setContactEditorTarget">;
-    panels: Pick<ChatPageStateModel["panels"], "setDesktopDetailsPanelOpen">;
+    panels: Pick<ChatPageStateModel["panels"], "setDesktopDetailsPanelOpen" | "setInspectedDetailsEntity">;
     appearance: Pick<ChatPageStateModel["appearance"], "setMessageHelperId" | "messageHelperId" | "desktopMessageHelperRef">;
     attachmentDraft: Pick<ChatPageStateModel["attachmentDraft"], "setStickerPickerOpen" | "stickerPickerOpen">;
     conversation: Pick<ChatPageStateModel["conversation"], "setAttachmentMenuOpen" | "setActiveConversation" | "setMessages" | "messages" | "activeConversation">;
@@ -72,7 +72,8 @@ export function useConversationNavigation(sources: ConversationNavigationSources
   const { selectedLinkRef, selectedLinkChangedAtRef, setSelectedLink, selectedLink, selectedSearchTargetRef } = sources.page.selection;
   const { selfId } = sources.page.account;
   const { setContactEditorTarget } = sources.page.contactEditor;
-  const { setDesktopDetailsPanelOpen } = sources.page.panels;
+  const { setDesktopDetailsPanelOpen, setInspectedDetailsEntity } = sources.page.panels;
+  const { detailsTargetRef } = sources.page;
   const { setMessageHelperId, messageHelperId, desktopMessageHelperRef } = sources.page.appearance;
   const { setStickerPickerOpen, stickerPickerOpen } = sources.page.attachmentDraft;
   const { setAttachmentMenuOpen, setActiveConversation, setMessages, messages, activeConversation } = sources.page.conversation;
@@ -124,7 +125,7 @@ export function useConversationNavigation(sources: ConversationNavigationSources
   }, [requestedChatLink]);
 
   useLayoutEffect(() => {
-    return resetConversationViewport({ selectedLink, bottomScrollAnimationRef, isScrollingToBottomRef, programmaticScrollRef, lastHandledSelectedLinkRef, chatScrollRef, setHasMoreMessagesBefore, setLoadingOlderMessages, setShowScrollToBottomButton, selectedSearchTargetRef, selectedChat, requestedChatType, selfId, currentUserIdRef, chatReadingPositionsRef, setProfileData, setContactEditorTarget, setDesktopDetailsPanelOpen, userScrolledUpRef, userSentMessageRef, lastObservedMessagesScrollTopRef, lastCommittedMessagesScrollTopRef, setMessagesScrollTop, messagesAtBottomRef, preservingHistoryScrollRef, prependScrollSnapshotRef, setMessageHelperId, setStickerPickerOpen, setAttachmentMenuOpen, setActiveConversation, setMessages, setDecryptingConversation, openConversationRef });
+    return resetConversationViewport({ selectedLink, bottomScrollAnimationRef, isScrollingToBottomRef, programmaticScrollRef, lastHandledSelectedLinkRef, chatScrollRef, setHasMoreMessagesBefore, setLoadingOlderMessages, setShowScrollToBottomButton, selectedSearchTargetRef, selectedChat, requestedChatType, selfId, currentUserIdRef, chatReadingPositionsRef, setProfileData, setContactEditorTarget, setDesktopDetailsPanelOpen, setInspectedDetailsEntity, detailsTargetRef, userScrolledUpRef, userSentMessageRef, lastObservedMessagesScrollTopRef, lastCommittedMessagesScrollTopRef, setMessagesScrollTop, messagesAtBottomRef, preservingHistoryScrollRef, prependScrollSnapshotRef, setMessageHelperId, setStickerPickerOpen, setAttachmentMenuOpen, setActiveConversation, setMessages, setDecryptingConversation, openConversationRef });
   }, [requestedChatType, selectedChat?.chatType, selectedLink, selfId]);
 
   useEffect(() => {

@@ -30,6 +30,7 @@ import { StoryAvatarRing } from "../components/story/StoryAvatarRing";
 import { telegramSubViewVariants } from "./config";
 import { ScrollableTabsBar, CommunityDetailsSkeleton } from "./profile-primitives";
 import { formatSharedFileSize } from "./media-thumbnails";
+import { ProfileMediaThumb } from "./ProfileMediaThumb";
 import { formatDurationFromSeconds } from "./media-recording";
 import { formatSearchCount } from "./virtualization";
 
@@ -115,7 +116,7 @@ export interface DesktopDetailsPanelProps {
   chatSharedLinksList: { id: string; messageId: string; url: string; domain: string; snippet: string; dateText: string; timeText: string; }[];
   openExternalLinkPrompt: (url: string) => void;
   chatSharedMusicList: { id: string; messageId: string; url: string; title: string; author: string; coverUrl?: string | null | undefined; durationMs?: number | undefined; dateText: string; timeText: string; }[];
-  chatSharedMediaList: { id: string; messageId: string; kind: "image" | "video"; src: string; caption?: string | undefined; durationMs?: number | undefined; mode?: "note" | "file" | undefined; timeText: string; dateText: string; authorName: string; authorAvatarUrl: string | null; authorLink: string | null; canDelete: boolean; isMine: boolean; }[];
+  chatSharedMediaList: { id: string; messageId: string; kind: "image" | "video"; src: string; caption?: string | undefined; preview?: string; durationMs?: number | undefined; mode?: "note" | "file" | undefined; timeText: string; dateText: string; authorName: string; authorAvatarUrl: string | null; authorLink: string | null; canDelete: boolean; isMine: boolean; }[];
   setVideoViewer: React.Dispatch<React.SetStateAction<{ src: string; caption: string; timeText: string; dateText: string; messageId: string; authorName: string; authorAvatarUrl?: string | null | undefined; authorLink?: string | null | undefined; canDelete: boolean; isMine?: boolean | undefined; } | null>>;
   setImageViewer: React.Dispatch<React.SetStateAction<ChatImageGalleryItem | null>>;
   profileError: string | null;
@@ -462,12 +463,12 @@ function DesktopDetailsPanelSurface({ desktopDetailsPanelOpen, liveBackgroundPre
             );
           })()}
           <div className={cn("relative z-[1] flex min-h-0 w-full flex-1 flex-col", (profileSubView === "qrcode" || groupSubView === "qrcode" || channelSubView === "qrcode" || (effectiveDetailsChatType === "direct" && profileSubView === null)) ? "h-full" : "h-[calc(100%-56px)]")}>
-            <div onScroll={handleProfileScroll} className={cn("min-h-0 flex-1 h-full flex flex-col no-scrollbar", (profileSubView === "qrcode" || profileSubView === "secret_chat" || groupSubView === "qrcode" || channelSubView === "qrcode") ? "overflow-hidden" : "overflow-y-auto pb-5")}>
+            <div key={`${effectiveDetailsChatType}:${inspectedDetailsEntity?.link ?? activeChat?.link ?? ""}`} onScroll={handleProfileScroll} className={cn("min-h-0 flex-1 h-full flex flex-col no-scrollbar", (profileSubView === "qrcode" || profileSubView === "secret_chat" || groupSubView === "qrcode" || channelSubView === "qrcode") ? "overflow-hidden" : "overflow-y-auto pb-5")}>
               {effectiveDetailsChatType === "direct" ? (
                 profileLoading ? (
                   renderProfileDetailsSkeleton()
                 ) : profileData ? (
-                  <PanelNavigation direction={profileNavDirection} className={profileSubView === "qrcode" || profileSubView === "secret_chat" ? "min-h-0 flex-1 h-full grid-rows-[minmax(0,1fr)]" : ""}>
+                  <PanelNavigation direction={profileNavDirection} className={profileSubView === "qrcode" || profileSubView === "secret_chat" ? "min-h-0 flex-1 h-full grid-rows-[minmax(0,1fr)]" : "shrink-0"}>
                     {profileSubView === "qrcode" ? (
                       <motion.div
                         key="profile-details-qrcode"
@@ -871,7 +872,7 @@ function DesktopDetailsPanelSurface({ desktopDetailsPanelOpen, liveBackgroundPre
                                   return (
                                     <a
                                       key={file.id}
-                                      href={file.src}
+                                      href={file.src || undefined} aria-disabled={!file.src}
                                       download={file.name}
                                       className="flex items-center gap-3.5 rounded-[18px] p-2 transition-colors hover:bg-white/[0.04] active:scale-[0.99] cursor-pointer group"
                                     >
@@ -927,7 +928,7 @@ function DesktopDetailsPanelSurface({ desktopDetailsPanelOpen, liveBackgroundPre
                                             audio.onended = () => setProfilePlayingAudioUrl(null);
                                           }
                                         }}
-                                        className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-[var(--ui-accent-solid,#38bdf8)] text-[color:var(--ui-accent-contrast,#ffffff)] hover:opacity-90 transition-opacity shadow-sm cursor-pointer"
+                                        disabled={!voice.src} className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-[var(--ui-accent-solid,#38bdf8)] text-[color:var(--ui-accent-contrast,#ffffff)] hover:opacity-90 transition-opacity shadow-sm cursor-pointer"
                                       >
                                         {isPlaying ? <Pause size={18} fill="currentColor" strokeWidth={0} /> : <Play size={18} fill="currentColor" strokeWidth={0} className="translate-x-0.5" />}
                                       </button>
@@ -1029,10 +1030,10 @@ function DesktopDetailsPanelSurface({ desktopDetailsPanelOpen, liveBackgroundPre
                                             }),
                                           );
                                         }}
-                                        className="relative grid h-11 w-11 shrink-0 place-items-center rounded-[12px] bg-zinc-800 text-white overflow-hidden shadow-sm cursor-pointer group"
+                                        disabled={!track.url} className="relative grid h-11 w-11 shrink-0 place-items-center rounded-[12px] bg-zinc-800 text-white overflow-hidden shadow-sm cursor-pointer group disabled:cursor-wait"
                                       >
                                         {track.coverUrl ? (
-                                          <img src={track.coverUrl} alt="" className="h-full w-full object-cover" />
+                                          <ProfileMediaThumb src={track.coverUrl} className="object-cover" />
                                         ) : (
                                           <Music2 size={20} className="text-zinc-400" />
                                         )}
@@ -1106,13 +1107,7 @@ function DesktopDetailsPanelSurface({ desktopDetailsPanelOpen, liveBackgroundPre
                                   >
                                     {item.kind === "video" ? (
                                       <>
-                                        <video
-                                          src={item.src}
-                                          className="h-full w-full object-cover transition-transform duration-200 group-hover:scale-105"
-                                          preload="metadata"
-                                          muted
-                                          playsInline
-                                        />
+                                        <ProfileMediaThumb src={item.src} preview={item.preview} video className="object-cover transition-transform duration-200 group-hover:scale-105" />
                                         <div className="absolute inset-0 bg-black/15 transition-opacity group-hover:bg-black/0" />
                                         <div className="absolute bottom-1.5 left-1.5 flex items-center gap-1 rounded-[6px] bg-black/60 px-1.5 py-0.5 text-[10.5px] font-medium text-white backdrop-blur-sm">
                                           <Play size={10} className="fill-white" />
@@ -1121,12 +1116,7 @@ function DesktopDetailsPanelSurface({ desktopDetailsPanelOpen, liveBackgroundPre
                                       </>
                                     ) : (
                                       <>
-                                        <img
-                                          src={item.src}
-                                          alt={item.caption || ""}
-                                          className="h-full w-full object-cover transition-transform duration-200 group-hover:scale-105"
-                                          loading="lazy"
-                                        />
+                                        <ProfileMediaThumb src={item.src} preview={item.preview} alt={item.caption || ""} className="object-cover transition-transform duration-200 group-hover:scale-105" />
                                         <div className="absolute inset-0 bg-black/0 transition-colors group-hover:bg-white/5" />
                                       </>
                                     )}

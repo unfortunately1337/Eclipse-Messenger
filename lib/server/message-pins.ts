@@ -4,6 +4,7 @@ import { prisma } from "./prisma";
 import { HttpError } from "./http";
 import { requireSecretChatAccess } from "./secret-chat-access";
 import type { MessagePins, PinScope } from "@/lib/message-pins";
+import { readCallMessage } from "@/lib/call-history";
 
 export const pinScopeSchema = z.object({
   chatType: z.enum(["direct", "saved", "eclipse", "group", "channel", "secret"]),
@@ -65,9 +66,9 @@ export async function readMessagePins(scope: PinScope, userId: string, sessionId
     const args = { where, select: { id: true, createdAt: true, pinnedAt: true }, orderBy: [{ pinnedAt: "desc" as const }, { id: "desc" as const }] };
     const rows = scope.chatType === "group" ? await tx.groupMessage.findMany(args)
       : scope.chatType === "channel" ? await tx.channelPost.findMany(args)
-      : scope.chatType === "secret" ? await tx.secretChatMessage.findMany(args) : await tx.message.findMany(args);
+      : scope.chatType === "secret" ? await tx.secretChatMessage.findMany(args) : await tx.message.findMany({ ...args, select: { ...args.select, systemPayload: true } });
     const excluded = new Set(await hiddenIds(tx, userId, access.hiddenType, rows.map(row => row.id)));
-    return { canManage: access.canManage, pins: rows.filter(row => !excluded.has(row.id)).map(row => ({ id: row.id, createdAt: row.createdAt.toISOString(), pinnedAt: row.pinnedAt!.toISOString() })) };
+    return { canManage: access.canManage, pins: rows.filter(row => !excluded.has(row.id) && !("systemPayload" in row && readCallMessage(row.systemPayload))).map(row => ({ id: row.id, createdAt: row.createdAt.toISOString(), pinnedAt: row.pinnedAt!.toISOString() })) };
   });
 }
 
@@ -82,8 +83,9 @@ export async function writeMessagePin(scope: PinScope, messageId: string, pinned
     const query = { where, select: { id: true } };
     const exists = scope.chatType === "group" ? await tx.groupMessage.findFirst(query)
       : scope.chatType === "channel" ? await tx.channelPost.findFirst(query)
-      : scope.chatType === "secret" ? await tx.secretChatMessage.findFirst(query) : await tx.message.findFirst(query);
+      : scope.chatType === "secret" ? await tx.secretChatMessage.findFirst(query) : await tx.message.findFirst({ ...query, select: { ...query.select, systemPayload: true } });
     if (!exists) throw new HttpError(404, "Сообщение не найдено");
+    if (pinned && "systemPayload" in exists && readCallMessage(exists.systemPayload)) throw new HttpError(400, "Звонок нельзя закрепить");
     const update = { where: { ...where, ...(pinned ? { pinnedAt: null } : {}) }, data: { pinnedAt: pinned ? new Date() : null } };
     if (scope.chatType === "group") await tx.groupMessage.updateMany(update);
     else if (scope.chatType === "channel") await tx.channelPost.updateMany(update);

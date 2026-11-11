@@ -143,27 +143,12 @@ export const ConversationMessageRow = memo(function ConversationMessageRow({ row
   const { message, index, top, showDateSeparator, rowSpacingClassName, chainWithPrevious, chainWithNext } = row;
   const { isSecretChat, messagePins, selectionMode, isDesktop, t, activeTitle, isManagedBotConversation, syncing, sendWelcomeSticker, selfId, selfProfile, currentUserIdRef, activeConversation, getMessageRowRef, dateSeparatorThemeStyle, mineMessageClassName, incomingMessageClassName, mineMessageGradientStyle, calls, activeChat, handleApplyPeerWallpaper, applyingWallpaper, channelModalData, removingMessageIds, groupMembersById, readProfileFromCache, contactsForAdd, selectedLink, messages, hasComposerText, hasPendingImage, hasPendingVideo, hasPendingAudio, hasSentWelcomeSticker, readMessageIds, activeReadReceiptIso, replyMessageById, mineReplyPreviewThemeStyle, scrollToMessageById, openForwardAuthorProfile, selectedMessageIdSet, messageHelperId, toggleMessageSelection, hoverReactionLeaveTimerRef, hoverReactionTimerRef, setHoverReactionMessageId, setHoverReactionExpandedMessageId, highlightedMessageId, swipeMessageId, swipeOffsetX, isCoarsePointer, setMessageHelperId, beginMessageSwipe, messageLongPressStartRef, clearMessageLongPress, moveMessageSwipe, endMessageSwipe, messageLongPressTriggeredRef, lastTapRef, messageSwipeStartRef, setSwipeMessageId, setSwipeOffsetX, messageLongPressTimerRef, renderInlineReactions, composerInputThemeStyle, setVideoViewer, setVideoViewerFailed, setVideoViewerPlaying, openImageViewer, renderLinkifiedText, pollResults, handlePollVote, fetchPollResults, hasAllowedReactions, hoverReactionMessageId, hoverReactionExpandedMessageId, hoverReactionEmojis, toggleReaction, defaultQuickReaction, shouldUseLegacyMessageHelper, messageHelperHorizontalPlacement, helperReactionEmojis, setStoryReplyTarget, setReplyToMessageId, beginForwardMessages, editSaving, editTarget, beginEditMessage, copyMessageText, beginSelectionMode, deletingMessageId, deleteMessage } = shared;
 
-if (message.systemPayload && message.systemPayload.botRole !== "user") {
+const callMessage = activeConversation?.chatType === "direct" ? readCallMessage(message.systemPayload) : null;
+if (message.systemPayload && message.systemPayload.botRole !== "user" && !callMessage) {
   const timeText = formatMessageTimeLabel(message.createdAt);
   const dateSeparatorLabel = showDateSeparator ? formatMessageDayLabel(message.createdAt) : "";
   const effectiveSelfId = selfId ?? selfProfile?.id ?? currentUserIdRef.current ?? "";
   const isWallpaperChange = message.systemPayload?.eventType === "wallpaper_change";
-
-  const callMessage = readCallMessage(message.systemPayload);
-  if (callMessage && activeConversation?.chatType === "direct") {
-    const outgoing = callMessage.callerId === effectiveSelfId;
-    return (
-      <div key={message.id} data-message-id={message.id} data-message-date={message.createdAt} ref={getMessageRowRef(message.id, message.localId)} className="px-0 pb-1" style={{ position: "absolute", top, left: 0, right: 0 }}>
-        {showDateSeparator && <div className="mb-1.5 flex justify-center"><span className="chat-service-pill" style={dateSeparatorThemeStyle}>{dateSeparatorLabel}</span></div>}
-        <CallMessageBubble call={callMessage} selfId={effectiveSelfId} timeText={timeText} hasTail={true}
-          className={cn(outgoing ? mineMessageClassName : incomingMessageClassName, resolveStackedBubbleShape({ isMine: outgoing, chainWithPrevious: false, chainWithNext: false }))}
-          style={outgoing ? mineMessageGradientStyle : undefined}
-          disabled={!calls.enabled || calls.busy || Boolean(calls.current)}
-          onCall={() => { const link = activeConversation?.peer?.link; if (link) void calls.start(callMessage.mode, { kind: "direct", link }); }}
-        />
-      </div>
-    );
-  }
 
   if (isWallpaperChange) {
     const currentChatWallpaper = activeConversation?.wallpaperUrl || activeChat?.wallpaperUrl;
@@ -242,7 +227,7 @@ if (message.systemPayload && message.systemPayload.botRole !== "user") {
   );
 }
 const effectiveSelfId = selfId ?? selfProfile?.id ?? currentUserIdRef.current ?? null;
-const rawIsMine = message.pending ? true : (effectiveSelfId ? message.senderId === effectiveSelfId : false);
+const rawIsMine = callMessage ? callMessage.callerId === effectiveSelfId : message.pending ? true : (effectiveSelfId ? message.senderId === effectiveSelfId : false);
 const isChannelChat = activeConversation?.chatType === "channel";
 const isMine = isChannelChat ? false : (activeConversation?.chatType === "saved" || rawIsMine);
 const rawParsed = parseMessageContentCached(message.text, false);
@@ -472,6 +457,7 @@ return (
         <div className="relative flex w-full">
           {selectionMode ? (
             <div
+              data-message-selection-indicator
               className={cn(
                 "absolute bottom-1 z-20 flex h-6 w-6 items-center justify-center rounded-full border transition-all duration-200 ease-out",
                 isMine ? "right-1.5" : "left-1.5",
@@ -492,7 +478,7 @@ return (
           ) : null}
           <div
             className={`flex min-w-0 w-full ${isMine ? "justify-end" : "justify-start"
-              } ${selectionMode ? (isMine ? "pr-9" : "pl-9") : ""}`}
+              } ${selectionMode ? (isMine ? "pr-12" : "pl-12") : ""}`}
           >
             {isGroupChat && !isMine ? (
               <div data-group-sender-avatar className="mr-2 mb-0.5 flex w-7 shrink-0 self-end flex-col items-center">
@@ -524,7 +510,7 @@ return (
             <div
               data-message-preview-origin={message.id}
               style={{ marginRight: message.sendFailure && rawIsMine && isMine ? 24 : 0, marginLeft: message.sendFailure && rawIsMine && !isMine ? 24 : 0, transition: "margin 160ms ease-out" }}
-              className={`max-w-[86%] sm:max-w-[82%] md:max-w-[60%] xl:max-w-[56%] ${messageHelperId === message.id
+              className={`min-w-0 max-w-[86%] sm:max-w-[82%] md:max-w-[60%] xl:max-w-[56%] [&_.message-bubble-target]:max-w-full ${messageHelperId === message.id
                 ? "relative drop-shadow-[0_12px_28px_rgba(0,0,0,0.45)]"
                 : ""
                 } ${shouldStackMediaFooter ? "flex w-fit flex-col items-center self-start" : ""}`}
@@ -671,7 +657,15 @@ return (
               >
                 <MessageHelperPreviewSource id={message.id} active={messageHelperId === message.id} isMine={isMine}>
                 <MediaReplyLayout quote={detachedForwardHeader || detachedReplyBlock ? <div data-detached-message-annotations className="space-y-2">{detachedForwardHeader}{detachedReplyBlock}</div> : null} isMine={isMine}>
-                  {parsed.kind === "text" && parsed.isOnlyEmojis ? (
+                  {callMessage ? (
+                    <CallMessageBubble call={callMessage} selfId={effectiveSelfId ?? ""} timeText={timeText} hasTail={hasTail}
+                      reactionsSlot={renderInlineReactions(message.id, reactions, isMine, { noTopMargin: true, align: "start" })}
+                      className={cn(isMine ? mineMessageClassName : incomingMessageClassName, stackedBubbleShapeClass, "message-bubble-target", dissolveTargetClass)}
+                      style={isMine ? mineMessageGradientStyle : undefined}
+                      disabled={!selectionMode && (!calls.enabled || calls.busy || Boolean(calls.current))}
+                      onCall={() => { if (selectionMode) return; const link = activeConversation?.peer?.link; if (link) void calls.start(callMessage.mode, { kind: "direct", link }); }}
+                    />
+                  ) : parsed.kind === "text" && parsed.isOnlyEmojis ? (
                     <div className={`flex flex-col gap-1.5 ${isMine ? "items-end" : "items-start"}`}>
                       <div
                         className={`relative ${reactions.length > 0 ? "pb-14" : "pb-6"} transition-opacity duration-75 ${stackedBubbleShapeClass} ${dissolveTargetClass}`}
@@ -1075,6 +1069,7 @@ return (
                       bubbleStyle={isMine ? mineMessageGradientStyle : undefined}
                       stackedBubbleShapeClass={stackedBubbleShapeClass}
                       bubbleTailClass={bubbleTailClass}
+                      tailSlot={<MessageBubbleTail isMine={isMine} hasTail={hasTail} mineGradientStyle={mineMessageGradientStyle} />}
                       isRemoving={isRemoving}
                       replyPreviewBlock={replyPreviewBlock}
                       reactions={reactions}
@@ -1386,21 +1381,19 @@ return (
                             <p className="truncate text-sm font-semibold leading-tight">{parsed.name}</p>
                             {parsed.caption ? (
                               <p
-                                className={`mt-0.5 truncate text-[11px] ${isMine ? "text-zinc-500" : "text-zinc-300"
-                                  }`}
+                                className="mt-0.5 truncate font-sans text-[11px] font-medium leading-4 tabular-nums text-current"
                               >
                                 {formatFileSize(parsed.size)}
                               </p>
                             ) : (
                               <div className="mt-0.5 flex items-center justify-between gap-2">
                                 <p
-                                  className={`min-w-0 truncate text-[11px] ${isMine ? "text-zinc-500" : "text-zinc-300"
-                                    }`}
+                                  className="min-w-0 truncate font-sans text-[11px] font-medium leading-4 tabular-nums text-current"
                                 >
                                   {formatFileSize(parsed.size)}
                                 </p>
                                 {reactions.length === 0 ? (
-                                  <MessageMeta timeText={timeText} showChannelViews={showChannelViews} channelViewsText={channelViewsText} showDeliveryStatus={showDeliveryStatus} isRead={isRead} className={`translate-y-1 shrink-0 flex items-center gap-1 ${isMine
+                                  <MessageMeta timeText={timeText} showChannelViews={showChannelViews} channelViewsText={channelViewsText} showDeliveryStatus={showDeliveryStatus} isRead={isRead} className={`shrink-0 flex items-center gap-1 ${isMine
                                     ? mineMessageGradientStyle
                                       ? "text-white/90"
                                       : "text-zinc-500"
@@ -1692,8 +1685,8 @@ return (
                   >
                     <FaReply size={15} />
                     {t("Ответить")}</Button>
-                  {!(!messagePins.canManage || messagePins.busy || message.id.startsWith("optimistic:")) && (<Button type="button" variant="ghost" size="sm" disabled={!messagePins.canManage || messagePins.busy || message.id.startsWith("optimistic:")} onClick={() => { setMessageHelperId(null); void messagePins.toggle((message).id); }} className="h-9 w-full justify-start rounded-xl px-2.5 gap-3 text-inherit hover:bg-white/10 disabled:opacity-40"><BsPinAngleFill size={17} className="shrink-0" />{messagePins.pins.some(pin => pin.id === (message).id) ? t("Открепить") : t("Закрепить")}</Button>)}
-                  {!(Boolean(selectedLink?.startsWith("secret-"))) && (<Button type="button" variant="ghost" size="sm" disabled={Boolean(selectedLink?.startsWith("secret-"))} onClick={() => beginForwardMessages([message])} className="h-9 w-full justify-start rounded-xl px-2.5 gap-3 text-inherit hover:bg-white/10 disabled:opacity-40"><IoArrowRedo size={17} />{t("Переслать")}</Button>)}
+                  {!callMessage && !(!messagePins.canManage || messagePins.busy || message.id.startsWith("optimistic:")) && (<Button type="button" variant="ghost" size="sm" disabled={!messagePins.canManage || messagePins.busy || message.id.startsWith("optimistic:")} onClick={() => { setMessageHelperId(null); void messagePins.toggle((message).id); }} className="h-9 w-full justify-start rounded-xl px-2.5 gap-3 text-inherit hover:bg-white/10 disabled:opacity-40"><BsPinAngleFill size={17} className="shrink-0" />{messagePins.pins.some(pin => pin.id === (message).id) ? t("Открепить") : t("Закрепить")}</Button>)}
+                  {!callMessage && parsed.kind !== "poll" && !(Boolean(selectedLink?.startsWith("secret-"))) && (<Button type="button" variant="ghost" size="sm" disabled={Boolean(selectedLink?.startsWith("secret-"))} onClick={() => beginForwardMessages([message])} className="h-9 w-full justify-start rounded-xl px-2.5 gap-3 text-inherit hover:bg-white/10 disabled:opacity-40"><IoArrowRedo size={17} />{t("Переслать")}</Button>)}
                   {!(!isEditable || editSaving || (editTarget ? editTarget.id !== message.id : false)) && (<Button
                     type="button"
                     variant="ghost"
@@ -1706,10 +1699,8 @@ return (
                   >
                     <MdEdit size={16} />
                     {t("Редактировать")}</Button>)}
-                  {!(parsed.kind === "image"
+                  {!callMessage && parsed.kind !== "poll" && !(parsed.kind === "image"
                     ? !parsed.caption.trim()
-                    : parsed.kind === "poll"
-                      ? !parsed.question.trim()
                       : parsed.kind === "album"
                         ? !parsed.caption.trim()
                         : parsed.kind === "sticker"
@@ -1727,8 +1718,6 @@ return (
                                   disabled={
                                     parsed.kind === "image"
                                       ? !parsed.caption.trim()
-                                      : parsed.kind === "poll"
-                                        ? !parsed.question.trim()
                                         : parsed.kind === "album"
                                           ? !parsed.caption.trim()
                                           : parsed.kind === "sticker"
@@ -1745,8 +1734,6 @@ return (
                                     void copyMessageText(
                                       parsed.kind === "image"
                                         ? parsed.caption
-                                        : parsed.kind === "poll"
-                                          ? parsed.question
                                           : parsed.kind === "album"
                                             ? parsed.caption
                                             : parsed.kind === "sticker"

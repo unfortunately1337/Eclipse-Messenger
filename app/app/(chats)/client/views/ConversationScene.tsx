@@ -23,6 +23,7 @@ import { ConversationMessages } from "../ConversationMessages";
 import { RecordingPanels } from "../RecordingPanels";
 import { MessageContextMenu } from "../MessageContextMenu";
 import { MessageComposer } from "../MessageComposer";
+import { MessageSelectionToolbar } from "../MessageSelectionToolbar";
 
 import type { ActiveConversationModel } from "../controllers/useActiveConversation";
 import type { ChatPageStateModel } from "../controllers/useChatPageState";
@@ -339,7 +340,8 @@ export function ConversationScene({ sources }: { sources: ConversationSceneSourc
             <MessageSearchNavigation desktop={isDesktop} query={messageSearch.query} count={messageSearch.matches.length} index={messageSearch.index} busy={messageSearch.busy} hasMore={messageSearch.hasMore} failed={messageSearch.failed} style={composerInputThemeStyle} onMove={messageSearch.move} />
           </div>}
 
-          <MessageComposer {...bindMessageComposer(sources)} />
+          <MessageComposer {...bindMessageComposer(sources)} selectionMode={selectionMode}
+            selectionToolbar={selectionMode ? <MessageSelectionToolbar {...bindConversationHeader(sources, activeChat)} /> : null} />
         </>
       )}
     </ChatScene>

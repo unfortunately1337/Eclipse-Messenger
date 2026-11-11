@@ -9,7 +9,7 @@ import { triggerRealtimeEvent, userPrivateChannel } from "@/lib/server/realtime"
 
 const voteSchema = z.object({
   messageId: z.string().min(1),
-  optionIdx: z.number().int().nonnegative(),
+  optionIdx: z.number().int().min(0).max(9).nullable(),
 });
 
 async function verifyAccessAndGetChatDetails(messageId: string, userId: string) {
@@ -23,7 +23,7 @@ async function verifyAccessAndGetChatDetails(messageId: string, userId: string) 
       where: { conversationId: directMsg.conversationId, userId },
     });
     if (!participant) throw new HttpError(403, "Forbidden");
-
+    
     const otherParticipants = await prisma.conversationParticipant.findMany({
       where: { conversationId: directMsg.conversationId, userId: { not: userId } },
       select: { userId: true },
@@ -147,23 +147,9 @@ export async function POST(req: NextRequest) {
 
     const chatDetails = await verifyAccessAndGetChatDetails(payload.messageId, user.id);
 
-    const existingVote = await prisma.pollVote.findUnique({
-      where: {
-        messageId_userId: {
-          messageId: payload.messageId,
-          userId: user.id,
-        },
-      },
-    });
-
-    if (existingVote && existingVote.optionIdx === payload.optionIdx) {
-      await prisma.pollVote.delete({
-        where: {
-          messageId_userId: {
-            messageId: payload.messageId,
-            userId: user.id,
-          },
-        },
+    if (payload.optionIdx === null) {
+      await prisma.pollVote.deleteMany({
+        where: { messageId: payload.messageId, userId: user.id },
       });
     } else {
       await prisma.pollVote.upsert({

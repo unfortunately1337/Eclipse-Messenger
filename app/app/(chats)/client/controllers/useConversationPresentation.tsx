@@ -8,6 +8,7 @@ import { useEclipseBotManagement } from "../../components/common/EclipseBotMenu"
 import { ECLIPSE_DIALOG_LINK } from "@/lib/eclipse-system";
 
 import { readForwardedContent } from "@/lib/client/message-forwarding";
+import { readCallMessage } from "@/lib/call-history";
 
 import { type DecryptedMessage, type GroupMember, type ConversationCacheSnapshot, type ActivityIndicatorKind } from "../../types";
 
@@ -387,13 +388,13 @@ export function useConversationPresentation(sources: ConversationPresentationSou
 
   const activeDetailsChatType = activeChat?.chatType ?? activeConversation?.chatType ?? null;
 
-  const effectiveDetailsChatType = inspectedDetailsEntity?.type ?? activeDetailsChatType;
+  const effectiveDetailsChatType = inspectedDetailsEntity?.type ?? (activeDetailsChatType === "saved" || activeDetailsChatType === "eclipse" ? "direct" : activeDetailsChatType);
 
   const canUseDesktopDetailsPanel =
     isDesktop &&
     (Boolean(inspectedDetailsEntity) ||
       (Boolean(activeChat) &&
-        (activeDetailsChatType === "direct" || activeDetailsChatType === "group" || activeDetailsChatType === "channel")));
+        (activeDetailsChatType === "direct" || activeDetailsChatType === "group" || activeDetailsChatType === "channel" || activeDetailsChatType === "saved" || activeDetailsChatType === "eclipse")));
 
   const showDirectEmptyState = isConversationEmpty && (isDirectConversation || isSavedConversation);
 
@@ -428,7 +429,7 @@ export function useConversationPresentation(sources: ConversationPresentationSou
     );
 
   const helperIsEditable =
-    helperMessage && helperParsed && !readForwardedContent(helperMessage.text)
+    helperMessage && helperParsed && !readCallMessage(helperMessage.systemPayload) && !readForwardedContent(helperMessage.text)
       ? helperIsChannelChat
         ? (rawHelperIsMine || helperCanModerateChannelMessages) && canEditMessageContent(helperParsed)
         : canEditMessage(helperMessage, helperParsed, rawHelperIsMine)
@@ -496,7 +497,7 @@ export function useConversationPresentation(sources: ConversationPresentationSou
                   : helperParsed.text;
   }, [helperParsed]);
 
-  const helperCanCopy = helperCopyValue.trim().length > 0;
+  const helperCanCopy = helperParsed?.kind !== "poll" && !readCallMessage(helperMessage?.systemPayload) && helperCopyValue.trim().length > 0;
 
   const messageById = useMemo(
     () => new Map(messages.map((message) => [message.id, message])),

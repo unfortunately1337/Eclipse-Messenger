@@ -59,9 +59,10 @@ export function PollOptionsEditor({ options, onChange, quizMode, correctIndex, o
           <div className="flex min-h-11 items-center gap-2 pb-2">
             <AnimatePresence initial={false}>
               {quizMode && <motion.button key="correct" type="button" aria-label={`${t("Выбрать как правильный")}: ${index + 1}`}
-                aria-pressed={correctIndex === index} onClick={() => onCorrectIndexChange(correctIndex === index ? null : index)}
+                onClick={() => onCorrectIndexChange(correctIndex === index ? null : index)}
                 initial={{ width: 0, opacity: 0 }} animate={{ width: 24, opacity: 1 }} exit={{ width: 0, opacity: 0 }} transition={transition}
-                className={`grid size-6 shrink-0 place-items-center rounded-full border transition-colors ${correctIndex === index ? "border-emerald-400 bg-emerald-400 text-zinc-950" : "border-white/20 text-transparent hover:border-white/40"}`}>
+                role="checkbox" aria-checked={correctIndex === index}
+                className={`grid size-6 shrink-0 place-items-center rounded-[6px] border transition-colors ${correctIndex === index ? "border-emerald-400 bg-emerald-400 text-zinc-950" : "border-white/20 text-transparent hover:border-white/40"}`}>
                 <Check size={14} strokeWidth={3} />
               </motion.button>}
             </AnimatePresence>

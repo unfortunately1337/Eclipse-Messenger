@@ -28,7 +28,7 @@ import type { ChatPageCallbacks } from "./chat-page-callbacks";
 
 export interface ConversationActionsSources {
   page: Pick<ChatPageStateModel, "setErrorText" | "t" | "hideChatActionPanel" | "setLocallyHiddenMessageIds" | "locallyHiddenMessageIds"> & {
-    conversation: Pick<ChatPageStateModel["conversation"], "setChats" | "activeConversationRef" | "messages" | "setActiveConversation" | "setMessages" | "chats">;
+    conversation: Pick<ChatPageStateModel["conversation"], "setChats" | "activeConversationRef" | "messages" | "setActiveConversation" | "setMessages" | "chats" | "setAttachmentMenuOpen">;
     account: Pick<ChatPageStateModel["account"], "selfId" | "selfProfile">;
     selection: Pick<ChatPageStateModel["selection"], "selectedLink" | "selectedLinkRef" | "messageText" | "setMessageText">;
     messageInteraction: Pick<ChatPageStateModel["messageInteraction"], "setRemovingMessageIds" | "setDeletingShift" | "setDeletingMessageId" | "setSelectionDeleting" | "setSelectionMode" | "setSelectedMessageIds" | "setSelectionDeleteDialogOpen" | "setForwardPickerMode" | "setForwardPickerMessages" | "forwardDraft" | "setForwardDraft" | "selectionDeleting">;
@@ -37,6 +37,7 @@ export interface ConversationActionsSources {
     mediaAndChannel: Pick<ChatPageStateModel["mediaAndChannel"], "contactsForAdd">;
     composerInteraction: Pick<ChatPageStateModel["composerInteraction"], "editTarget" | "replyToMessageId" | "setSwipeMessageId" | "setSwipeOffsetX" | "swipeOffsetX" | "setReplyToMessageId">;
     storyDraft: Pick<ChatPageStateModel["storyDraft"], "storyReplyTarget" | "setStoryReplyTarget">;
+    attachmentDraft: Pick<ChatPageStateModel["attachmentDraft"], "setStickerPickerOpen">;
 
   };
   bootstrap: Pick<ChatBootstrapModel, "readProfileFromCache" | "loadChatPage">;
@@ -69,6 +70,8 @@ export interface ConversationActionsModel {
 export function useConversationActions(sources: ConversationActionsSources): ConversationActionsModel {
   const { setErrorText, t, hideChatActionPanel, setLocallyHiddenMessageIds, locallyHiddenMessageIds } = sources.page;
   const { setChats, activeConversationRef, messages, setActiveConversation, setMessages, chats } = sources.page.conversation;
+  const { setAttachmentMenuOpen } = sources.page.conversation;
+  const { setStickerPickerOpen } = sources.page.attachmentDraft;
   const { selfId, selfProfile } = sources.page.account;
   const { selectedLink, selectedLinkRef, messageText, setMessageText } = sources.page.selection;
   const { setRemovingMessageIds, setDeletingShift, setDeletingMessageId, setSelectionDeleting, setSelectionMode, setSelectedMessageIds, setSelectionDeleteDialogOpen, setForwardPickerMode, setForwardPickerMessages, forwardDraft, setForwardDraft, selectionDeleting } = sources.page.messageInteraction;
@@ -285,6 +288,8 @@ export function useConversationActions(sources: ConversationActionsSources): Con
   }, [selectedLink, forwardDraft, editTarget, replyToMessageId, storyReplyTarget]);
 
   const beginSelectionMode = useCallback((messageId: string) => {
+    setStickerPickerOpen(false);
+    setAttachmentMenuOpen(false);
     setMessageHelperId(null);
     setSelectionMode(true);
     setSelectedMessageIds((prev) => (prev.includes(messageId) ? prev : [messageId]));

@@ -191,7 +191,7 @@ export function useProfileDetails(sources: ProfileDetailsSources): ProfileDetail
         onCall={() => void calls.start("audio", { kind: "direct", link: profileData.link })}
         onToggleSound={() => toggleChatMutedState(profileData.link)}
         onChat={profileOpenedExternally ? () => {
-          setProfileModalOpen(false); setDesktopDetailsPanelOpen(false); setInspectedDetailsEntity(null);
+          setProfileModalOpen(false); setInspectedDetailsEntity(null);
           messageSearch.close();
           openChatSearchResult(profileData.link, "direct");
         } : undefined}

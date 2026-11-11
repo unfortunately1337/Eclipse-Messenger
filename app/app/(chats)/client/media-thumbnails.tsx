@@ -1,7 +1,6 @@
 "use client";
 
 /* eslint-disable @next/next/no-img-element */
-import { translate as t } from "@/lib/i18n/translate";
 import { useTranslation } from "@/components/LocaleProvider";
 import { CSSProperties, useState } from "react";
 import { cn } from "@/lib/utils";
@@ -76,12 +75,13 @@ export function ChatImageThumb({
   );
 }
 
-export function ChatVideoThumb({ src, preview, aspectRatio, className, fill = false }: {
+export function ChatVideoThumb({ src, preview, aspectRatio, className, fill = false, autoPlay = true }: {
   src: string;
   preview?: string;
   aspectRatio?: number;
   className?: string;
   fill?: boolean;
+  autoPlay?: boolean;
 }) {
   const t = useTranslation();
   const resolvedSrc = getCachedMediaUrl(src);
@@ -109,7 +109,7 @@ export function ChatVideoThumb({ src, preview, aspectRatio, className, fill = fa
         src={resolvedSrc}
         className={cn("absolute inset-0 h-full w-full rounded-[inherit] transition-opacity duration-150 ease-out", className, "max-h-none max-w-none",
           loaded ? "opacity-100" : "opacity-0")}
-        autoPlay loop playsInline muted preload="auto"
+        autoPlay={autoPlay} loop={autoPlay} playsInline muted preload={autoPlay ? "auto" : "metadata"}
         onLoadedMetadata={event => {
           const { aspectRatio: ratio } = rememberDecodedMediaPreview(resolvedSrc, event.currentTarget);
           if (ratio) setDecodedSize({ src: resolvedSrc, ratio });

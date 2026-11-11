@@ -3,10 +3,10 @@ import { NextRequest } from "next/server";
 
 const mocks = vi.hoisted(() => {
   const reactions = () => ({ findMany: vi.fn().mockResolvedValue([]), deleteMany: vi.fn().mockResolvedValue({ count: 0 }), create: vi.fn().mockResolvedValue({}) });
-  return { groupMessage: vi.fn(), channelPost: vi.fn(), groupReactions: reactions(), channelReactions: reactions(), transaction: vi.fn().mockResolvedValue([]) };
+  return { directMessage: vi.fn().mockResolvedValue(null), participant: vi.fn(), directReactions: reactions(), groupMessage: vi.fn(), channelPost: vi.fn(), groupReactions: reactions(), channelReactions: reactions(), transaction: vi.fn().mockResolvedValue([]) };
 });
 vi.mock("@/lib/server/prisma", () => ({ prisma: {
-  message: { findFirst: vi.fn().mockResolvedValue(null) }, groupMessage: { findFirst: mocks.groupMessage }, channelPost: { findFirst: mocks.channelPost },
+  message: { findFirst: mocks.directMessage }, conversationParticipant: { findFirst: mocks.participant, findMany: vi.fn().mockResolvedValue([]) }, messageReaction: mocks.directReactions, groupMessage: { findFirst: mocks.groupMessage }, channelPost: { findFirst: mocks.channelPost },
   groupMember: { findFirst: vi.fn().mockResolvedValue({ id: "membership" }), findMany: vi.fn().mockResolvedValue([]) },
   channelSubscriber: { findFirst: vi.fn().mockResolvedValue({ id: "membership" }), findMany: vi.fn().mockResolvedValue([]) },
   groupMessageReaction: mocks.groupReactions, channelPostReaction: mocks.channelReactions, $transaction: mocks.transaction,
@@ -56,5 +56,29 @@ describe.each(["group", "channel"] as const)("%s reaction restrictions", kind =>
   it("preserves the unrestricted all mode", async () => {
     expect((await send(kind, "🔥")).status).toBe(200);
     expect(store.create).toHaveBeenCalledOnce();
+  });
+});
+
+describe("call history reactions", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mocks.directMessage.mockResolvedValue({ id: "call:one", conversationId: "chat", conversation: { id: "chat", type: "direct", isSystem: false } });
+    mocks.participant.mockResolvedValue({ id: "membership" });
+    mocks.directReactions.findMany.mockResolvedValue([]);
+  });
+  const react = () => POST(new NextRequest("http://localhost/api/reactions", { method: "POST", body: JSON.stringify({ chatType: "direct", emoji: "🔥", messageId: "call:one" }) }));
+  it("lets a participant react and toggle the reaction off on a call record", async () => {
+    expect((await react()).status).toBe(200);
+    expect(mocks.directReactions.create).toHaveBeenCalledWith({ data: { messageId: "call:one", userId: "reader", emoji: "🔥" } });
+    mocks.directReactions.create.mockClear();
+    mocks.directReactions.findMany.mockResolvedValue([{ userId: "reader", emoji: "🔥" }]);
+    expect((await react()).status).toBe(200);
+    expect(mocks.directReactions.create).not.toHaveBeenCalled();
+  });
+  it("rejects someone outside the call's conversation without changing reactions", async () => {
+    mocks.participant.mockResolvedValue(null);
+    expect((await react()).status).toBe(403);
+    expect(mocks.directReactions.deleteMany).not.toHaveBeenCalled();
+    expect(mocks.directReactions.create).not.toHaveBeenCalled();
   });
 });
