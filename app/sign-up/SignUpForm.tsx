@@ -8,7 +8,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import { AtSign, Eye, EyeOff, Mail, User } from "lucide-react";
 import { useMemo, useState, useEffect, useRef } from "react";
 import Link from "next/link";
-import { cn } from "@/lib/utils";
+import { PasswordRequirements } from "@/components/auth/PasswordRequirements";
 import { apiRequest } from "@/lib/client/http";
 import { showAppToast } from "@/lib/client/app-toast";
 import {
@@ -543,29 +543,7 @@ export default function SignUpForm({
                         </AuthIconButton>
                       }
                     />
-                    {password.length > 0 ? (
-                      <div className="rounded-[18px] border border-white/[0.08] bg-transparent hover:border-white/[0.14] px-4 py-3 space-y-2 text-left select-none transition-colors">
-                        <p className="text-[12px] font-medium text-zinc-400">{t("Требования к паролю:")}</p>
-                        <div className="grid grid-cols-2 gap-x-3 gap-y-1.5 text-[12px]">
-                          <div className={cn("flex items-center gap-2 transition-colors", hasLength ? "text-emerald-400 font-medium" : "text-zinc-500")}>
-                            <span className={cn("w-1.5 h-1.5 rounded-full transition-all shrink-0", hasLength ? "bg-emerald-400 shadow-[0_0_6px_rgba(52,211,153,0.8)]" : "bg-zinc-600")} />
-                            <span className="whitespace-nowrap">{t("От 10 символов")}</span>
-                          </div>
-                          <div className={cn("flex items-center gap-2 transition-colors", hasUppercase ? "text-emerald-400 font-medium" : "text-zinc-500")}>
-                            <span className={cn("w-1.5 h-1.5 rounded-full transition-all shrink-0", hasUppercase ? "bg-emerald-400 shadow-[0_0_6px_rgba(52,211,153,0.8)]" : "bg-zinc-600")} />
-                            <span className="whitespace-nowrap">{t("Заглавная (A-Z)")}</span>
-                          </div>
-                          <div className={cn("flex items-center gap-2 transition-colors", hasLowercase ? "text-emerald-400 font-medium" : "text-zinc-500")}>
-                            <span className={cn("w-1.5 h-1.5 rounded-full transition-all shrink-0", hasLowercase ? "bg-emerald-400 shadow-[0_0_6px_rgba(52,211,153,0.8)]" : "bg-zinc-600")} />
-                            <span className="whitespace-nowrap">{t("Строчная (a-z)")}</span>
-                          </div>
-                          <div className={cn("flex items-center gap-2 transition-colors", hasNumber ? "text-emerald-400 font-medium" : "text-zinc-500")}>
-                            <span className={cn("w-1.5 h-1.5 rounded-full transition-all shrink-0", hasNumber ? "bg-emerald-400 shadow-[0_0_6px_rgba(52,211,153,0.8)]" : "bg-zinc-600")} />
-                            <span className="whitespace-nowrap">{t("Цифра (0-9)")}</span>
-                          </div>
-                        </div>
-                      </div>
-                    ) : null}
+                    <PasswordRequirements hasLength={hasLength} hasUppercase={hasUppercase} hasLowercase={hasLowercase} hasNumber={hasNumber} />
                   </div>
 
                   {confirmPassword && !passwordsMatch ? (

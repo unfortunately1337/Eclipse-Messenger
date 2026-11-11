@@ -50,10 +50,13 @@ export function jsonError(error: unknown) {
       "message" in error)
   ) {
     const httpError = error as any;
-    return NextResponse.json(
+    const response = NextResponse.json(
       { ok: false, error: httpError.message, details: httpError.details ?? null },
       { status: httpError.status },
     );
+    const retryAfter = httpError.details?.retryAfterSeconds;
+    if (httpError.status === 429 && Number.isFinite(retryAfter)) response.headers.set("Retry-After", String(Math.max(1, Math.ceil(retryAfter))));
+    return response;
   }
 
   if (error instanceof Error) {

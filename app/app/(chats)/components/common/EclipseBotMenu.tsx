@@ -6,6 +6,7 @@ import { useTranslation } from "@/components/LocaleProvider";
 import { useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { apiRequest } from "@/lib/client/http";
+import { messageRateLimit } from "@/lib/client/message-send-limit";
 import type { BotManagementAction, BotManagementResult, BotManagementState } from "@/lib/bot-management";
 import type { EclipseSystemMessage } from "@/lib/eclipse-system";
 import { cn } from "@/lib/utils";
@@ -42,7 +43,7 @@ export function useEclipseBotManagement({ enabled, ownerId, onMessages }: {
     return () => { alive.current = false; generation.current++; window.removeEventListener("eclipse:bot-management-updated", updated); window.removeEventListener("focus", updated); };
   }, [enabled, ownerId, t]);
 
-  const act = useCallback(async (action: BotManagementAction, options: { text?: string; botId?: string; file?: File } = {}) => {
+  const act = useCallback(async (action: BotManagementAction, options: { text?: string; botId?: string; file?: File; throwOnRateLimit?: boolean } = {}) => {
     if (!alive.current || inflight.current) return false;
     const requestGeneration = generation.current;
     inflight.current = true; setBusy(true); setError(null);
@@ -65,6 +66,7 @@ export function useEclipseBotManagement({ enabled, ownerId, onMessages }: {
     } catch (error) {
       if (!alive.current || requestGeneration !== generation.current) return false;
       if (error instanceof Error && error.name === "AbortError") return false;
+      if (options.throwOnRateLimit && messageRateLimit(error)) throw error;
       toast.error(error instanceof Error ? error.message : t("Не удалось выполнить действие."));
       const previousRevision = stateRef.current?.revision;
       try { const next = await refresh(); if (next.revision !== previousRevision) retry.current = null; } catch { /* Keep the error visible. */ }
@@ -88,7 +90,7 @@ export function EclipseBotMenu({ controller, material }: { controller: ReturnTyp
     <AnimatePresence initial={false}>{menuOpen && <motion.div id="eclipse-bot-menu" key="menu" initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }} className="overflow-hidden">
       <div className="grid grid-cols-2 gap-2 px-0.5 pb-0.5 pt-2" aria-label={t("Меню системного бота")}>
         {step === "root" && button(t("Боты"), "bots", undefined, "col-span-2")}
-        {step === "bots" && <>{button(t("Создать бота"), "create")}{button(t("Мои боты"), "mine")}</>}
+        {step === "bots" && <>{button(t("Создать бота"), "create")}{button(t("Мои боты"), "mine")}{button(t("Документация"), "documentation", undefined, "col-span-2")}</>}
         {step === "mine" && (state?.bots.length ? state.bots.map(bot => button(`${bot.name} (@${bot.username})`, "select", bot.id, "col-span-2 break-words")) : <p className="col-span-2 py-2 text-center text-sm text-zinc-400">{t("У вас пока нет ботов")}</p>)}
         {step === "detail" && <>{button(t("API Токен"), "api_token")}{button(t("Настройки бота"), "settings")}{button(t("Удалить бота"), "delete", undefined, "col-span-2")}</>}
         {step === "settings" && <>{button(t("Изменить имя"), "change_name")}{button(t("Изменить уникальное имя"), "change_username")}{button(t("Сменить аватар"), "change_avatar")}{button(t("Разрешение для групп"), "group_permissions")}</>}

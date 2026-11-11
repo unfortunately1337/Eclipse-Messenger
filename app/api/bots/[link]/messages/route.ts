@@ -12,6 +12,7 @@ import { writeBotMessage, readBotContent, notifyBotChat, enqueueBotUpdate, apiBo
 import { encryptAtRest, decryptAtRest } from "@/lib/server/db-crypto";
 import { BOT_TRANSPORT } from "@/lib/bot-api";
 import { enforceRateLimit } from "@/lib/server/rate-limit";
+import { enforceMessageRateLimit } from "@/lib/server/message-rate-limit";
 import { canUserStartConversation, getPrivacySettings } from "@/lib/server/privacy-settings";
 
 const schema = z.object({ text: z.string().min(1).max(65536), requestId: z.string().regex(/^[A-Za-z0-9:_-]{8,128}$/), replyToMessageId: z.string().max(128).optional(), messageId: z.string().max(128).optional() }).strict();
@@ -41,13 +42,14 @@ async function handle(req: NextRequest, { params }: { params: Promise<{ link: st
   try {
     if ((await params).link.toLowerCase() === IMPORTER_BOT_LINK) return await handleImporterMessage(req);
     verifyCsrf(req); const { user } = await requireUserFromRequest(req);
-    await enforceRateLimit({ key: `bot-user-message:${user.id}`, limit: 60, windowSeconds: 60 });
+    if (req.method === "PATCH") await enforceRateLimit({ key: `bot-user-message:${user.id}`, limit: 60, windowSeconds: 60 });
     const bot = await prisma.managedBot.findFirst({ where: { profile: { link: { equals: (await params).link, mode: "insensitive" }, isBot: true, isSystemAccount: false } }, include: { profile: true } });
     if (!bot) throw new HttpError(404, "Бот не найден.");
     if (!canUserStartConversation(user.id, bot.profileId, await getPrivacySettings(bot.profileId))) throw new HttpError(403, "Бот ограничил новые сообщения.");
     let payload: unknown;
     try { payload = JSON.parse(new TextDecoder().decode(await readBotRequestBody(req, 100000))); } catch (error) { if (error instanceof HttpError) throw error; throw new HttpError(400, "Некорректный запрос."); }
     const args = schema.parse(payload);
+    if (req.method === "POST") await enforceMessageRateLimit(user.id, `direct:${bot.profileId}`);
     if (req.method === "PATCH" && !args.messageId) throw new HttpError(400, "Укажите сообщение для изменения.");
     const conversationId = req.method === "PATCH" ? await findDirectConversation(user.id, bot.profileId) : await getOrCreateDirectConversation(user.id, bot.profileId);
     if (!conversationId) throw new HttpError(404, "Чат не найден.");

@@ -16,6 +16,7 @@ import { getCachedMediaUrl, getDecodedMediaPreview } from "@/lib/client/media-ca
 import { rememberDecodedMediaPreview } from "@/lib/client/media-preview";
 import type { StoryOverlay } from "@/lib/story-overlay";
 import { StoryDrawingCanvas } from "./StoryDrawingCanvas";
+import { StoryScene } from "./StoryScene";
 import { StoryLayerContent } from "./StoryLayerContent";
 import { StoryAvatarRing } from "./StoryAvatarRing";
 import {
@@ -309,6 +310,7 @@ export function StoryViewer({
             onPointerCancel={releaseStoryViewer}
             onPointerLeave={releaseStoryViewer}
           >
+            <StoryScene viewport={activeStoryOverlay.viewport}>
             <MediaLoadingPreview preview={activeStoryOverlay.preview ?? getDecodedMediaPreview(mediaSrc)} fit="contain"
               loading={!mediaLoaded && !mediaFailed}
               mediaStyle={buildStoryMediaTransformStyle(activeStoryOverlay.media)}
@@ -377,6 +379,7 @@ export function StoryViewer({
                 </div>
               );
             })}
+            </StoryScene>
           </div>
         </div>
       </div>

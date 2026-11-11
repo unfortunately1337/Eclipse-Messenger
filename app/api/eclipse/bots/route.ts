@@ -5,13 +5,14 @@ import { requireUserFromRequest } from "@/lib/server/auth";
 import { ensureCsrfCookie, verifyCsrf } from "@/lib/server/csrf";
 import { HttpError, jsonError, jsonOk } from "@/lib/server/http";
 import { enforceRateLimit } from "@/lib/server/rate-limit";
+import { enforceMessageRateLimit } from "@/lib/server/message-rate-limit";
 import { getBotManagementState, runBotManagement, type BotManagementInput } from "@/lib/server/bot-management";
 import { sniffMediaBuffer, uploadMediaBuffer, deleteMediaObject } from "@/lib/server/media-storage";
 import { prisma } from "@/lib/server/prisma";
 import { readBotRequestBody } from "@/lib/server/bot-request-body";
 
 const inputSchema = z.object({
-  action: z.enum(["bots", "create", "mine", "back", "submit", "skip", "avatar", "select", "rotate", "revoke", "delete", "confirm_delete", "api_token", "settings", "change_avatar", "group_permissions", "change_name", "change_username"]),
+  action: z.enum(["bots", "documentation", "create", "mine", "back", "submit", "skip", "avatar", "select", "rotate", "revoke", "delete", "confirm_delete", "api_token", "settings", "change_avatar", "group_permissions", "change_name", "change_username"]),
   revision: z.number().int().min(0),
   requestId: z.string().uuid(),
   text: z.string().max(1000).optional(),
@@ -38,8 +39,8 @@ export async function POST(req: NextRequest) {
   try {
     verifyCsrf(req);
     const { user } = await requireUserFromRequest(req);
-    await enforceRateLimit({ key: `bot-management:${user.id}`, limit: 40, windowSeconds: 60, message: "Слишком много действий. Подождите минуту." });
     const multipart = req.headers.get("content-type")?.startsWith("multipart/form-data");
+    if (multipart) await enforceRateLimit({ key: `bot-management:${user.id}`, limit: 40, windowSeconds: 60, message: "Слишком много действий. Подождите минуту." });
     const bytes = await readBotRequestBody(req, multipart ? 5 * 1024 * 1024 + 16_384 : 4096);
     let input: BotManagementInput;
     if (multipart) {
@@ -63,6 +64,8 @@ export async function POST(req: NextRequest) {
       catch (error) { if (error instanceof SyntaxError) throw new HttpError(400, "Некорректный запрос."); throw error; }
       if (input.action === "avatar") throw new HttpError(400, "Пришлите изображение.");
     }
+    if (input.action === "submit") await enforceMessageRateLimit(user.id, "eclipse:system");
+    else if (!multipart) await enforceRateLimit({ key: `bot-management:${user.id}`, limit: 40, windowSeconds: 60, message: "Слишком много действий. Подождите минуту." });
     return jsonOk(await runBotManagement(user.id, input));
   } catch (error) { return errorResponse(error); }
   finally {

@@ -7,6 +7,7 @@ import { useLanguage, useTranslation } from "./LocaleProvider";
 import { plural } from "@/lib/i18n/translate";
 import { showAppToast } from "@/lib/client/app-toast";
 import { openImportedPack } from "@/lib/client/pack-items";
+import { BotInlineActions, BOT_INLINE_ACTION_CLASS_NAME } from "./BotInlineActions";
 
 export default function ImportPackCard({ value, messageId, renderBody = body => body, actionClassName }: { value: ImportCard; messageId: string; renderBody?: (body: ReactNode, options: { showTime: boolean }) => ReactNode; actionClassName?: string }) {
   const t = useTranslation(), { locale } = useLanguage(), reduced = useReducedMotion();
@@ -49,9 +50,9 @@ export default function ImportPackCard({ value, messageId, renderBody = body => 
     {card.status === "failed" && <p className="mt-3 max-w-64 text-[15px] font-normal leading-[1.4] text-red-400">{t(card.error ?? "Импорт прервался. Попробуйте ещё раз.")}</p>}
     {card.status === "cancelled" && <p className="mt-2 text-[15px] font-normal leading-[1.4]">{t("Импорт отменён")}</p>}
     </div>, { showTime: false })}
-    {["confirm", "failed"].includes(card.status) && <div data-bot-inline-actions className="mt-2.5 flex w-full flex-col gap-2 pb-2.5">
-      <button type="button" disabled={busy} onClick={() => void act("import")} className={actionClassName ?? "min-h-9 rounded-[14px] bg-current/10 px-4 py-2 text-[13px] font-semibold transition-opacity disabled:opacity-40"}>{t(card.update ? "Доимпортировать" : "Импортировать")}</button>
-      <button type="button" disabled={busy} onClick={() => void act("cancel")} className={actionClassName ?? "min-h-8 rounded-[14px] px-4 py-1.5 text-[12px] opacity-60 hover:opacity-100"}>{t("Отмена")}</button>
-    </div>}
+    {["confirm", "failed"].includes(card.status) && <BotInlineActions>
+      <button type="button" disabled={busy} onClick={() => void act("import")} className={actionClassName ?? BOT_INLINE_ACTION_CLASS_NAME}>{t(card.update ? "Доимпортировать" : "Импортировать")}</button>
+      <button type="button" disabled={busy} onClick={() => void act("cancel")} className={actionClassName ?? BOT_INLINE_ACTION_CLASS_NAME}>{t("Отмена")}</button>
+    </BotInlineActions>}
   </div>;
 }

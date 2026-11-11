@@ -140,7 +140,10 @@ try {
   browser = await chromium.launch({ executablePath: process.env.CHROME_PATH || "C:/Program Files/Google/Chrome/Application/chrome.exe", headless: true,
     args: ["--autoplay-policy=no-user-gesture-required"] });
   page = await browser.newPage();
-  await page.setContent("<html><body>Local Eclipse call test</body></html>");
+  // P2P signaling uses Web Crypto, which requires a secure context.
+  const helperPage = new URL("/__eclipse_call_test__", origin).href;
+  await page.route(helperPage, route => route.fulfill({ contentType: "text/html", body: "<html><body>Local Eclipse call test</body></html>" }));
+  await page.goto(helperPage);
   const snapshot = await api();
   if (!snapshot.enabled) throw new Error("Calls are not configured in the local app.");
   if (snapshot.directTransport === "p2p") {

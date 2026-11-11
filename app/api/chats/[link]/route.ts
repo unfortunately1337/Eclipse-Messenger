@@ -30,6 +30,7 @@ import { publicEncryptedMessageText } from "@/lib/server/e2e-shared-member";
 import { HttpError, applyCors, handleOptions, jsonError, jsonOk } from "@/lib/server/http";
 import { prisma } from "@/lib/server/prisma";
 import { enforceRateLimit } from "@/lib/server/rate-limit";
+import { enforceMessageRateLimit } from "@/lib/server/message-rate-limit";
 import { triggerRealtimeChannels, triggerRealtimeEvent, userPrivateChannel } from "@/lib/server/realtime";
 import { grantInteractionPresence } from "@/lib/server/presence";
 import { publishBeamsMessageToUser } from "@/lib/server/beams";
@@ -1595,12 +1596,6 @@ export async function POST(req: NextRequest, { params }: Params) {
   try {
     verifyCsrf(req);
     const { user, sessionId } = await requireUserFromRequest(req);
-    await enforceRateLimit({
-      key: `rate:chat:send:${user.id}`,
-      limit: 45,
-      windowSeconds: 30,
-      message: "Too many messages. Please slow down.",
-    });
     const { link: rawLink } = await params;
 
     if (rawLink.startsWith("secret-")) {
@@ -1615,6 +1610,7 @@ export async function POST(req: NextRequest, { params }: Params) {
         throw new HttpError(404, "Секретный чат не найден");
       }
       const ownPart = requireSecretChatAccess(secretChat, user.id, sessionId);
+      await enforceMessageRateLimit(user.id, `secret:${secretChat.id}`);
       if (secretChat.cryptoVersion === 2 && secretChat.participants.some(p => !p.deviceKeyId || !p.devicePublicKey)) {
         throw new HttpError(409, "Ключи устройств ещё не согласованы");
       }
@@ -1686,6 +1682,7 @@ export async function POST(req: NextRequest, { params }: Params) {
 
     if (savedDialogRequested) {
       const payload = directBodySchema.parse(await readJsonBody(req, 2 * 1024 * 1024));
+      await enforceMessageRateLimit(user.id, `saved:${user.id}`);
       const [conversationId, senderKeyMeta] = await Promise.all([
         getOrCreateSavedDialog(user.id),
         resolveActiveUserKeyMeta(user.id),
@@ -1779,6 +1776,7 @@ export async function POST(req: NextRequest, { params }: Params) {
 
     if (peer) {
       const payload = directBodySchema.parse(await readJsonBody(req, 2 * 1024 * 1024));
+      await enforceMessageRateLimit(user.id, `direct:${peer.id}`);
       const [peerPublicKey, existingConversationId, privacyByUserId, senderKeyMeta, recipientKeyMeta] = await Promise.all([
         getUserPublicKey(peer.id),
         findDirectConversation(user.id, peer.id),
@@ -2078,6 +2076,7 @@ export async function POST(req: NextRequest, { params }: Params) {
         throw new HttpError(403, "You do not have permission to send messages in this group");
       }
       const payload = groupBodySchema.parse(await readJsonBody(req, 2 * 1024 * 1024));
+      await enforceMessageRateLimit(user.id, `group:${memberGroup.id}`);
       const dedupKey = buildMessageSendDedupKey({
         userId: user.id,
         chatScope: `group:${memberGroup.id}`,
@@ -2239,6 +2238,7 @@ export async function POST(req: NextRequest, { params }: Params) {
       }
 
       const payload = channelBodySchema.parse(await readJsonBody(req, 2 * 1024 * 1024));
+      await enforceMessageRateLimit(user.id, `channel:${channel.id}`);
       const dedupKey = buildMessageSendDedupKey({
         userId: user.id,
         chatScope: `channel:${channel.id}`,

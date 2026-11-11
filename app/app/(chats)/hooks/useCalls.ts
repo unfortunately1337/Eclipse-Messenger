@@ -22,6 +22,7 @@ async function microphonePermission(video = false) {
 
 export function useCalls(userId: string | null, target: Target) {
   const [launch, setLaunch] = useState<CallView | null>(null);
+  const launchCallId = useRef<string | null>(null);
   const [stored, setStored] = useState<CallsSnapshot & { ownerId: string | null; closing: CallView | null; closingUntil: number }>({ ...empty, ownerId: userId, closing: null, closingUntil: 0 });
   const snapshot = stored.ownerId === userId ? stored : empty;
   const setSnapshot = useCallback((update: CallsSnapshot | ((previous: CallsSnapshot) => CallsSnapshot)) => {
@@ -36,7 +37,12 @@ export function useCalls(userId: string | null, target: Target) {
   }, [userId]);
   useEffect(() => {
     if (!stored.closing || stored.ownerId !== userId) return;
-    const timer = setTimeout(() => { setStored(previous => ({ ...previous, closing: null })); setLaunch(null); }, Math.max(0, stored.closingUntil - Date.now()));
+    const closingId = stored.closing.id;
+    const timer = setTimeout(() => {
+      setStored(previous => previous.ownerId === userId && previous.closing?.id === closingId
+        ? { ...previous, closing: null } : previous);
+      if (launchCallId.current === closingId) { launchCallId.current = null; setLaunch(null); }
+    }, Math.max(0, stored.closingUntil - Date.now()));
     return () => clearTimeout(timer);
   }, [stored.closing, stored.closingUntil, stored.ownerId, userId]);
   const [busy, setBusy] = useState(false);
@@ -150,6 +156,8 @@ export function useCalls(userId: string | null, target: Target) {
   const start = useCallback((mode: CallMode, destination: Target = target) => run(async () => {
     if (!destination || call) return;
     const display = destination.link === target?.link ? target : destination;
+    launchCallId.current = null;
+    setStored(previous => previous.ownerId === userId ? { ...previous, closing: null, closingUntil: 0 } : previous);
     setLaunch({ id: `request:${crypto.randomUUID()}`, requesting: true, kind: destination.kind, mode,
       status: "ringing", link: destination.link, title: display?.title ?? destination.link, peer: display?.peer,
       callerId: userId!, createdAt: Date.now(), startedAt: null, expiresAt: Date.now() + 45_000,
@@ -161,7 +169,10 @@ export function useCalls(userId: string | null, target: Target) {
       await microphonePermission(mode === "video");
       if (owner.current !== userId) return;
       const result = await apiRequest<{ call: CallView }>("/api/calls", { method: "POST", body: JSON.stringify({ action: "start", protocol: "p2p-v1", kind: destination.kind, link: destination.link, mode }) });
-      if (owner.current === userId) setSnapshot(previous => ({ ...previous, current: result.call }));
+      if (owner.current === userId) {
+        launchCallId.current = result.call.id;
+        setSnapshot(previous => ({ ...previous, current: result.call }));
+      }
     } catch (failure) { setLaunch(null); throw failure; }
   }), [run, target, call, userId, setSnapshot, snapshot.directTransport]);
 
@@ -185,6 +196,8 @@ export function useCalls(userId: string | null, target: Target) {
   }), [run, call, userId, setSnapshot]);
 
   const clearError = useCallback(() => setError(null), []);
-  const presentation = snapshot.current ?? (stored.ownerId === userId ? stored.closing : null) ?? (busy && launch?.callerId === userId ? launch : null);
-  return { ...snapshot, presentation, presentationKey: launch?.callerId === userId ? launch.id : presentation?.id, busy, error, clearError, start, join, leave, refresh };
+  const pendingLaunch = busy && launch?.callerId === userId ? launch : null;
+  const presentation = snapshot.current ?? pendingLaunch ?? (stored.ownerId === userId ? stored.closing : null);
+  const usesLaunch = launch?.callerId === userId && (presentation === launch || presentation?.id === launchCallId.current);
+  return { ...snapshot, presentation, presentationKey: usesLaunch ? launch.id : presentation?.id, busy, error, clearError, start, join, leave, refresh };
 }

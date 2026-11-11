@@ -21,11 +21,11 @@ export function CommunityDescription({ description }: { description?: string | n
       } catch {
         showAppToast({ title: t("Не удалось скопировать описание"), type: "error" });
       }
-    }} className="flex min-h-14 w-full items-center gap-3.5 rounded-[18px] px-4 py-3 text-left transition-colors hover:bg-white/[0.06] active:scale-[0.99]">
+    }} className="flex min-h-[52px] w-full items-center gap-3.5 rounded-[18px] px-3.5 py-2 text-left transition-colors hover:bg-white/[0.06] active:scale-[0.99]">
       <Info size={20} className="shrink-0 text-zinc-400" />
       <span className="min-w-0 flex-1">
-        <span className="block whitespace-pre-wrap break-words text-[15px] font-semibold leading-snug text-white">{text}</span>
-        <span className="mt-0.5 block text-[12.5px] text-zinc-400">{t("Описание")}</span>
+        <span className="block whitespace-pre-wrap break-words text-[15px] font-semibold leading-5 text-white">{text}</span>
+        <span className="mt-0.5 block text-[12.5px] leading-4 text-zinc-400">{t("Описание")}</span>
       </span>
     </button>;
 }

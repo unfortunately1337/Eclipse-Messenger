@@ -14,6 +14,7 @@ import { verifyCsrf } from "./csrf";
 import { HttpError, jsonOk } from "./http";
 import { readBotRequestBody } from "./bot-request-body";
 import { enforceRateLimit } from "./rate-limit";
+import { enforceMessageRateLimit } from "./message-rate-limit";
 import { inspectTelegramPack, preparePackImport } from "./telegram-pack-import";
 import { importerNoticePayload } from "@/lib/importer-notice";
 import { IMPORTER_EMPTY_TEXT, IMPORTER_HELP_TEXT, IMPORTER_GREETING } from "@/lib/importer-copy";
@@ -76,10 +77,10 @@ export async function importerUi(_userId: string) {
 export async function handleImporterMessage(req: NextRequest) {
   verifyCsrf(req);
   const { user } = await requireUserFromRequest(req);
-  await enforceRateLimit({ key: `importer:message:${user.id}`, limit: 30, windowSeconds: 60 });
   if (req.method !== "POST") throw new HttpError(403, "Сообщения импорта нельзя редактировать.");
   const args = z.object({ text: z.string().trim().min(1).max(4096), requestId: z.string().regex(/^[A-Za-z0-9:_-]{8,128}$/), replyToMessageId: z.string().optional() }).strict().parse(JSON.parse(new TextDecoder().decode(await readBotRequestBody(req, 16_384))));
   const bot = await ensureImporterBotUser(), conversationId = await getOrCreateDirectConversation(user.id, bot.id);
+  await enforceMessageRateLimit(user.id, `direct:${bot.id}`);
   const id = replyId(user.id + ":" + args.requestId, "user");
   const prior = await prisma.message.findUnique({ where: { id } });
   if (prior && (prior.senderId !== user.id || prior.conversationId !== conversationId || readBotContent(prior.botContentEnc)?.text !== args.text)) throw new HttpError(409, "Этот запрос уже использован.");

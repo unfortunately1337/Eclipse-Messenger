@@ -13,4 +13,5 @@ export interface IProfile {
     musicAuthor?: string;
     musicCoverUrl?: string;
     secondaryLinks?: string[];
+    usernameHidden?: boolean;
 }

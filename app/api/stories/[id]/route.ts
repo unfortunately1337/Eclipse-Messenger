@@ -20,8 +20,8 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
     if (!story) {
       throw new HttpError(404, "История не найдена");
     }
-    await deleteStoryById(story.id);
-    void (async () => {
+    await deleteStoryById(story.id, true);
+    await (async () => {
       try {
         const audienceUserIds = await getStoryAudienceUserIds(user.id);
         await invalidateStoryFeedForUsers([...audienceUserIds, user.id]);

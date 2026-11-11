@@ -8,6 +8,11 @@ const prismaMock = {
 vi.mock("@/lib/server/prisma", () => ({
   prisma: prismaMock,
 }));
+// Saved-dialog behavior does not depend on the bot/importer service graph.
+vi.mock("@/lib/server/eclipse-bot", () => ({
+  ECLIPSE_DIALOG_TYPE: "eclipse", ECLIPSE_DIALOG_LINK: "eclipse", ECLIPSE_DIALOG_TITLE: "Eclipse",
+  findEclipseDialog: vi.fn(), getOrCreateEclipseDialog: vi.fn(), isEclipseBotUserId: vi.fn(),
+}));
 
 describe("saved dialog service", () => {
   beforeEach(() => {

@@ -294,7 +294,7 @@ export function AuthField({
       <label htmlFor={id} className="sr-only">
         {label}
       </label>
-      <div className="relative rounded-[18px] border border-white/[0.08] bg-transparent hover:border-white/[0.14] focus-within:border-white transition-colors px-4 py-3 flex items-center group overflow-hidden">
+      <div data-auth-field className="relative flex h-12 items-center overflow-hidden rounded-[18px] border border-white/[0.08] bg-transparent px-4 transition-colors hover:border-white/[0.14] focus-within:border-white group">
         {/* Error double-blink overlay */}
         {errorGlow ? (
           <span
@@ -318,7 +318,7 @@ export function AuthField({
           {...props}
           placeholder={props.placeholder ?? label}
           className={cn(
-            "w-full bg-transparent text-[15px] font-normal text-white outline-none placeholder:text-zinc-500 [&:-webkit-autofill]:bg-transparent [&:-webkit-autofill]:[-webkit-text-fill-color:white]",
+            "min-w-0 w-full bg-transparent text-[15px] font-normal leading-5 text-white outline-none placeholder:text-zinc-500 [&:-webkit-autofill]:bg-transparent [&:-webkit-autofill]:[-webkit-text-fill-color:white]",
             inputClassName,
           )}
         />
@@ -366,7 +366,7 @@ export function AuthPrimaryButton({
       {...props}
       disabled={props.disabled || loading}
       className={cn(
-        "relative h-[46px] w-full rounded-[18px] bg-white hover:bg-zinc-100 text-[15px] font-semibold text-zinc-950 shadow-sm transition-all duration-200 active:scale-[0.985] disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer border-0",
+        "relative h-[46px] w-full rounded-full bg-white hover:bg-zinc-100 text-[15px] font-semibold text-zinc-950 shadow-sm transition-all duration-200 active:scale-[0.985] disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer border-0",
         className,
       )}
     >
@@ -419,7 +419,7 @@ export function AuthIconButton({
       type="button"
       aria-label={label}
       {...props}
-      className="flex h-7 w-7 items-center justify-center text-zinc-400 hover:text-white transition-colors duration-200 cursor-pointer border-0 bg-transparent"
+      className="flex h-7 w-7 items-center justify-center rounded-full text-zinc-400 hover:text-white transition-colors duration-200 cursor-pointer border-0 bg-transparent"
     >
       {children}
     </button>

@@ -183,6 +183,7 @@ export type DecryptedMessage = {
   reactions?: ReactionSummary[];
   readBy?: MessageReadViewer[];
   pending?: boolean;
+  sendFailure?: { kind: "rate_limit"; retryAt: number };
 };
 
 export type SelfProfile = {
@@ -204,7 +205,7 @@ export type SelfProfile = {
   secondaryLinks?: string[];
 };
 
-export type SettingsPanelView = "main" | "edit" | "privacy" | "security" | "security-totp" | "security-password" | "chats" | "sessions" | "qr" | "scan-qr" | "storage" | "custom-theme" | "language";
+export type SettingsPanelView = "main" | "edit" | "privacy" | "security" | "security-totp" | "security-totp-disable" | "security-password" | "chats" | "sessions" | "qr" | "scan-qr" | "storage" | "custom-theme" | "language";
 
 export type SettingsProfileDetails = SelfProfile & {
   description?: string | null;
@@ -786,12 +787,12 @@ export type PusherFactory = new (
 export type ParsedMessageContent =
   | { kind: "text"; text: string; isSingleEmoji?: boolean; isOnlyEmojis?: boolean; emojiCount?: number }
   | { kind: "story_reply"; text: string; authorName: string; storyId?: string; previewText?: string; isOwn?: boolean }
-  | { kind: "image"; src: string; caption: string; preview?: string }
+  | { kind: "image"; src: string; caption: string; preview?: string; aspectRatio?: number }
   | { kind: "poll"; question: string; options: string[]; quizMode: boolean; correctOptionIndex: number | null; expiresAt: string | null }
   | { kind: "album"; items: Array<{ src: string; kind: "image" | "video"; durationMs?: number; mode?: string; preview?: string }>; caption: string }
   | { kind: "sticker"; src: string; source?: "greeting_button" | "picker"; emoji?: string }
   | { kind: "voice"; src: string; durationMs: number; waveform?: number[] }
-  | { kind: "video"; src: string; durationMs: number; caption: string; mode: "note" | "file"; preview?: string }
+  | { kind: "video"; src: string; durationMs: number; caption: string; mode: "note" | "file"; preview?: string; aspectRatio?: number }
   | { kind: "file"; src: string; name: string; size: number; mimeType: string; caption: string }
   | { kind: "music"; url: string; title: string; caption: string; author?: string; coverUrl?: string; durationMs?: number };
 
@@ -803,6 +804,8 @@ export type ChatListPreviewMeta = {
   kind: "image" | "album" | "music" | "video" | "video_note" | "voice" | "sticker" | "file" | "poll" | "text";
   text: string;
   thumbUrl?: string | null;
+  thumbPreview?: string;
+  thumbKind?: "image" | "video";
 };
 
 export type LottiePlayerApi = {
@@ -821,7 +824,7 @@ export interface Window {
   isLottieScriptLoading?: boolean;
 }
 
-export type MessageStatusState = "sent" | "read";
+export type MessageStatusState = "sending" | "sent" | "read";
 
 export type DissolveParticle = {
   x: number;

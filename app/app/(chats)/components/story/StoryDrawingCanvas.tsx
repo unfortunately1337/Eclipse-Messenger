@@ -10,8 +10,8 @@ export function StoryDrawingCanvas({ overlay }: { overlay: StoryOverlay }) {
     const stage = canvas?.parentElement;
     if (!canvas || !stage) return;
     const draw = () => {
-      const rect = stage.getBoundingClientRect();
-      drawStoryOverlayToCanvas(canvas, overlay, rect.width, rect.height);
+      // A transformed opening animation must not change the canvas's layout size.
+      drawStoryOverlayToCanvas(canvas, overlay, stage.clientWidth, stage.clientHeight);
     };
     draw();
     const observer = new ResizeObserver(draw);

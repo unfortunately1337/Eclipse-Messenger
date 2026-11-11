@@ -97,7 +97,8 @@ export default async function ProfilePage({ params }: Params) {
       profile={{
         id: user.id,
         displayName,
-        link: usernameHidden ? t("Скрыт") : `@${user.link}`,
+        link: usernameHidden ? "" : `@${user.link}`,
+        usernameHidden,
         secondaryLinks,
         description: user.description ?? "",
         avatarUrl: user.avatarUrl ?? "",

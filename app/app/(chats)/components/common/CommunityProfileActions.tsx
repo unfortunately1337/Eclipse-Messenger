@@ -6,6 +6,7 @@ import { menuPopoverMotion } from "@/lib/client/panel-motion";
 import { IoEllipsisHorizontal, IoNotifications, IoNotificationsOff, IoSearch } from "react-icons/io5";
 import { SlidersHorizontal, LogOut, Trash2 } from "lucide-react";
 import { useTranslation } from "@/components/LocaleProvider";
+import { getProfileMenuVisualStyle } from "@/lib/client/panel-visual";
 
 type Props = {
   kind: "group" | "channel"; muted: boolean; glass: boolean; canManage: boolean;
@@ -37,7 +38,7 @@ export default function CommunityProfileActions(props: Props) {
     {props.kind === "channel" && <button type="button" className={tile} onClick={props.onSearch}><IoSearch size={22} aria-hidden /><span className={label}>{t("Поиск")}</span></button>}
     {props.canManage && <button type="button" className={tile} onClick={props.onManage}><SlidersHorizontal size={22} aria-hidden /><span className={label}>{t("Управление")}</span></button>}
     <button type="button" className={tile} onClick={() => setMoreOpen(value => !value)} aria-expanded={moreOpen} aria-controls={menuId}><IoEllipsisHorizontal size={22} aria-hidden /><span className={label}>{t("Ещё")}</span></button>
-    <AnimatePresence>{moreOpen && <motion.div id={menuId} role="menu" aria-label={t("Ещё")} className="absolute right-0 top-[calc(100%+8px)] z-50 w-[220px] max-w-full rounded-[22px] p-1.5 text-zinc-100 shadow-[0_14px_40px_rgba(0,0,0,0.28)]" style={{ backgroundColor: props.glass ? "rgba(30,30,32,0.99)" : "#1e1e20" }} {...menuPopoverMotion(reduced)}>
+    <AnimatePresence>{moreOpen && <motion.div id={menuId} data-profile-action-menu role="menu" aria-label={t("Ещё")} className="absolute right-0 top-[calc(100%+8px)] z-50 w-[220px] max-w-full rounded-[22px] p-1.5 text-zinc-100" style={getProfileMenuVisualStyle(props.glass)} {...menuPopoverMotion(reduced)}>
       {props.danger && <button type="button" role="menuitem" className={`${item} text-red-400`} onClick={() => { setMoreOpen(false); props.onDanger(); }}>{props.danger === "delete" ? <Trash2 size={18} className="shrink-0" /> : <LogOut size={18} className="shrink-0" />}{t(props.kind === "group" ? props.danger === "delete" ? "Удалить группу" : "Покинуть группу" : props.danger === "delete" ? "Удалить канал" : "Покинуть канал")}</button>}
     </motion.div>}</AnimatePresence>
   </div>;

@@ -1,7 +1,7 @@
 "use client";
 
-import { normalizeMediaPreview } from "@/lib/media-preview";
-import { cacheDecodedMediaPreview, getDecodedMediaPreview } from "./media-cache";
+import { normalizeMediaAspectRatio, normalizeMediaPreview, type MediaPreviewDetails } from "@/lib/media-preview";
+import { cacheMediaPreviewDetails, getDecodedMediaPreview } from "./media-cache";
 
 export function captureMediaPreview(media: HTMLImageElement | HTMLVideoElement): string | undefined {
   const width = "videoWidth" in media ? media.videoWidth : media.naturalWidth;
@@ -24,12 +24,18 @@ export function captureMediaPreview(media: HTMLImageElement | HTMLVideoElement):
   }
 }
 
-export function makeMediaPreview(file: Blob, kind: "image" | "video"): Promise<string | undefined> {
-  return new Promise(resolve => {
+const localPreviews = new WeakMap<Blob, Promise<MediaPreviewDetails>>();
+
+export function makeMediaPreviewDetails(file: Blob, kind: "image" | "video"): Promise<MediaPreviewDetails> {
+  const cached = localPreviews.get(file);
+  if (cached) return cached;
+  const details = new Promise<MediaPreviewDetails>(resolve => {
     const url = URL.createObjectURL(file);
     const media = kind === "video" ? document.createElement("video") : new Image();
     const finish = (preview?: string) => {
       clearTimeout(timeout);
+      const aspectRatio = normalizeMediaAspectRatio(media instanceof HTMLVideoElement
+        ? media.videoWidth / media.videoHeight : media.naturalWidth / media.naturalHeight);
       media.onerror = null;
       media.onload = null;
       if (media instanceof HTMLVideoElement) {
@@ -40,7 +46,7 @@ export function makeMediaPreview(file: Blob, kind: "image" | "video"): Promise<s
         media.removeAttribute("src");
       }
       URL.revokeObjectURL(url);
-      resolve(preview);
+      resolve({ preview, aspectRatio });
     };
     const timeout = setTimeout(() => finish(), 1800);
     media.onerror = () => finish();
@@ -54,10 +60,22 @@ export function makeMediaPreview(file: Blob, kind: "image" | "video"): Promise<s
     }
     media.src = url;
   });
+  localPreviews.set(file, details);
+  return details;
 }
 
-export function rememberDecodedMediaPreview(src: string, media: HTMLImageElement | HTMLVideoElement) {
-  if (!src || getDecodedMediaPreview(src)) return;
-  const preview = captureMediaPreview(media);
-  if (preview) cacheDecodedMediaPreview(src, preview);
+export async function makeMediaPreview(file: Blob, kind: "image" | "video"): Promise<string | undefined> {
+  return (await makeMediaPreviewDetails(file, kind)).preview;
+}
+
+export function rememberDecodedMediaPreview(src: string, media: HTMLImageElement | HTMLVideoElement): MediaPreviewDetails {
+  if (!src) return {};
+  const aspectRatio = normalizeMediaAspectRatio("videoWidth" in media
+    ? media.videoWidth / media.videoHeight : media.naturalWidth / media.naturalHeight);
+  const preview = getDecodedMediaPreview(src) ?? captureMediaPreview(media);
+  const details = { preview, aspectRatio };
+  // Older attachments can have a preview but no dimensions. Keep enriching
+  // that entry, including when a cross-origin image cannot be read to canvas.
+  cacheMediaPreviewDetails(src, details);
+  return details;
 }

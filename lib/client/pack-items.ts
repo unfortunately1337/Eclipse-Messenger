@@ -1,7 +1,7 @@
 "use client";
-import { useEffect, useSyncExternalStore } from "react";
+import { useCallback, useEffect, useSyncExternalStore } from "react";
 import { apiRequest } from "./http";
-import { emojiCatalogVersion, getEmojiStatus, registerImportedEmojis, subscribeEmojiCatalog } from "@/lib/emoji-status";
+import { getEmojiStatus, registerImportedEmojis, subscribeEmojiEntry } from "@/lib/emoji-status";
 import type { PackItem } from "@/lib/imported-packs";
 
 export type ResolvedPackItem = PackItem & { title: string; kind: string };
@@ -46,8 +46,9 @@ export function resolvePackItem(id: string): Promise<ResolvedPackItem | null> {
   });
 }
 export function useEmojiEntry(id: string | null | undefined) {
-  useSyncExternalStore(subscribeEmojiCatalog, emojiCatalogVersion, () => 0);
-  const entry = getEmojiStatus(id);
+  const subscribe = useCallback((notify: () => void) => subscribeEmojiEntry(id, notify), [id]);
+  const snapshot = useCallback(() => getEmojiStatus(id), [id]);
+  const entry = useSyncExternalStore(subscribe, snapshot, snapshot);
   useEffect(() => { if (id && !entry) void resolvePackItem(id); }, [id, entry]);
   return entry;
 }

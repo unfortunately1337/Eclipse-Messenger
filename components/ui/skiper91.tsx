@@ -14,15 +14,14 @@ import React, {
   useState,
 } from "react";
 import {
-  FastForward,
   Maximize,
   Minimize,
   Pause,
   Play,
-  Rewind,
   Volume2,
   VolumeX,
 } from "lucide-react";
+import { PiRewindFill } from "react-icons/pi";
 import {
   animate,
   motion,
@@ -63,74 +62,6 @@ export function formatTime(seconds: number): string {
   return `${minutes.toString().padStart(2, "0")}:${secs
     .toString()
     .padStart(2, "0")}`;
-}
-
-/**
- * Telegram iOS style 15-second Rewind Circular Icon
- */
-export function Rewind15Icon({ className }: { className?: string }) {
-  const t = useTranslation();
-  return (
-    <svg
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={2}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      className={className}
-    >
-      <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
-      <path d="M3 3v5h5" />
-      <text
-        x="12.2"
-        y="13.2"
-        textAnchor="middle"
-        dominantBaseline="central"
-        stroke="none"
-        fill="currentColor"
-        fontSize="7.2"
-        fontWeight="700"
-        fontFamily="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif"
-      >
-        15
-      </text>
-    </svg>
-  );
-}
-
-/**
- * Telegram iOS style 15-second Forward Circular Icon
- */
-export function Forward15Icon({ className }: { className?: string }) {
-  const t = useTranslation();
-  return (
-    <svg
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={2}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      className={className}
-    >
-      <path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.85.99 6.74 2.74L21 8" />
-      <path d="M21 3v5h-5" />
-      <text
-        x="11.8"
-        y="13.2"
-        textAnchor="middle"
-        dominantBaseline="central"
-        stroke="none"
-        fill="currentColor"
-        fontSize="7.2"
-        fontWeight="700"
-        fontFamily="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif"
-      >
-        15
-      </text>
-    </svg>
-  );
 }
 
 /**
@@ -458,6 +389,7 @@ export const SkiperScrubber = memo(function SkiperScrubber({
             className="absolute flex w-full flex-1 select-none items-center py-4"
             onPointerDown={handlePointerDown}
             onPointerUp={handlePointerUp}
+            onPointerCancel={handlePointerUp}
           >
             <motion.div
               style={{
@@ -515,7 +447,7 @@ export interface CenterVideoControlsOverlayProps {
 
 /**
  * Center On-Screen Video Controls (Telegram iOS style):
- * Circular Rewind 15s, Bouncy Center Play/Pause, and Circular Forward 15s in Liquid Glass style.
+ * Rewind and forward by 15 seconds with play/pause in the center.
  * Clicking anywhere on the empty screen toggles play/pause.
  */
 export const CenterVideoControlsOverlay = memo(function CenterVideoControlsOverlay({
@@ -527,13 +459,14 @@ export const CenterVideoControlsOverlay = memo(function CenterVideoControlsOverl
   const t = useTranslation();
   return (
     <div
+      inert={!isVisible}
       onClick={(e) => {
         // Clicking on the empty screen pauses/plays the video
         e.stopPropagation();
         onTogglePlay();
       }}
       className={cn(
-        "absolute inset-0 flex items-center justify-center transition-opacity duration-300 select-none z-20 cursor-pointer",
+        "absolute inset-0 flex items-center justify-center transition-opacity duration-150 select-none z-20 cursor-pointer",
         isVisible
           ? "opacity-100 bg-black/20 pointer-events-auto"
           : "opacity-0 pointer-events-none"
@@ -543,7 +476,7 @@ export const CenterVideoControlsOverlay = memo(function CenterVideoControlsOverl
       <div
         onClick={(e) => e.stopPropagation()}
         className={cn(
-          "flex items-center justify-center gap-6 sm:gap-8 md:gap-9 transition-all duration-300",
+          "flex items-center justify-center gap-6 sm:gap-8 md:gap-9 transition-transform duration-150",
           isVisible
             ? "opacity-100 scale-100 pointer-events-auto"
             : "opacity-0 scale-95 pointer-events-none"
@@ -558,7 +491,7 @@ export const CenterVideoControlsOverlay = memo(function CenterVideoControlsOverl
           title={t("Назад на 15 секунд")}
           aria-label={t("Назад на 15 секунд")}
         >
-          <Rewind15Icon className="size-6 sm:size-7 text-white/90 group-hover:text-white transition-colors" />
+          <PiRewindFill aria-hidden className="size-6 sm:size-7 text-white/90 group-hover:text-white transition-colors" />
         </button>
 
         {/* Center Play / Pause Button in Liquid Glass style */}
@@ -598,7 +531,7 @@ export const CenterVideoControlsOverlay = memo(function CenterVideoControlsOverl
           title={t("Вперёд на 15 секунд")}
           aria-label={t("Вперёд на 15 секунд")}
         >
-          <Forward15Icon className="size-6 sm:size-7 text-white/90 group-hover:text-white transition-colors" />
+          <PiRewindFill aria-hidden className="size-6 -scale-x-100 sm:size-7 text-white/90 group-hover:text-white transition-colors" />
         </button>
       </div>
     </div>
@@ -666,7 +599,7 @@ export interface Skiper91Handle {
  * Skiper91 Video Player
  * High-performance, spacious video player with smooth elastic rubber-band scrubbing,
  * liquid glass center overlay controls (Rewind, Play/Pause, Forward),
- * 2-second auto-hide timeout, mouseleave hide, and empty screen click to pause.
+ * Auto-hide on inactivity and click to pause.
  */
 export const Skiper91 = forwardRef<HTMLVideoElement, Skiper91Props>(
   (
@@ -711,53 +644,32 @@ export const Skiper91 = forwardRef<HTMLVideoElement, Skiper91Props>(
     const [hasError, setHasError] = useState(false);
     const [readySrc, setReadySrc] = useState<string | null>(null);
 
-    const controlsVisibleRef = useRef(true);
     const [controlsVisible, setControlsVisible] = useState(true);
-    const hideControlsTimerRef = useRef<NodeJS.Timeout | null>(null);
-    const lastActivityTimeRef = useRef<number>(0);
-
-    // Controls visibility handler: 2-second timeout of inactivity
-    const showControlsTemporarily = useCallback(() => {
-      const now = Date.now();
-      if (now - lastActivityTimeRef.current < 150 && controlsVisibleRef.current) {
-        if (hideControlsTimerRef.current) {
-          clearTimeout(hideControlsTimerRef.current);
-        }
-        hideControlsTimerRef.current = setTimeout(() => {
-          if (!isScrubbingRef.current) {
-            controlsVisibleRef.current = false;
-            setControlsVisible(false);
-          }
-        }, 2000);
-        return;
-      }
-      lastActivityTimeRef.current = now;
-
-      if (!controlsVisibleRef.current) {
-        controlsVisibleRef.current = true;
-        setControlsVisible(true);
-      }
-
-      if (hideControlsTimerRef.current) {
-        clearTimeout(hideControlsTimerRef.current);
-      }
-      hideControlsTimerRef.current = setTimeout(() => {
-        if (!isScrubbingRef.current) {
-          controlsVisibleRef.current = false;
-          setControlsVisible(false);
-        }
-      }, 2000);
+    const hideControlsTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const clearControlsTimer = useCallback(() => {
+      if (hideControlsTimerRef.current !== null) clearTimeout(hideControlsTimerRef.current);
+      hideControlsTimerRef.current = null;
     }, []);
+    const showControlsTemporarily = useCallback(() => {
+      setControlsVisible(true);
+      clearControlsTimer();
+      hideControlsTimerRef.current = setTimeout(() => {
+        hideControlsTimerRef.current = null;
+        if (!isScrubbingRef.current) setControlsVisible(false);
+      }, 1300);
+    }, [clearControlsTimer]);
+
+    useEffect(() => {
+      showControlsTemporarily();
+      return clearControlsTimer;
+    }, [clearControlsTimer, showControlsTemporarily, src]);
 
     // Immediately hide center buttons & controls when cursor leaves the player area
     const handleMouseLeave = useCallback(() => {
       if (isScrubbingRef.current) return;
-      if (hideControlsTimerRef.current) {
-        clearTimeout(hideControlsTimerRef.current);
-      }
-      controlsVisibleRef.current = false;
+      clearControlsTimer();
       setControlsVisible(false);
-    }, []);
+    }, [clearControlsTimer]);
 
     // Frame synchronization purely via MotionValues (Zero React re-renders!)
     useEffect(() => {
@@ -774,7 +686,7 @@ export const Skiper91 = forwardRef<HTMLVideoElement, Skiper91Props>(
       const handleEnded = () => {
         currentTimeMotion.set(video.duration || 0);
         setIsPlaying(false);
-        controlsVisibleRef.current = true;
+        clearControlsTimer();
         setControlsVisible(true);
         onEnded?.();
       };
@@ -818,7 +730,7 @@ export const Skiper91 = forwardRef<HTMLVideoElement, Skiper91Props>(
       const handleError = () => {
         setHasError(true);
         setIsPlaying(false);
-        controlsVisibleRef.current = true;
+        clearControlsTimer();
         setControlsVisible(true);
         onError?.();
       };
@@ -844,7 +756,6 @@ export const Skiper91 = forwardRef<HTMLVideoElement, Skiper91Props>(
         video.removeEventListener("pause", handlePause);
         video.removeEventListener("error", handleError);
         if (rafId !== null) cancelAnimationFrame(rafId);
-        if (hideControlsTimerRef.current) clearTimeout(hideControlsTimerRef.current);
       };
     }, [
       currentTimeMotion,
@@ -854,6 +765,7 @@ export const Skiper91 = forwardRef<HTMLVideoElement, Skiper91Props>(
       onPause,
       onPlay,
       onTimeUpdate,
+      clearControlsTimer,
       showControlsTemporarily,
     ]);
 
@@ -988,9 +900,9 @@ export const Skiper91 = forwardRef<HTMLVideoElement, Skiper91Props>(
     return (
       <div
         ref={containerRef}
-        onMouseMove={showControlsTemporarily}
-        onMouseLeave={handleMouseLeave}
-        onTouchStart={showControlsTemporarily}
+        onPointerMove={event => { if (event.pointerType === "mouse") showControlsTemporarily(); }}
+        onPointerLeave={event => { if (event.pointerType === "mouse") handleMouseLeave(); }}
+        onPointerDown={showControlsTemporarily}
         className={cn(
           "relative flex h-full w-full items-center justify-center overflow-hidden select-none p-0 md:p-6",
           className
@@ -1042,11 +954,12 @@ export const Skiper91 = forwardRef<HTMLVideoElement, Skiper91Props>(
           {/* 2. Skiper91 Floating Bottom Dock (Telegram iOS style) */}
           {showControls && !hasError ? (
             <div
+              inert={!controlsVisible}
               onClick={(e) => e.stopPropagation()}
               className={cn(
                 "fixed bottom-0 inset-x-0 z-30 pb-[max(env(safe-area-inset-bottom),14px)] pt-3 px-3 sm:px-4 pointer-events-auto",
                 "md:fixed md:bottom-6 md:inset-x-0 md:z-30 md:pb-0 md:pt-0 md:px-0 md:w-full md:max-w-[min(100%,680px)] md:mx-auto",
-                "flex flex-col items-center gap-2.5 transition-opacity duration-300",
+                "flex flex-col items-center gap-2.5 transition-opacity duration-150",
                 controlsVisible ? "opacity-100" : "opacity-0 pointer-events-none"
               )}
             >

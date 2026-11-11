@@ -74,7 +74,7 @@ export const CountdownTimer: React.FC<CountdownTimerProps> = ({
   const isCritical = timeLeftMs !== null && timeLeftMs > 0 && timeLeftMs <= 10000;
 
   return (
-    <div
+    <span
       className={`flex h-7 items-center justify-center rounded-full px-3.5 font-mono text-[11px] font-semibold tracking-widest select-none tabular-nums ${
         isCritical
           ? "text-red-400 bg-red-950/60 border border-red-500/50 shadow-[0_0_12px_rgba(239,68,68,0.4)] animate-pulse"
@@ -83,6 +83,6 @@ export const CountdownTimer: React.FC<CountdownTimerProps> = ({
       style={style}
     >
       {label}
-    </div>
+    </span>
   );
 };

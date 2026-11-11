@@ -1,5 +1,39 @@
 # Interface performance
 
+## Chat and panel work — 2026-11-11
+
+Message position updates are separated from bubble/media rendering. A shared
+ResizeObserver batches row measurements; cached estimates avoid reparsing long
+histories when the virtual window moves. Chat-list rows compare their own
+selection, unread, typing and online state rather than rebuilding together.
+Closed profiles and media viewers skip unrelated chat updates.
+
+Imported emoji now notify subscribers by emoji ID. Adding or resolving a pack
+does not redraw unrelated Unicode emoji, messages, avatars or profile statuses.
+Unchanged account-poll responses reuse the previous list and item objects.
+Audio gesture listeners detach after unlocking and re-arm after interruptions.
+Presence expiry uses the next server deadline instead of a 500 ms polling loop.
+
+QR display/export, custom-theme editing and session scanning load separately.
+QR controls warm their module on pointer/focus intent; settings warm optional
+subviews after the containing panel has entered. Loading QR views retain a back
+button. Grapheme processing reuses segmenters and skips ordinary text; truncated
+previews stop walking characters once their display limit is reached.
+
+Message deletion uses one shared GPU canvas and animation frame, with bounded
+snapshot and grain budgets. Selection deletion keeps all selected bubbles until
+the effect finishes and applies the history change once. Reduced-motion and
+unsupported devices use a fade. Partial request failures restore the affected
+rows; deletion requests have bounded concurrency.
+
+Browser checks with 100 chat summaries and 2,000 synthetic messages retained all
+23 mounted chat-list row renders while typing, used one message-size observer,
+and exercised chat switching, menus and selection deletion. These are local
+development checks, not a whole-app frame-rate guarantee. Secret-chat verification
+and QR navigation were checked at desktop and 397 px mobile widths, including
+focus restoration, dialog dismissal, scanner return and transparent QR controls.
+
+
 The chat keeps measured, virtualized message rows. Scroll position is committed
 in 96 px steps, with an additional 320 px buffer on each side and the existing
 row overscan. Exact navigation, bottom following and history anchoring still use

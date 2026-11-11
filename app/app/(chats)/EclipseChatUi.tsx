@@ -1,9 +1,10 @@
 "use client";
+import { BOT_DOCUMENTATION_URL } from "@/lib/bot-management";
 import { localizeSystemText, translate as t } from "@/lib/i18n/translate";
 import { useLanguage, useTranslation } from "@/components/LocaleProvider";
 
 
-import { useEffect, useState, type CSSProperties, type ReactNode } from "react";
+import { Fragment, useEffect, useState, type CSSProperties, type ReactNode } from "react";
 import { MessageBubbleTail } from "./components/common/MessageBubbles";
 import { VscVerifiedFilled } from "react-icons/vsc";
 import { GiNestedEclipses } from "react-icons/gi";
@@ -15,8 +16,9 @@ import { cn } from "@/lib/utils";
 import { Popover } from "radix-ui";
 import ImportPackCard from "@/components/ImportPackCard";
 import TelegramImportConnect from "@/components/TelegramImportConnect";
+import { BotInlineActions, BOT_INLINE_ACTION_CLASS_NAME } from "@/components/BotInlineActions";
 
-export const ECLIPSE_INLINE_ACTION_CLASS_NAME = "inline-flex min-h-[38px] w-full items-center justify-center rounded-[14px] bg-white/[0.06] hover:bg-white/[0.10] active:bg-white/[0.04] border border-white/[0.08] hover:border-white/[0.14] px-4 py-2.5 text-center text-[13px] font-medium text-zinc-100 hover:text-white backdrop-blur-[4px] active:scale-[0.985] transition-all duration-150 disabled:opacity-50 select-none cursor-pointer";
+export const ECLIPSE_INLINE_ACTION_CLASS_NAME = BOT_INLINE_ACTION_CLASS_NAME;
 
 export function VerifiedBadge({ className, kind = "user", showDetails = false, size = 16 }: { className?: string; kind?: "user" | "bot" | "group" | "channel"; showDetails?: boolean; size?: number }) {
   const t = useTranslation();
@@ -209,14 +211,19 @@ export function EclipseSystemMessageBubble({
           {!payload.metadata?.importerNotice && payload.title && <div className="text-[14.5px] font-semibold leading-snug">{payload.botRole === "user" ? messageTitle : localizeSystemText(messageTitle ?? "")}{!payload.body && <span className="inline-block w-11" aria-hidden />}</div>}
           {!payload.metadata?.packImport && !payload.metadata?.telegramImportConnect && payload.body && (
             <div className={cn("whitespace-pre-wrap break-words [overflow-wrap:anywhere] text-[15px] font-normal leading-[1.4]", payload.title && !payload.metadata?.importerNotice && "mt-1")}>
-              <span>{payload.botRole === "user" ? payload.body : localizeSystemText(payload.body)}</span><span className="inline-block w-11" aria-hidden />
+              <span>{payload.metadata?.botDocumentation && payload.botRole === "assistant" ? <>
+                {t("Документация по созданию и подключению ботов доступна {0}.").split("{0}").map((part, index) => index === 0 ? part : <Fragment key={index}>
+                  <a href={BOT_DOCUMENTATION_URL} target="_blank" rel="noopener noreferrer" onClick={event => event.stopPropagation()}
+                    className="cursor-pointer text-inherit underline decoration-current/50 decoration-1 underline-offset-[3px] transition-colors hover:decoration-current">{t("здесь")}</a>{part}
+                </Fragment>)}
+              </> : payload.botRole === "user" ? payload.body : localizeSystemText(payload.body)}</span><span className="inline-block w-11" aria-hidden />
             </div>
           )}
           <span className="absolute bottom-[2px] right-0 text-[11px] leading-none opacity-75 select-none">{timeText}</span>
         </div>
       </div>
       {payload.botToken || visibleActions.length > 0 ? (
-        <div className="mt-1.5 flex w-full flex-col gap-1.5">
+        <BotInlineActions>
           {payload.botToken && (
             <button
               type="button"
@@ -233,7 +240,7 @@ export function EclipseSystemMessageBubble({
           {visibleActions.map((action) => (
             <EclipseActionButton key={action.id} action={action} messageId={messageId} />
           ))}
-        </div>
+        </BotInlineActions>
       ) : null}
     </div>
   );

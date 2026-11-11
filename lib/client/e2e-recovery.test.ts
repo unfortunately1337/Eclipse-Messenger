@@ -115,7 +115,7 @@ describe("fresh-device key recovery", () => {
   it("transfers history via QR without giving the server the decryption secret", async () => {
     const h = await history(), approving = await device();
     approving.e2e.setActiveE2EUserId(userId); approving.e2e.storePasswordMasterKey(h.master);
-    const token = "00000000-0000-4000-8000-000000000001", secret = approving.qr.createQrKeySecret();
+    const token = "c56a4180-65aa-42ec-a945-5fd21dec0538", secret = approving.qr.createQrKeySecret();
     const transfer = await approving.qr.encryptQrKeyTransfer(token, secret);
     expect(JSON.stringify(transfer)).not.toContain(h.active.privateKeyBase64);
     expect(JSON.stringify(transfer)).not.toContain(secret);

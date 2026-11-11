@@ -34,6 +34,8 @@ export type StoryMediaTransform = {
 };
 
 export type StoryOverlay = {
+  // Layout size of the editor, before its opening animation is applied.
+  viewport?: { width: number; height: number };
   media?: StoryMediaTransform;
   preview?: string;
   texts: StoryOverlayTextLayer[];
@@ -58,8 +60,13 @@ function isColor(value: unknown): value is string {
 
 export function normalizeStoryOverlay(value: unknown): StoryOverlay {
   if (!value || typeof value !== "object") return EMPTY_OVERLAY;
-  const raw = value as { media?: unknown; preview?: unknown; texts?: unknown; strokes?: unknown };
+  const raw = value as { viewport?: unknown; media?: unknown; preview?: unknown; texts?: unknown; strokes?: unknown };
   const preview = normalizeMediaPreview(raw.preview);
+  const dimensions = raw.viewport as Partial<{ width: number; height: number }> | undefined;
+  const viewport = dimensions && Number.isFinite(dimensions.width) && Number.isFinite(dimensions.height)
+    && Number(dimensions.width) >= 1 && Number(dimensions.width) <= 4096
+    && Number(dimensions.height) >= 1 && Number(dimensions.height) <= 4096
+    ? { width: Number(dimensions.width), height: Number(dimensions.height) } : undefined;
 
   const media = (() => {
     if (!raw.media || typeof raw.media !== "object") return undefined;
@@ -126,7 +133,7 @@ export function normalizeStoryOverlay(value: unknown): StoryOverlay {
     }
   }
 
-  return { ...(media ? { media } : {}), ...(preview ? { preview } : {}), texts, strokes };
+  return { ...(viewport ? { viewport } : {}), ...(media ? { media } : {}), ...(preview ? { preview } : {}), texts, strokes };
 }
 
 export function parseStoryOverlay(value: string | null | undefined): StoryOverlay | null {

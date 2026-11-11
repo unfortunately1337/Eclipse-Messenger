@@ -1,6 +1,6 @@
 import { expect, it } from "vitest";
 import { extractLoginQrToken, extractLoginQrSecret } from "./login-qr-token";
-const token = "00000000-0000-4000-8000-000000000001";
+const token = "c56a4180-65aa-42ec-a945-5fd21dec0538";
 it("accepts the login QR payload and trusted login URLs", () => {
   for (const value of [token, `eclipse://login?token=${token}`, `https://eclpse.ru/login?qrToken=${token}`]) {
     expect(extractLoginQrToken(value, "https://eclpse.ru")).toBe(token);

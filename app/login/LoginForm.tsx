@@ -8,6 +8,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import { Eye, EyeOff, Mail } from "lucide-react";
 import { useMemo, useState, useEffect, useRef, useCallback } from "react";
 import Link from "next/link";
+import { drawQrCode } from "@/lib/client/qr-code";
 import { apiRequest } from "@/lib/client/http";
 import { showAppToast } from "@/lib/client/app-toast";
 import {
@@ -44,93 +45,10 @@ const QR_EXPIRY_MS = 30000; // 30 seconds auto-refresh matching Telegram Web
 
 async function renderQrToCanvas(canvas: HTMLCanvasElement, token: string): Promise<boolean> {
   try {
-    const QRCode = (await import("qrcode")).default;
     if (!canvas.isConnected) return false;
-    const context = canvas.getContext("2d");
-    if (!context) return false;
-    const canvasSize = 512;
-    canvas.width = canvasSize;
-    canvas.height = canvasSize;
-    const qr = QRCode.create(token, { errorCorrectionLevel: "M" });
-    const { size, data: modulesData } = qr.modules;
-    const moduleSize = canvasSize / size;
-
-    context.clearRect(0, 0, canvasSize, canvasSize);
-    context.fillStyle = "#ffffff";
-
-    for (let r = 0; r < size; r++) {
-      for (let c = 0; c < size; c++) {
-        const isDark = modulesData[r * size + c] === 1;
-        if (!isDark) continue;
-
-        const isTopLeftFinder = r < 7 && c < 7;
-        const isTopRightFinder = r < 7 && c >= size - 7;
-        const isBottomLeftFinder = r >= size - 7 && c < 7;
-        if (isTopLeftFinder || isTopRightFinder || isBottomLeftFinder) {
-          continue;
-        }
-
-        const cx = c * moduleSize + moduleSize / 2;
-        const cy = r * moduleSize + moduleSize / 2;
-        context.beginPath();
-        context.arc(cx, cy, (moduleSize / 2) * 0.82, 0, 2 * Math.PI);
-        context.fill();
-      }
-    }
-
-    const drawFinderPattern = (startX: number, startY: number) => {
-      const w = 7 * moduleSize;
-      const h = 7 * moduleSize;
-      const radius = 1.6 * moduleSize;
-
-      context.fillStyle = "#ffffff";
-      context.beginPath();
-      if (typeof context.roundRect === "function") {
-        context.roundRect(startX, startY, w, h, radius);
-      } else {
-        context.rect(startX, startY, w, h);
-      }
-      context.fill();
-
-      context.fillStyle = "#000000";
-      context.beginPath();
-      if (typeof context.roundRect === "function") {
-        context.roundRect(
-          startX + moduleSize,
-          startY + moduleSize,
-          w - 2 * moduleSize,
-          h - 2 * moduleSize,
-          radius * 0.75
-        );
-      } else {
-        context.rect(startX + moduleSize, startY + moduleSize, w - 2 * moduleSize, h - 2 * moduleSize);
-      }
-      context.fill();
-
-      context.fillStyle = "#ffffff";
-      context.beginPath();
-      if (typeof context.roundRect === "function") {
-        context.roundRect(
-          startX + 2 * moduleSize,
-          startY + 2 * moduleSize,
-          w - 4 * moduleSize,
-          h - 4 * moduleSize,
-          radius * 0.45
-        );
-      } else {
-        context.rect(startX + 2 * moduleSize, startY + 2 * moduleSize, w - 4 * moduleSize, h - 4 * moduleSize);
-      }
-      context.fill();
-    };
-
-    drawFinderPattern(0, 0); // Top-Left
-    drawFinderPattern((size - 7) * moduleSize, 0); // Top-Right
-    drawFinderPattern(0, (size - 7) * moduleSize); // Bottom-Left
-    return true;
-  } catch (err) {
-    console.error("renderQrToCanvas error:", err);
-    return false;
-  }
+    await drawQrCode(canvas, token, { dark: true });
+    return canvas.isConnected;
+  } catch { return false; }
 }
 
 export default function LoginForm({ isAddingAccount = false, initialStep = "email" }: { isAddingAccount?: boolean; initialStep?: "email" | "qr" }) {
@@ -485,15 +403,7 @@ export default function LoginForm({ isAddingAccount = false, initialStep = "emai
             >
               <div className="flex flex-col items-center justify-center w-full">
                 <div className="my-5 flex items-center justify-center">
-                  <div className="relative flex items-center justify-center rounded-[22px] bg-white/[0.05] p-3.5 shadow-inner overflow-hidden min-h-[208px] min-w-[208px] sm:min-h-[218px] sm:min-w-[218px]">
-                    {/* Telegram-style ambient radial light behind QR */}
-                    <div
-                      className="pointer-events-none absolute inset-0 rounded-[22px] opacity-70"
-                      style={{
-                        background: "radial-gradient(circle at 50% 50%, rgba(255,255,255,0.06) 0%, transparent 72%)",
-                      }}
-                    />
-
+                  <div data-login-qr-card className="relative flex min-h-[240px] min-w-[240px] items-center justify-center overflow-hidden rounded-[30px] bg-[#202124] p-2 shadow-[0_18px_45px_rgba(0,0,0,.16)]">
                     {/* Telegram Web signature smooth bloom appearance */}
                     <motion.div
                       initial={{ opacity: 0, scale: 0.92 }}
@@ -503,7 +413,7 @@ export default function LoginForm({ isAddingAccount = false, initialStep = "emai
                           : { opacity: 0, scale: 0.92 }
                       }
                       transition={{
-                        duration: 0.35,
+                        duration: 0.18,
                         ease: [0.16, 1, 0.3, 1],
                       }}
                       style={{ willChange: "transform, opacity" }}
@@ -511,7 +421,10 @@ export default function LoginForm({ isAddingAccount = false, initialStep = "emai
                     >
                       <canvas
                         ref={qrCanvasRef}
-                        className="h-[180px] w-[180px] sm:h-[190px] sm:w-[190px]"
+                        data-qr-code
+                        role="img"
+                        aria-label={t("Вход по QR-коду")}
+                        className="h-[224px] w-[224px] rounded-[24px] bg-[#202124]"
                       />
                     </motion.div>
                   </div>

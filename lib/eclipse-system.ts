@@ -12,6 +12,9 @@ export type EclipseEventType =
   | "security_recommendation"
   | "bot_management"
   | "call"
+  | "wallpaper_change"
+  | "community_created"
+  | "service"
   | "pack_import";
 
 export type EclipseMessageActionType =
@@ -37,6 +40,12 @@ export type EclipseSystemPayload = {
   botToken?: string;
   actions?: EclipseMessageAction[];
   metadata?: {
+    senderId?: string;
+    senderName?: string;
+    senderAvatar?: string | null;
+    wallpaperUrl?: string;
+    wallpaperPosY?: number;
+    botDocumentation?: boolean;
     packImport?: import("./imported-packs").ImportCard;
     telegramImportConnect?: boolean;
     importerNotice?: boolean;

@@ -1,7 +1,7 @@
 "use client";
 
 import { cacheMediaBlobUrl, getCachedMediaUrl, hasCachedMediaUrl, invalidateCachedMediaUrl } from "./media-cache";
-import { normalizeMediaPreview } from "@/lib/media-preview";
+import { getJpegPreviewAspectRatio, normalizeMediaAspectRatio, normalizeMediaPreview, type MediaPreviewDetails } from "@/lib/media-preview";
 
 const PREFIX = "#eclipse-e2e=";
 const aad = new TextEncoder().encode("eclipse-media-v1");
@@ -64,7 +64,7 @@ async function fetchAttachment(url: string, requestedGeneration: number) {
 
 function encode(bytes: Uint8Array) { return btoa(String.fromCharCode(...bytes)); }
 function decode(value: string) { return Uint8Array.from(atob(value), c => c.charCodeAt(0)); }
-type Envelope = { v: 1; k: string; i: string; m: string; s: string; e: number | null; p?: string };
+type Envelope = { v: 1; k: string; i: string; m: string; s: string; e: number | null; p?: string; r?: number };
 
 export async function encryptMediaBlob(blob: Blob) {
   const uploadGeneration = generation;
@@ -74,9 +74,10 @@ export async function encryptMediaBlob(blob: Blob) {
   const ciphertext = await crypto.subtle.encrypt({ name: "AES-GCM", iv, additionalData: aad }, key, await blob.arrayBuffer());
   return {
     blob: new Blob([ciphertext], { type: "application/octet-stream" }),
-    protectUrl(url: string, scope: string, expiresAt?: string | null, options?: { cacheOriginal?: boolean; preview?: string }) {
+    protectUrl(url: string, scope: string, expiresAt?: string | null, options?: MediaPreviewDetails & { cacheOriginal?: boolean }) {
       const envelope: Envelope = { v: 1, k: encode(rawKey), i: encode(iv), m: blob.type || "application/octet-stream", s: scope, e: expiresAt ? Date.parse(expiresAt) : null };
       const preview = normalizeMediaPreview(options?.preview);
+      envelope.r = normalizeMediaAspectRatio(options?.aspectRatio);
       const withPreview = preview ? url + PREFIX + encodeURIComponent(JSON.stringify({ ...envelope, p: preview })) : "";
       const protectedUrl = withPreview && withPreview.length <= 4000
         ? withPreview : url + PREFIX + encodeURIComponent(JSON.stringify(envelope));
@@ -101,13 +102,25 @@ function readEnvelope(src: string): Envelope | null {
   return data;
 }
 
-export function getEncryptedMediaPreview(src: string): string | undefined {
+function getEncryptedMediaDetails(src: string): MediaPreviewDetails {
   try {
     const envelope = readEnvelope(src);
-    if (envelope && (envelope.e === null || envelope.e > Date.now())) return normalizeMediaPreview(envelope.p);
+    if (envelope && (envelope.e === null || envelope.e > Date.now())) {
+      const preview = normalizeMediaPreview(envelope.p);
+      return { preview, aspectRatio: normalizeMediaAspectRatio(envelope.r) ?? getJpegPreviewAspectRatio(preview) };
+    }
   } catch {
     // Treat malformed or expired attachment previews as absent.
   }
+  return {};
+}
+
+export function getEncryptedMediaPreview(src: string): string | undefined {
+  return getEncryptedMediaDetails(src).preview;
+}
+
+export function getEncryptedMediaExpiresAt(src: string): number | undefined {
+  try { return readEnvelope(src)?.e ?? undefined; } catch { return undefined; }
 }
 
 export function resolveEncryptedMediaUrl(src: string): string {
@@ -188,7 +201,7 @@ export function resolveMessageMedia<T extends { kind: string }>(parsed: T): T {
   return { ...value,
     ...(typeof value.src === "string" ? {
       src: resolveEncryptedMediaUrl(value.src),
-      ...(value.kind === "image" || value.kind === "video" ? { preview: getEncryptedMediaPreview(value.src) } : {}),
+      ...(value.kind === "image" || value.kind === "video" ? getEncryptedMediaDetails(value.src) : {}),
     } : {}),
     ...(typeof value.url === "string" ? { url: resolveEncryptedMediaUrl(value.url) } : {}),
     ...(typeof value.coverUrl === "string" ? { coverUrl: resolveEncryptedMediaUrl(value.coverUrl) } : {}),

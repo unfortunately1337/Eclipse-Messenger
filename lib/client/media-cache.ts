@@ -5,21 +5,31 @@
  * flickers, and loaders for the sender.
  */
 
+import { normalizeMediaAspectRatio, type MediaPreviewDetails } from "@/lib/media-preview";
+
 const MAX_CACHED_ITEMS = 120;
 const mediaBlobCache = new Map<string, string>();
-const mediaPreviewCache = new Map<string, string>();
+const mediaPreviewCache = new Map<string, MediaPreviewDetails>();
 
-export function cacheDecodedMediaPreview(src: string, preview: string): void {
-  if (!src || mediaPreviewCache.has(src)) return;
-  if (mediaPreviewCache.size >= MAX_CACHED_ITEMS) {
+export function cacheMediaPreviewDetails(src: string, details: MediaPreviewDetails): void {
+  if (!src) return;
+  const previous = mediaPreviewCache.get(src);
+  if (!previous && mediaPreviewCache.size >= MAX_CACHED_ITEMS) {
     const oldest = mediaPreviewCache.keys().next().value;
     if (oldest) mediaPreviewCache.delete(oldest);
   }
-  mediaPreviewCache.set(src, preview);
+  mediaPreviewCache.set(src, {
+    preview: details.preview ?? previous?.preview,
+    aspectRatio: normalizeMediaAspectRatio(details.aspectRatio) ?? previous?.aspectRatio,
+  });
 }
 
 export function getDecodedMediaPreview(src: string): string | undefined {
-  return mediaPreviewCache.get(src);
+  return mediaPreviewCache.get(src)?.preview;
+}
+
+export function getLocalMediaAspectRatio(src: string): number | undefined {
+  return mediaPreviewCache.get(src)?.aspectRatio;
 }
 
 export function cacheMediaBlobUrl(serverUrl: string, blobUrl: string): void {

@@ -17,13 +17,13 @@ export function compareMessagesByTime<T extends { id?: string; createdAt: string
   return 0;
 }
 
-export function appendAndSortMessages<T extends { id: string; createdAt: string; pending?: boolean; text?: string | null; senderId?: string | null; localId?: string | null }>(prev: T[], nextMessage: T) {
+export function appendAndSortMessages<T extends { id: string; createdAt: string; pending?: boolean; sendFailure?: unknown; text?: string | null; senderId?: string | null; localId?: string | null }>(prev: T[], nextMessage: T) {
   if (prev.some((message) => message.id === nextMessage.id || (message.localId && message.localId === nextMessage.id))) {
     return prev;
   }
 
   // If nextMessage is a confirmed message (not pending), check if an optimistic pending message matches it
-  if (!nextMessage.pending && nextMessage.senderId && nextMessage.text) {
+  if (!nextMessage.pending && !nextMessage.sendFailure && nextMessage.senderId && nextMessage.text) {
     const pendingIndex = prev.findIndex(
       (m) => m.pending && m.senderId === nextMessage.senderId && m.text === nextMessage.text,
     );
@@ -68,7 +68,7 @@ export function appendAndSortMessages<T extends { id: string; createdAt: string;
   return [...prev.slice(0, low), nextMessage, ...prev.slice(low)];
 }
 
-export function finalizeOptimisticMessage<T extends { id: string; createdAt: string; pending?: boolean; localId?: string | null }>(options: {
+export function finalizeOptimisticMessage<T extends { id: string; createdAt: string; pending?: boolean; localId?: string | null; sendFailure?: unknown }>(options: {
   prev: T[];
   nextMessage: T;
   optimisticMessageId?: string | null;
@@ -91,6 +91,7 @@ export function finalizeOptimisticMessage<T extends { id: string; createdAt: str
     ...nextMessage,
     createdAt: optimisticMessage.createdAt || nextMessage.createdAt,
     pending: false,
+    sendFailure: undefined,
   };
 
   const next = prev.filter(
@@ -121,7 +122,7 @@ export function getEcliStreamRevealIndex(elapsedMs: number, textLength: number, 
   return Math.min(textLength, Math.floor(eased * textLength));
 }
 
-export function mergeMessageWindow<T extends { id: string; createdAt: string; localId?: string | null; pending?: boolean; text?: string | null; senderId?: string | null }>(baseMessages: T[], nextWindow: T[]) {
+export function mergeMessageWindow<T extends { id: string; createdAt: string; localId?: string | null; pending?: boolean; sendFailure?: unknown; text?: string | null; senderId?: string | null }>(baseMessages: T[], nextWindow: T[]) {
   if (baseMessages.length === 0) {
     return nextWindow.slice().sort(compareMessagesByTime);
   }
@@ -135,7 +136,7 @@ export function mergeMessageWindow<T extends { id: string; createdAt: string; lo
     nextWindow.map((message) => {
       // Bot refreshes can arrive before the HTTP send response. Reconcile that
       // echo with one pending row instead of briefly displaying both bubbles.
-      const pending = !baseById.has(message.id) && !message.pending && message.senderId && message.text
+      const pending = !baseById.has(message.id) && !message.pending && !message.sendFailure && message.senderId && message.text
         ? baseMessages.find(value => value.pending && !replacedPending.has(value.id) && value.senderId === message.senderId && value.text === message.text && Math.abs(Date.parse(value.createdAt) - Date.parse(message.createdAt)) < 30_000)
         : undefined;
       if (pending) replacedPending.add(pending.id);

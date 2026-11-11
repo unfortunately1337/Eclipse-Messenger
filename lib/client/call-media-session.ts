@@ -23,7 +23,8 @@ export interface CallParticipant {
   getTrackPublication(source: CallTrackSource): CallPublication | undefined;
 }
 export interface LocalCallParticipant extends CallParticipant {
-  setMicrophoneEnabled(enabled: boolean): Promise<unknown>;
+  setMicrophoneEnabled(enabled: boolean, options?: { noiseSuppression?: boolean }): Promise<unknown>;
+  setNoiseSuppression?(enabled: boolean): Promise<void>;
   setCameraEnabled(enabled: boolean, options?: { facingMode?: CameraRestartOptions["facingMode"] }): Promise<unknown>;
   setScreenShareEnabled(enabled: boolean, capture?: { audio?: boolean; contentHint?: string; selfBrowserSurface?: string; surfaceSwitching?: string }, publish?: { screenShareEncoding?: { maxBitrate: number; maxFramerate: number } }): Promise<unknown>;
 }

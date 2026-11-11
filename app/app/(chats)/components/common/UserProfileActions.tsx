@@ -5,6 +5,7 @@ import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { menuPopoverMotion } from "@/lib/client/panel-motion";
 import { IoChatbubble, IoCall, IoEllipsisHorizontal, IoImageOutline, IoLockClosedOutline, IoNotifications, IoNotificationsOff, IoSearch } from "react-icons/io5";
 import { useTranslation } from "@/components/LocaleProvider";
+import { getProfileMenuVisualStyle } from "@/lib/client/panel-visual";
 
 type Props = {
   muted: boolean;
@@ -79,7 +80,7 @@ export default function UserProfileActions({ muted, glass, callDisabled, uploadi
       </button>
       <AnimatePresence>
         {moreOpen && (
-          <motion.div id={menuId} className="absolute right-0 top-[calc(100%+8px)] z-50 w-[232px] max-w-full rounded-[22px] p-1.5 shadow-[0_14px_40px_rgba(0,0,0,0.28)]" style={{ backgroundColor: glass ? "rgba(30,30,32,0.99)" : "#1e1e20" }} {...menuPopoverMotion(reduced)}>
+          <motion.div id={menuId} data-profile-action-menu role="menu" aria-label={t("Ещё")} className="absolute right-0 top-[calc(100%+8px)] z-50 w-[232px] max-w-full rounded-[22px] p-1.5" style={getProfileMenuVisualStyle(glass)} {...menuPopoverMotion(reduced)}>
             <button type="button" className={item} disabled={uploadingWallpaper} onClick={() => { setMoreOpen(false); onWallpaper(); }}>
               <IoImageOutline size={21} className="shrink-0 text-zinc-400" aria-hidden />
               <span>{t(uploadingWallpaper ? "Загрузка..." : "Поставить обои")}</span>

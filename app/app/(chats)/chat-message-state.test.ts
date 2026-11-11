@@ -1,5 +1,5 @@
 import { expect, it } from "vitest";
-import { finalizeOptimisticMessage, getMessageSelectionNeighbors, mergeMessageWindow } from "./chat-message-state";
+import { appendAndSortMessages, finalizeOptimisticMessage, getMessageSelectionNeighbors, mergeMessageWindow } from "./chat-message-state";
 const at = "2026-11-01T00:00:00.000Z";
 
 it("groups selected rows using absolute history indices after virtual scrolling", () => {
@@ -12,7 +12,7 @@ it("groups selected rows using absolute history indices after virtual scrolling"
   expect(getMessageSelectionNeighbors(history, 199, selected)).toEqual({ previous: false, next: false });
   expect(getMessageSelectionNeighbors([], 0, selected)).toEqual({ previous: false, next: false });
 });
-type Message = { id: string; createdAt: string; senderId: string; text: string; localId?: string; pending?: boolean };
+type Message = { id: string; createdAt: string; senderId: string; text: string; localId?: string; pending?: boolean; sendFailure?: { kind: string; retryAt: number } };
 const pending: Message = { id: "optimistic:one", localId: "optimistic:one", createdAt: at, pending: true, senderId: "self", text: "😀" };
 const echo: Message = { id: "server-one", createdAt: "2026-11-01T00:00:00.100Z", senderId: "self", text: "😀" };
 it("keeps one stable row when a bot refresh arrives before the send response", () => {
@@ -30,4 +30,15 @@ it("does not re-use a single pending row for two legitimate identical sends", ()
 it("never swallows another sender's message or an old message with the same content", () => {
   expect(mergeMessageWindow([pending], [{ ...echo, senderId: "other" }])).toHaveLength(2);
   expect(mergeMessageWindow([pending], [{ ...echo, createdAt: "2026-10-30T00:00:00.000Z" }])).toHaveLength(2);
+});
+it("does not mistake a restored failed draft for the confirmation of another identical send", () => {
+  const failed = { ...echo, id: "failed", localId: "failed", pending: false, sendFailure: { kind: "rate_limit", retryAt: 5000 } };
+  expect(mergeMessageWindow([pending], [failed])).toHaveLength(2);
+  expect(appendAndSortMessages([pending], failed)).toHaveLength(2);
+});
+it("clears the failure marker after a manual retry is confirmed while preserving the row key", () => {
+  const failed = { ...pending, pending: false, sendFailure: { kind: "rate_limit", retryAt: 5000 } };
+  const confirmed = finalizeOptimisticMessage<Message>({ prev: [failed], nextMessage: echo, optimisticMessageId: failed.id });
+  expect(confirmed).toHaveLength(1);
+  expect(confirmed[0]).toMatchObject({ id: echo.id, localId: failed.localId, pending: false, sendFailure: undefined });
 });

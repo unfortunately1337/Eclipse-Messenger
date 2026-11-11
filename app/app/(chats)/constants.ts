@@ -70,18 +70,18 @@ export const DEFAULT_CHAT_UI_SETTINGS: ChatUiSettings = {
 };
 
 export const SETTINGS_LIVE_PRESETS: Array<{ id: LiveBackgroundNeatPreset; label: string; colors: string; icon: string }> = [
-  { id: "none", label: "Стандарт", colors: "linear-gradient(135deg,#ffffff,#e4e4e7)", icon: "⚙️" },
-  { id: "neon", label: "Неон", colors: "linear-gradient(135deg,#8b5cf6,#a855f7)", icon: "🏠" },
-  { id: "emerald", label: "Изумруд", colors: "linear-gradient(135deg,#22c55e,#16a34a)", icon: "🐥" },
-  { id: "ocean", label: "Океан", colors: "linear-gradient(135deg,#38bdf8,#0284c7)", icon: "💎" },
-  { id: "midnight", label: "Полночь", colors: "linear-gradient(135deg,#6366f1,#4f46e5)", icon: "☃️" },
-  { id: "sunset", label: "Закат", colors: "linear-gradient(135deg,#f97316,#ea580c)", icon: "🔥" },
+  { id: "none", label: "Стандарт", colors: "linear-gradient(135deg,#ffffff,#e4e4e7)", icon: "🌗" },
+  { id: "neon", label: "Неон", colors: "linear-gradient(135deg,#8b5cf6,#a855f7)", icon: "🔮" },
+  { id: "emerald", label: "Изумруд", colors: "linear-gradient(135deg,#22c55e,#16a34a)", icon: "🌿" },
+  { id: "ocean", label: "Океан", colors: "linear-gradient(135deg,#38bdf8,#0284c7)", icon: "🌊" },
+  { id: "midnight", label: "Полночь", colors: "linear-gradient(135deg,#6366f1,#4f46e5)", icon: "🌙" },
+  { id: "sunset", label: "Закат", colors: "linear-gradient(135deg,#f97316,#ea580c)", icon: "🌅" },
   { id: "aurora", label: "Аврора", colors: "linear-gradient(135deg,#10b981,#059669)", icon: "🌌" },
   { id: "violet", label: "Фиолетовый", colors: "linear-gradient(135deg,#a855f7,#9333ea)", icon: "✨" },
-  { id: "crimson", label: "Багровый", colors: "linear-gradient(135deg,#f43f5e,#e11d48)", icon: "🍎" },
+  { id: "crimson", label: "Багровый", colors: "linear-gradient(135deg,#f43f5e,#e11d48)", icon: "🌹" },
   { id: "mono", label: "Моно", colors: "linear-gradient(135deg,#9ca3af,#4b5563)", icon: "🐼" },
   { id: "frost", label: "Иней", colors: "linear-gradient(135deg,#38bdf8,#818cf8)", icon: "❄️" },
-  { id: "lava", label: "Лава", colors: "linear-gradient(135deg,#ef4444,#dc2626)", icon: "💥" },
+  { id: "lava", label: "Лава", colors: "linear-gradient(135deg,#ef4444,#dc2626)", icon: "🌋" },
 ];
 
 export const REACTION_EMOJIS = [

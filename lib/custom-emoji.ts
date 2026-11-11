@@ -3,6 +3,7 @@ import { getEmojiStatus } from "./emoji-status";
 // A stable ID is serialized inside message text; never trust URLs from messages.
 export const customEmojiToken = (id: string) => getEmojiStatus(id) ? `\uE000${id}\uE001` : "";
 const tokenPattern = /\uE000(tg-[a-f0-9]{24})\uE001/g;
+let textSegmenter: Intl.Segmenter | undefined;
 export type EmojiTextPart = { text: string; id?: string };
 export function splitCustomEmoji(text: string): EmojiTextPart[] {
   const parts: EmojiTextPart[] = [];
@@ -22,11 +23,15 @@ export function emojiPlainText(text: string) {
 
 /** Truncate visible characters without cutting a serialized emoji or grapheme in half. */
 export function truncateEmojiText(text: string, limit: number): string {
-  const segmenter = new Intl.Segmenter("en", { granularity: "grapheme" });
+  textSegmenter ??= new Intl.Segmenter("en", { granularity: "grapheme" });
   let result = "", count = 0;
   for (const part of splitCustomEmoji(text)) {
-    const characters = part.id ? [part.text] : Array.from(segmenter.segment(part.text), item => item.segment);
-    for (const character of characters) {
+    if (part.id) {
+      if (count >= limit) return `${result}...`;
+      result += part.text; count++;
+      continue;
+    }
+    for (const { segment: character } of textSegmenter.segment(part.text)) {
       if (count >= limit) return `${result}...`;
       result += character;
       count++;

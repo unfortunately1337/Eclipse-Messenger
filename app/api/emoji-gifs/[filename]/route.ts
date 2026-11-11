@@ -1,6 +1,3 @@
-import fs from "node:fs/promises";
-import path from "node:path";
-import { artworkFallbackResponse } from "@/lib/server/artwork-fallback";
 import { NextRequest, NextResponse } from "next/server";
 import { loadEmojiGif, emojiMirrorUrls } from "@/lib/server/emoji-assets";
 import { TELEGRAM_EMOJI_GIF_MAP } from "@/lib/client/telegram-emoji-gifs";
@@ -23,9 +20,6 @@ export async function GET(
     if (!filename || !filename.endsWith(".gif") || !VALID_GIFS.has(filename)) {
       return new NextResponse("Invalid emoji gif", { status: 404 });
     }
-
-    const bundled = await fs.stat(path.join(process.cwd(), "public", "gifs", filename)).then(stat => stat.isFile()).catch(() => false);
-    if (!bundled) return artworkFallbackResponse(`/gifs/${filename}`);
 
     const ifNoneMatch = req.headers.get("if-none-match");
     const etag = `"${filename}"`;

@@ -2,12 +2,13 @@
 import { dateLocale, translate as t } from "@/lib/i18n/translate";
 import { useTranslation } from "@/components/LocaleProvider";
 
-import { profileChatUrl } from "@/lib/client/deployment-url";
 
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
+import ProfileQrPanel from "@/components/ProfileQrPanel";
 import { IProfile } from "@/types/profile.type";
-import { CircleEllipsis, Copy, Eye, EyeOff, Heart, Info, Music, QrCode, X } from "lucide-react";
+import { CircleEllipsis, Copy, Eye, EyeOff, Heart, Info, Music, X } from "lucide-react";
+import { PiQrCodeBold as QrCode } from "react-icons/pi";
 import { MdDelete, MdEdit } from "react-icons/md";
 import { Button } from "@/components/ui/button";
 import { ConfirmationSheet } from "@/components/ui/confirmation-sheet";
@@ -336,7 +337,6 @@ export default function Profile({ profile: initialProfile, isOwner = false }: Pr
   const [storyViewerStats, setStoryViewerStats] = useState<StoryViewerStats | null>(null);
   const [storyViewerStatsLoading, setStoryViewerStatsLoading] = useState(false);
   const [profileQrOpen, setProfileQrOpen] = useState(false);
-  const [profileQrDataUrl, setProfileQrDataUrl] = useState<string | null>(null);
   const [showAvatarViewer, setShowAvatarViewer] = useState(false);
   const [collectibleModalUsername, setCollectibleModalUsername] = useState<string | null>(null);
   const viewedStoryIdsRef = useRef<Set<string>>(new Set());
@@ -367,11 +367,6 @@ export default function Profile({ profile: initialProfile, isOwner = false }: Pr
   const activeStory = storyGroup?.stories[storyViewerIndex] ?? null;
   const activeStoryOverlay = useMemo(() => normalizeStoryOverlay(activeStory?.overlay), [activeStory?.overlay]);
   const hasStory = Boolean(storyGroup?.stories.length);
-  const shareChatUrl = useMemo(() => {
-    const normalizedLink = String(profile.link ?? "").trim().replace(/^@+/u, "").toLowerCase();
-    if (!normalizedLink) return "";
-    return profileChatUrl(normalizedLink);
-  }, [profile.link]);
 
   useEffect(() => {
     setProfile(initialProfile);
@@ -710,31 +705,7 @@ export default function Profile({ profile: initialProfile, isOwner = false }: Pr
     );
   };
 
-  useEffect(() => {
-    if (!profileQrOpen || !shareChatUrl) return;
-    let cancelled = false;
-    setProfileQrDataUrl(null);
-    void import("qrcode")
-      .then((QRCode) =>
-        QRCode.toDataURL(shareChatUrl, {
-          margin: 1,
-          width: 320,
-          color: {
-            dark: "#111827",
-            light: "#ffffff",
-          },
-        }),
-      )
-      .then((dataUrl) => {
-        if (!cancelled) setProfileQrDataUrl(dataUrl);
-      })
-      .catch(() => {
-        if (!cancelled) setProfileQrDataUrl(null);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [profileQrOpen, shareChatUrl]);
+
 
   return (
     <div
@@ -753,14 +724,14 @@ export default function Profile({ profile: initialProfile, isOwner = false }: Pr
         )}
       >
         <div className="relative h-32 w-full overflow-hidden bg-zinc-100 dark:bg-zinc-900">
-          <button
+          {!profile.usernameHidden && <button
             type="button"
             onClick={() => setProfileQrOpen(true)}
             className="absolute left-4 top-4 z-20 flex h-11 w-11 items-center justify-center rounded-full border border-white/18 bg-zinc-950/28 text-white shadow-[0_10px_30px_rgba(0,0,0,0.22)] backdrop-blur-xl transition-colors hover:bg-zinc-950/38 active:scale-95"
             aria-label={t("Показать QR-код профиля")}
           >
             <QrCode size={19} />
-          </button>
+          </button>}
 
           {isOwner ? (
             <button
@@ -861,7 +832,7 @@ export default function Profile({ profile: initialProfile, isOwner = false }: Pr
 
           <div className="flex-1 text-center md:text-left space-y-0 pb-1">
             <h2 className="text-2xl font-semibold tracking-tight text-zinc-900 dark:text-zinc-50">{profile.displayName}</h2>
-            <p className="text-sm text-zinc-500 dark:text-zinc-400">
+            {!profile.usernameHidden && <p className="text-sm text-zinc-500 dark:text-zinc-400">
               <span>{profile.link}</span>
               {profile.secondaryLinks && profile.secondaryLinks.length > 0 && (
                 <span className="text-xs text-zinc-400 dark:text-zinc-500 block sm:inline sm:ml-1.5 font-normal">
@@ -886,7 +857,7 @@ export default function Profile({ profile: initialProfile, isOwner = false }: Pr
                   </span>
                 </span>
               )}
-            </p>
+            </p>}
           </div>
           </div>
 
@@ -929,84 +900,9 @@ export default function Profile({ profile: initialProfile, isOwner = false }: Pr
             transition={{ duration: 0.2, ease: "easeOut" }}
             onClick={() => setProfileQrOpen(false)}
           >
-            <motion.div
-              initial={{ y: "100%" }}
-              animate={{ y: 0 }}
-              exit={{ y: "100%" }}
-              transition={{ duration: 0.2, ease: [0.2, 0.7, 0.2, 1] }}
-              onClick={(event) => event.stopPropagation()}
-              className="relative w-full rounded-t-[32px] border border-b-0 border-white/10 bg-zinc-950 px-5 pb-[calc(env(safe-area-inset-bottom)+18px)] pt-6 text-white shadow-[0_-24px_70px_rgba(0,0,0,0.5)] sm:mb-4 sm:max-w-md sm:rounded-[32px] sm:border sm:pb-5"
-            >
-              <div className="absolute top-4 right-4 z-10">
-                <button
-                  type="button"
-                  onClick={() => setProfileQrOpen(false)}
-                  className="grid h-8 w-8 place-items-center rounded-full text-zinc-400 hover:bg-white/10 hover:text-white transition-colors"
-                  aria-label={t("Закрыть")}
-                >
-                  <X size={18} />
-                </button>
-              </div>
-              <div className="flex flex-col items-center text-center">
-                <MediaAvatar
-                  src={profile.avatarUrl}
-                  alt={profile.displayName}
-                  className="h-16 w-16 border border-white/10 shadow-[0_14px_34px_rgba(0,0,0,0.36)]"
-                  fallbackText={profile.displayName.trim().slice(0, 1)}
-                  autoPlay
-                />
-                <div className="mt-3 min-w-0">
-                  <div className="truncate text-xl font-black leading-6">{profile.displayName}</div>
-                  <div className="mt-1 text-sm text-zinc-400">
-                    <span>{profile.link}</span>
-                    {profile.secondaryLinks && profile.secondaryLinks.length > 0 && (
-                      <div className="text-xs text-zinc-400 mt-0.5">
-                        {t("а также")}{" "}
-                        <span className="font-semibold text-white">
-                          {profile.secondaryLinks.map((l, idx) => (
-                            <span key={l}>
-                              {idx > 0 && ", "}
-                              <span
-                                role="button"
-                                tabIndex={0}
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setCollectibleModalUsername(l);
-                                }}
-                                className="cursor-pointer transition-colors duration-150 inline-block rounded-[6px] px-1 py-0.5 -mx-1 -my-0.5 hover:bg-white/10 active:bg-white/15 text-white select-none"
-                              >
-                                @{l.replace(/^@+/, "")}
-                              </span>
-                            </span>
-                          ))}
-                        </span>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </div>
-
-              <div className="mx-auto mt-6 flex w-full max-w-[312px] items-center justify-center rounded-[30px] bg-white p-4 shadow-[0_18px_46px_rgba(0,0,0,0.34)]">
-                <div className="flex aspect-square w-full items-center justify-center rounded-[22px] bg-white">
-                  {profileQrDataUrl ? (
-                    <img src={profileQrDataUrl} alt={`QR ${profile.displayName}`} className="h-full w-full rounded-[18px]" />
-                  ) : (
-                    <div className="text-sm font-medium text-zinc-500">{t("Генерация QR...")}</div>
-                  )}
-                </div>
-              </div>
-
-              <Button
-                type="button"
-                onClick={() => {
-                  if (!shareChatUrl) return;
-                  navigator.clipboard.writeText(shareChatUrl);
-                  toast.success(t("Ссылка на чат скопирована"));
-                }}
-                className="mt-5 h-12 w-full rounded-full border border-white/10 bg-white text-[15px] font-black text-zinc-950 shadow-[0_12px_34px_rgba(255,255,255,0.08)] hover:bg-zinc-100"
-              >
-                <Copy size={17} />
-                {t("Скопировать ссылку")}</Button>
+            <motion.div initial={{ y: "100%" }} animate={{ y: 0 }} exit={{ y: "100%" }} transition={{ duration: .22, ease: [.22, 1, .36, 1] }}
+              onClick={event => event.stopPropagation()} className="relative flex h-[min(740px,calc(100dvh-24px))] w-[calc(100%-24px)] max-w-sm overflow-hidden rounded-[28px]">
+              <ProfileQrPanel displayName={profile.displayName} link={profile.link} onBack={() => setProfileQrOpen(false)} />
             </motion.div>
           </motion.div>
         ) : null}

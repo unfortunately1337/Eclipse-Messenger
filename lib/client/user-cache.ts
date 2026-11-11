@@ -1,6 +1,8 @@
 "use client";
 import { clearMediaBlobCache } from "./media-cache";
 import { clearEncryptedMedia } from "./media-crypto";
+import { clearFailedMessages } from "./failed-message-store";
+import { clearMessageCooldowns } from "./message-send-limit";
 
 type StorageLike = {
   length: number;
@@ -37,6 +39,8 @@ function clearStorage(storage: StorageLike | null, prefixes: string[], exactKeys
 }
 
 export function clearUserCaches() {
+  void clearFailedMessages();
+  clearMessageCooldowns();
   clearEncryptedMedia();
   clearMediaBlobCache();
   if (typeof window === "undefined") return;

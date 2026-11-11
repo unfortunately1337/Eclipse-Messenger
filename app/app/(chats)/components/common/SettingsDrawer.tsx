@@ -19,7 +19,7 @@ import { PANEL_SUBVIEW_VARIANTS, PANEL_TRANSITION, panelOverlayMotion } from "@/
 import { schedulePanelIdle } from "@/lib/client/panel-work";
 import { usePanelDirection } from "@/lib/client/use-panel-direction";
 import {
-  ArrowLeft, Trash, Trash2, Download, QrCode, Camera, Music, LogOut, KeySquare, X,
+  ArrowLeft, Trash, Trash2, Download, Camera, Music, LogOut, KeySquare, X,
   Mail, Lock, ChevronRight, User, Laptop, Tablet, Monitor, Check,
   AtSign, Bell, Database, Settings, Pencil, MoreVertical, Palette,
   Sliders, RefreshCw, Eye, EyeOff, Sparkles, AlertCircle,
@@ -30,6 +30,7 @@ import {
 import { TbShieldLock as ShieldLock } from "react-icons/tb";
 import { MdOutlinePrivacyTip, MdOutlineDevices, MdEdit, MdDelete } from "react-icons/md";
 import { IoLogoWindows, IoPhonePortrait } from "react-icons/io5";
+import { PiQrCodeBold as QrCode } from "react-icons/pi";
 import { FaLinux } from "react-icons/fa";
 import { RiMacbookLine } from "react-icons/ri";
 
@@ -42,7 +43,10 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { MediaAvatar, MediaBanner, isRealMediaAvatar } from "@/components/ui/media";
 import { AvatarMediaViewerModal } from "./AvatarMediaViewerModal";
 import { CollectibleUsernameModal } from "./CollectibleUsernameModal";
-import SessionQrScanner from "./SessionQrScanner";
+import dynamic from "next/dynamic";
+import { TotpDisableScreen } from "./TotpDisableScreen";
+import { ProfileMusicEditor } from "./ProfileMusicEditor";
+import { StyledQrCode } from "@/components/StyledQrCode";
 import { showAppToast } from "@/lib/client/app-toast";
 import { broadcastSelfProfileUpdated } from "@/lib/client/local-updates";
 import { StoryAvatarRing } from "../story/StoryAvatarRing";
@@ -74,15 +78,16 @@ import {
   formatSettingsSessionTime
 } from "../../helpers";
 
-import ProfileQrPanel from "@/components/ProfileQrPanel";
+import ProfileQrPanel, { preloadProfileQrPanel } from "@/components/ProfileQrPanel";
 import { ProfileMusicCaption } from "./ProfileMusicCaption";
 import { LottieSticker, preloadLottieSticker } from "./LottieSticker";
 import { MonkeyPasswordAnimation } from "@/components/auth/AuthAnimation";
 import { fetchStickerAnimationData } from "@/lib/client/stickers";
 import { MessageStatusTicks } from "./MessageStatus";
 import { ChatThemeCard } from "./ChatThemeCard";
+import { HorizontalThemeStrip } from "./HorizontalThemeStrip";
+import { ThemeCardActions } from "./ThemeCardActions";
 import { ReplyQuote } from "./ReplyQuote";
-import { CustomChatThemeEditor } from "./CustomChatThemeEditor";
 import { DEFAULT_CUSTOM_CHAT_THEME, customThemeMessageBackground, customThemeChatBackground, customThemeTextColor, customThemeReactionSurface } from "@/lib/client/custom-chat-theme";
 
 import { THEME_BACKDROP_MAP, THEME_DOODLE_GRADIENT_MAP, THEME_SVG_MAP, THEME_SOLID_COLOR_MAP } from "./TelegramDoodleWallpaper";
@@ -96,6 +101,11 @@ import {
 } from "@/lib/profile-gradients";
 
 const settingsSubViewVariants = PANEL_SUBVIEW_VARIANTS;
+const loadThemeEditor = () => import("./CustomChatThemeEditor");
+const loadSessionScanner = () => import("./SessionQrScanner");
+const panelLoading = () => <div className="grid min-h-40 flex-1 place-items-center"><Spinner className="size-5 text-zinc-400" /></div>;
+const CustomChatThemeEditor = dynamic(() => loadThemeEditor().then(module => module.CustomChatThemeEditor), { ssr: false, loading: panelLoading });
+const SessionQrScanner = dynamic(loadSessionScanner, { ssr: false, loading: panelLoading });
 
 
 function ToggleSwitch({
@@ -150,183 +160,6 @@ function SettingsRadioIndicator({ selected }: { selected: boolean }) {
         )}
       />
     </span>
-  );
-}
-
-function TotpQrCanvas({
-  value,
-  fallbackUrl,
-  size = 200,
-}: {
-  value: string;
-  fallbackUrl?: string | null;
-  size?: number;
-}) {
-  const t = useTranslation();
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-  const [useFallback, setUseFallback] = useState(false);
-
-  useEffect(() => {
-    if (!value && !fallbackUrl) return;
-    let active = true;
-
-    const drawRoundedRect = (
-      ctx: CanvasRenderingContext2D,
-      x: number,
-      y: number,
-      w: number,
-      h: number,
-      r: number
-    ) => {
-      ctx.beginPath();
-      if (typeof ctx.roundRect === "function") {
-        ctx.roundRect(x, y, w, h, r);
-      } else {
-        ctx.moveTo(x + r, y);
-        ctx.lineTo(x + w - r, y);
-        ctx.quadraticCurveTo(x + w, y, x + w, y + r);
-        ctx.lineTo(x + w, y + h - r);
-        ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
-        ctx.lineTo(x + r, y + h);
-        ctx.quadraticCurveTo(x, y + h, x, y + h - r);
-        ctx.lineTo(x, y + r);
-        ctx.quadraticCurveTo(x, y, x + r, y);
-      }
-      ctx.closePath();
-    };
-
-    const drawQr = (QRCode: any) => {
-      const canvas = canvasRef.current;
-      if (!canvas) return;
-
-      const ctx = canvas.getContext("2d");
-      if (!ctx) return;
-
-      const canvasSize = 512;
-      canvas.width = canvasSize;
-      canvas.height = canvasSize;
-
-      try {
-        const qrSource = value || fallbackUrl || "";
-        const qr = QRCode.create(qrSource, { errorCorrectionLevel: "M" });
-        const { size: qrSize, data } = qr.modules;
-        const margin = 2;
-        const totalModules = qrSize + margin * 2;
-        const moduleSize = canvasSize / totalModules;
-        const offsetX = margin * moduleSize;
-        const offsetY = margin * moduleSize;
-
-        // Clear canvas with crisp white
-        ctx.fillStyle = "#ffffff";
-        ctx.fillRect(0, 0, canvasSize, canvasSize);
-
-        // 1. Draw modules as refined rounded squaricles (smooth modern QR modules)
-        ctx.fillStyle = "#09090b";
-        const moduleRadius = moduleSize * 0.28;
-        const pad = moduleSize * 0.05;
-
-        for (let r = 0; r < qrSize; r++) {
-          for (let c = 0; c < qrSize; c++) {
-            const isDark = data[r * qrSize + c] === 1;
-            if (!isDark) continue;
-
-            const isTopLeftFinder = r < 7 && c < 7;
-            const isTopRightFinder = r < 7 && c >= qrSize - 7;
-            const isBottomLeftFinder = r >= qrSize - 7 && c < 7;
-
-            if (isTopLeftFinder || isTopRightFinder || isBottomLeftFinder) {
-              continue;
-            }
-
-            const x = offsetX + c * moduleSize;
-            const y = offsetY + r * moduleSize;
-            drawRoundedRect(
-              ctx,
-              x + pad,
-              y + pad,
-              moduleSize - pad * 2,
-              moduleSize - pad * 2,
-              moduleRadius
-            );
-            ctx.fill();
-          }
-        }
-
-        // 2. Draw unified rounded finder patterns
-        const drawFinderPattern = (startX: number, startY: number) => {
-          const w = 7 * moduleSize;
-          const h = 7 * moduleSize;
-          const radius = 1.75 * moduleSize;
-
-          ctx.fillStyle = "#09090b";
-          drawRoundedRect(ctx, startX, startY, w, h, radius);
-          ctx.fill();
-
-          ctx.fillStyle = "#ffffff";
-          drawRoundedRect(
-            ctx,
-            startX + moduleSize,
-            startY + moduleSize,
-            w - 2 * moduleSize,
-            h - 2 * moduleSize,
-            radius * 0.72
-          );
-          ctx.fill();
-
-          ctx.fillStyle = "#09090b";
-          drawRoundedRect(
-            ctx,
-            startX + 2 * moduleSize,
-            startY + 2 * moduleSize,
-            w - 4 * moduleSize,
-            h - 4 * moduleSize,
-            radius * 0.44
-          );
-          ctx.fill();
-        };
-
-        drawFinderPattern(offsetX, offsetY);
-        drawFinderPattern(offsetX + (qrSize - 7) * moduleSize, offsetY);
-        drawFinderPattern(offsetX, offsetY + (qrSize - 7) * moduleSize);
-      } catch (err) {
-        console.error("QR drawing error, using fallback image:", err);
-        setUseFallback(true);
-      }
-    };
-
-    import("qrcode")
-      .then((QRCodeLib) => {
-        if (!active) return;
-        const QRCode = QRCodeLib.default || QRCodeLib;
-        drawQr(QRCode);
-      })
-      .catch(() => {
-        if (!active) return;
-        setUseFallback(true);
-      });
-
-    return () => {
-      active = false;
-    };
-  }, [value, fallbackUrl]);
-
-  if (useFallback && fallbackUrl) {
-    return (
-      <img
-        src={fallbackUrl}
-        alt="2FA QR Code"
-        style={{ width: size, height: size }}
-        className="block rounded-[16px] object-contain select-none"
-      />
-    );
-  }
-
-  return (
-    <canvas
-      ref={canvasRef}
-      style={{ width: size, height: size, maxWidth: "100%" }}
-      className="block rounded-[16px] select-none"
-    />
   );
 }
 
@@ -616,13 +449,25 @@ export const SettingsDrawer = React.memo(function SettingsDrawer(props: any) {
   const [verifyPasswordError, setVerifyPasswordError] = useState<string | null>(null);
   const [verifyPasswordLoading, setVerifyPasswordLoading] = useState(false);
   const [showVerifyPasswordText, setShowVerifyPasswordText] = useState(false);
-  const [showDisableTotpModal, setShowDisableTotpModal] = useState(false);
   const [disablePasswordInput, setDisablePasswordInput] = useState("");
   const [disablePasswordError, setDisablePasswordError] = useState<string | null>(null);
   const [disablePasswordLoading, setDisablePasswordLoading] = useState(false);
   const [showDisablePasswordText, setShowDisablePasswordText] = useState(false);
   const settingsPanelView = props.settingsPanelView ?? internalPanelView;
   const setSettingsPanelView = props.setSettingsPanelView ?? setInternalPanelView;
+
+  useEffect(() => {
+    if (!isOpen) return;
+    if (settingsPanelView === "chats") return schedulePanelIdle(() => { void loadThemeEditor().catch(() => {}); });
+    if (settingsPanelView === "sessions") return schedulePanelIdle(() => { void loadSessionScanner().catch(() => {}); });
+  }, [isOpen, settingsPanelView]);
+
+  useEffect(() => {
+    if (isOpen && settingsPanelView === "security-totp-disable") return;
+    setDisablePasswordInput("");
+    setDisablePasswordError(null);
+    setShowDisablePasswordText(false);
+  }, [isOpen, settingsPanelView, selfProfile?.id]);
 
   useEffect(() => {
     if (!isOpen || !["privacy", "security", "security-totp", "security-password"].includes(settingsPanelView)) return;
@@ -778,7 +623,7 @@ export const SettingsDrawer = React.memo(function SettingsDrawer(props: any) {
 
   const [settingsSecurityPanel, setSettingsSecurityPanel] = useState<"main" | "totp" | "password" | "email" | null>(null);
   const settingsDepth = settingsPanelView === "main" ? 0
-    : settingsPrivacyDetail === "lastSeenExceptions" ? 3
+    : settingsPanelView === "security-totp-disable" || settingsPrivacyDetail === "lastSeenExceptions" ? 3
     : settingsPrivacyDetail || settingsSecurityPanel || ["security-totp", "security-password", "scan-qr", "custom-theme"].includes(settingsPanelView) ? 2 : 1;
   const settingsNavDirection = usePanelDirection(settingsDepth, `${settingsPanelView}-${settingsPrivacyDetail ?? settingsSecurityPanel ?? "root"}`);
   const [settingsMoreOpen, setSettingsMoreOpen] = useState(false);
@@ -1157,7 +1002,7 @@ export const SettingsDrawer = React.memo(function SettingsDrawer(props: any) {
         body: JSON.stringify({ password: disablePasswordInput }),
       });
       setInternalTotpEnabled(false);
-      setShowDisableTotpModal(false);
+      setSettingsPanelView("privacy");
       setDisablePasswordInput("");
       setShowDisablePasswordText(false);
       setInternalTotpQrUrl(null);
@@ -1224,6 +1069,7 @@ export const SettingsDrawer = React.memo(function SettingsDrawer(props: any) {
     privacy: t("Приватность и безопасность"),
     security: t("Безопасность"),
     "security-totp": t("2FA Аутентификация"),
+    "security-totp-disable": t("Отключить 2FA"),
     "security-password": t("Смена пароля"),
     chats: t("Оформление"),
     sessions: t("Устройства"),
@@ -1343,24 +1189,10 @@ export const SettingsDrawer = React.memo(function SettingsDrawer(props: any) {
     if (storageCleaning) return;
     setStorageCleaning(true);
     setCleaningProgressPercent(0);
-    setCleaningProgressModal(true);
+    const progressTimer = window.setTimeout(() => setCleaningProgressModal(true), 150);
 
     try {
-      // 3-second smooth cleaning progress animation
-      const startTime = Date.now();
-      const duration = 2800;
-
-      await new Promise<void>((resolve) => {
-        const interval = setInterval(() => {
-          const elapsed = Date.now() - startTime;
-          const progress = Math.min(100, Math.floor((elapsed / duration) * 100));
-          setCleaningProgressPercent(progress);
-          if (progress >= 100) {
-            clearInterval(interval);
-            resolve();
-          }
-        }, 40);
-      });
+      setCleaningProgressPercent(5);
 
       if (typeof window !== "undefined" && "caches" in window) {
         const cacheNames = await caches.keys();
@@ -1376,7 +1208,8 @@ export const SettingsDrawer = React.memo(function SettingsDrawer(props: any) {
       setStorageCleaned(true);
       setStorageCategories((prev) => prev.map((c) => ({ ...c, sizeMb: 0.0, percent: 0 })));
 
-      await new Promise((r) => setTimeout(r, 250));
+      setCleaningProgressPercent(100);
+      window.clearTimeout(progressTimer);
       setCleaningProgressModal(false);
 
       showAppToast({
@@ -1393,6 +1226,8 @@ export const SettingsDrawer = React.memo(function SettingsDrawer(props: any) {
         type: "error",
       });
     } finally {
+      window.clearTimeout(progressTimer);
+      setCleaningProgressModal(false);
       setStorageCleaning(false);
     }
   }
@@ -1878,6 +1713,7 @@ export const SettingsDrawer = React.memo(function SettingsDrawer(props: any) {
         <motion.div
           key="settings-drawer-content"
           data-app-panel
+          data-settings-drawer
           className="fixed inset-y-0 left-0 z-[145] flex w-full flex-col overflow-hidden bg-[#1b1b1b] text-zinc-50 shadow-[18px_0_42px_rgba(0,0,0,0.28)] md:w-[350px] lg:w-[370px] md:inset-y-2 md:left-2 md:rounded-2xl"
           {...panelOverlayMotion(reducedMotion, "left")}
           onAnimationComplete={(target) => {
@@ -1908,6 +1744,11 @@ export const SettingsDrawer = React.memo(function SettingsDrawer(props: any) {
                       setSettingsPrivacyDetail(null);
                     } else if (settingsPanelView === "security" && settingsSecurityPanel) {
                       setSettingsSecurityPanel(null);
+                    } else if (settingsPanelView === "security-totp-disable") {
+                      setSettingsPanelView("security-totp");
+                      setDisablePasswordInput("");
+                      setDisablePasswordError(null);
+                      setShowDisablePasswordText(false);
                     } else if (settingsPanelView === "security-totp" || settingsPanelView === "security-password" || settingsPanelView === "security") {
                       setSettingsPanelView("privacy");
                     } else if (settingsPanelView === "scan-qr") {
@@ -1931,7 +1772,7 @@ export const SettingsDrawer = React.memo(function SettingsDrawer(props: any) {
                   <button
                     type="button"
                     onClick={() => void saveSettingsProfile()}
-                    disabled={settingsEditInvalid || settingsProfileSaving}
+                    disabled={settingsEditInvalid || settingsProfileSaving || settingsMusicUploading || settingsCoverUploading}
                     className="grid h-10 w-10 shrink-0 place-items-center rounded-full text-zinc-300 hover:text-white hover:bg-white/8 transition-colors disabled:opacity-50 cursor-pointer"
                     aria-label={t("Сохранить профиль")}
                   >
@@ -1987,6 +1828,7 @@ export const SettingsDrawer = React.memo(function SettingsDrawer(props: any) {
                               onClick={() => setSettingsPanelView("qr")}
                               className="grid h-10 w-10 shrink-0 place-items-center rounded-full text-white/90 transition-colors hover:bg-white/10 hover:text-white cursor-pointer"
                               aria-label={t("QR-код профиля")}
+                              onPointerEnter={preloadProfileQrPanel} onFocus={preloadProfileQrPanel}
                             >
                               <QrCode size={21} />
                             </button>
@@ -2063,7 +1905,7 @@ export const SettingsDrawer = React.memo(function SettingsDrawer(props: any) {
                                   aria-label={t("Просмотреть свою историю")}
                                   initial={{ opacity: 0, scale: 0.95 }}
                                   animate={{ opacity: 1, scale: 1 }}
-                                  exit={{ opacity: 0, scale: 0.95 }}
+                                  exit={{ opacity: 1, scale: 1, transition: { duration: 0 } }}
                                   transition={{ duration: 0.22, ease: "easeOut" }}
                                 >
                                   <StoryAvatarRing
@@ -2097,7 +1939,7 @@ export const SettingsDrawer = React.memo(function SettingsDrawer(props: any) {
                                       : "cursor-default"
                                   )}
                                   title={isRealMediaAvatar(selfProfile?.avatarUrl) ? t("Нажмите, чтобы просмотреть фотографию") : undefined}
-                                  initial={{ opacity: 0, scale: 0.95 }}
+                                  initial={false}
                                   animate={{ opacity: 1, scale: 1 }}
                                   exit={{ opacity: 0, scale: 0.95 }}
                                   transition={{ duration: 0.22, ease: "easeOut" }}
@@ -2139,8 +1981,8 @@ export const SettingsDrawer = React.memo(function SettingsDrawer(props: any) {
                   })()}
 
                   {/* Username Card */}
-                  <div className="mx-5 mt-1 overflow-hidden rounded-[20px] bg-white/[0.04] p-1 shadow-[0_10px_28px_rgba(0,0,0,0.12)] space-y-0.5">
-                    <button
+                  {(!selfProfile?.usernameHidden || selfProfile?.description) && <div className="mx-5 mt-1 overflow-hidden rounded-[20px] bg-white/[0.04] p-1 shadow-[0_10px_28px_rgba(0,0,0,0.12)] space-y-0.5">
+                    {!selfProfile?.usernameHidden && <button
                       type="button"
                       onClick={() => {
                         if (selfProfile?.link) {
@@ -2191,7 +2033,7 @@ export const SettingsDrawer = React.memo(function SettingsDrawer(props: any) {
                             : t("Уникальное имя")}
                         </span>
                       </span>
-                    </button>
+                    </button>}
                     {selfProfile?.description ? (
                       <button
                         type="button"
@@ -2218,7 +2060,7 @@ export const SettingsDrawer = React.memo(function SettingsDrawer(props: any) {
                         </span>
                       </button>
                     ) : null}
-                  </div>
+                  </div>}
 
                   {/* Categories */}
                   <div className="mx-5 mt-2 overflow-hidden rounded-[20px] bg-white/[0.04] p-1 shadow-[0_10px_28px_rgba(0,0,0,0.12)] space-y-0.5">
@@ -2327,28 +2169,7 @@ export const SettingsDrawer = React.memo(function SettingsDrawer(props: any) {
 
                     {/* Unique Name (Username) Card with Hide Function */}
                     <div className="mx-5 overflow-hidden rounded-[24px] bg-white/[0.04] p-4 shadow-[0_10px_28px_rgba(0,0,0,0.12)] space-y-2.5">
-                      <div className="flex items-center justify-between px-1">
-                        <span className="text-[14px] font-medium text-zinc-300">
-                          {t("Уникальное имя")}</span>
-                        <button
-                          type="button"
-                          onClick={() => setSettingsEditDraft((prev: any) => ({ ...prev, usernameHidden: !prev?.usernameHidden }))}
-                          className={cn(
-                            "flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[12px] font-medium transition-colors cursor-pointer select-none",
-                            settingsEditDraft?.usernameHidden
-                              ? "bg-white/15 text-white"
-                              : "text-zinc-400 hover:text-zinc-200 hover:bg-white/[0.06]"
-                          )}
-                          title={settingsEditDraft?.usernameHidden
-                            ? t("Уникальное имя скрыто")
-                            : t("Скрывать уникальное имя")}
-                        >
-                          {settingsEditDraft?.usernameHidden ? <EyeOff size={14} /> : <Eye size={14} />}
-                          <span>{settingsEditDraft?.usernameHidden
-                            ? t("Скрыто")
-                            : t("Скрывать")}</span>
-                        </button>
-                      </div>
+                      <div className="px-1 text-[14px] font-medium text-zinc-300">{t("Уникальное имя")}</div>
                       <div className="rounded-[18px] border border-white/[0.08] bg-transparent focus-within:border-[var(--ui-accent-solid,#38bdf8)] transition-all px-4 py-3.5">
                         <input
                           type="text"
@@ -2365,6 +2186,17 @@ export const SettingsDrawer = React.memo(function SettingsDrawer(props: any) {
 
                           {t("Уникальное имя должно содержать 4–32 символа (латиница a–z, 0–9, _)")}</p>
                       ) : null}
+                      <button type="button" role="switch" aria-checked={Boolean(settingsEditDraft?.usernameHidden)} aria-label={t("Скрыть уникальное имя")}
+                        onClick={() => setSettingsEditDraft((prev: SettingsEditDraft) => ({ ...prev, usernameHidden: !prev.usernameHidden }))}
+                        className="flex w-full cursor-pointer items-center gap-3 rounded-[14px] px-1 pt-2 text-left">
+                        <span className="min-w-0 flex-1">
+                          <span className="block text-[14px] font-medium leading-5 text-zinc-100">{t("Скрыть уникальное имя")}</span>
+                          <span className="mt-0.5 block text-[12px] leading-4 text-zinc-400">{t("Не показывать другим пользователям")}</span>
+                        </span>
+                        <span aria-hidden="true" className={cn("inline-flex h-6 w-11 shrink-0 items-center rounded-full p-0.5 transition-colors duration-150", settingsEditDraft?.usernameHidden ? "bg-white" : "bg-white/15")}>
+                          <span className={cn("size-5 rounded-full transition-transform duration-150", settingsEditDraft?.usernameHidden ? "translate-x-5 bg-zinc-950" : "translate-x-0 bg-white")} />
+                        </span>
+                      </button>
                     </div>
 
                     {/* Explanatory notes matching Telegram/Eclipse style */}
@@ -2385,127 +2217,17 @@ export const SettingsDrawer = React.memo(function SettingsDrawer(props: any) {
                         {t("Можно использовать символы ")}<strong className="font-semibold text-zinc-300">a–z</strong>, <strong className="font-semibold text-zinc-300">0–9</strong> {t(" и знак подчеркивания. Минимальная длина — ")}<strong className="font-semibold text-zinc-300">4</strong> {t(" символа.")}</p>
                     </div>
 
-                    {/* Music Upload Card */}
-                    <div className="mx-5 overflow-hidden rounded-[24px] bg-white/[0.04] p-4 shadow-[0_10px_28px_rgba(0,0,0,0.12)] space-y-3.5">
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-3">
-                          <span className="grid h-7 w-7 shrink-0 place-items-center text-zinc-400">
-                            <Music size={18} />
-                          </span>
-                          <div className="min-w-0 flex-1">
-                            <span className="block text-[15px] font-semibold text-white">{t("Музыка в профиле")}</span>
-                            <span className="block text-[12px] text-zinc-400">
-                              {settingsMusicUploading ? t("Загрузка аудиофайла...") : settingsEditDraft?.musicUrl ? t("Трек загружен") : t("Загрузите трек (MP3, WAV)")}
-                            </span>
-                          </div>
-                        </div>
-
-                        {settingsEditDraft?.musicUrl ? (
-                          <div className="flex items-center gap-1">
-                            <button
-                              type="button"
-                              onClick={() => void saveSettingsProfile()}
-                              disabled={settingsProfileSaving || settingsEditInvalid}
-                              className="grid h-8 w-8 place-items-center rounded-full text-zinc-400 hover:text-white hover:bg-white/[0.08] active:scale-95 transition-all disabled:opacity-50 cursor-pointer"
-                              title={t("Сохранить изменения")}
-                              aria-label={t("Сохранить")}
-                            >
-                              {settingsProfileSaving || settingsMusicUploading ? <Spinner className="h-4 w-4 text-zinc-200 animate-spin" /> : <Check size={18} />}
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() =>
-                                setSettingsEditDraft((prev: any) => ({
-                                  ...prev,
-                                  musicUrl: null,
-                                  musicTitle: "",
-                                  musicAuthor: "",
-                                  musicCoverUrl: null,
-                                }))
-                              }
-                              className="grid h-8 w-8 place-items-center rounded-full text-zinc-400 hover:text-red-400 hover:bg-white/[0.08] active:scale-95 transition-all cursor-pointer"
-                              title={t("Удалить аудиофайл")}
-                              aria-label={t("Удалить файл")}
-                            >
-                              <Trash size={17} />
-                            </button>
-                          </div>
-                        ) : null}
-                      </div>
-
-                      {settingsEditDraft?.musicUrl ? (
-                        <div className="space-y-3 pt-0.5">
-                          {/* Track Info & Cover Row */}
-                          <div className="flex items-center gap-3">
-                            <div
-                              onClick={() => !settingsCoverUploading && musicCoverInputRef.current?.click()}
-                              className="relative h-[96px] w-[96px] shrink-0 cursor-pointer overflow-hidden rounded-[18px] bg-white/[0.06] border border-white/[0.08] hover:border-white/20 transition-all group flex items-center justify-center select-none shadow-sm"
-                              title={t("Нажмите, чтобы изменить обложку")}
-                            >
-                              {settingsEditDraft.musicCoverUrl ? (
-                                <img
-                                  src={settingsEditDraft.musicCoverUrl}
-                                  alt={t("Обложка")}
-                                  className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
-                                />
-                              ) : (
-                                <div className="flex flex-col items-center justify-center text-zinc-400 gap-1 p-2 text-center">
-                                  <Music size={24} className="group-hover:scale-110 transition-transform duration-200" />
-                                  <span className="text-[10px] text-zinc-400 font-medium leading-tight">{t("Обложка")}</span>
-                                </div>
-                              )}
-                              <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity">
-                                <Camera size={18} className="text-white mb-0.5" />
-                                <span className="text-[10px] font-semibold text-white">{t("Изменить")}</span>
-                              </div>
-                              {settingsCoverUploading && (
-                                <div className="absolute inset-0 flex items-center justify-center bg-black/65">
-                                  <Spinner className="h-5 w-5 text-white animate-spin" />
-                                </div>
-                              )}
-                            </div>
-
-                            <div className="min-w-0 flex-1 space-y-2">
-                              <div className="rounded-[18px] border border-white/[0.08] bg-transparent focus-within:border-[var(--ui-accent-solid,#38bdf8)] transition-all px-3.5 py-2">
-                                <input
-                                  type="text"
-                                  value={settingsEditDraft.musicTitle ?? ""}
-                                  onChange={(e) =>
-                                    setSettingsEditDraft((prev: any) => ({ ...prev, musicTitle: e.target.value }))
-                                  }
-                                  placeholder={t("Название трека")}
-                                  className="w-full bg-transparent text-[14.5px] font-normal text-white outline-none placeholder:text-zinc-500"
-                                  maxLength={64}
-                                />
-                              </div>
-
-                              <div className="rounded-[18px] border border-white/[0.08] bg-transparent focus-within:border-[var(--ui-accent-solid,#38bdf8)] transition-all px-3.5 py-2">
-                                <input
-                                  type="text"
-                                  value={settingsEditDraft.musicAuthor ?? ""}
-                                  onChange={(e) =>
-                                    setSettingsEditDraft((prev: any) => ({ ...prev, musicAuthor: e.target.value }))
-                                  }
-                                  placeholder={t("Исполнитель")}
-                                  className="w-full bg-transparent text-[14.5px] font-normal text-white outline-none placeholder:text-zinc-500"
-                                  maxLength={64}
-                                />
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                      ) : (
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          disabled={settingsMusicUploading}
-                          onClick={() => musicInputRef.current?.click()}
-                          className="w-full h-10 rounded-xl bg-white/10 hover:bg-white/15 text-white font-medium text-sm gap-2 border-0 shadow-none outline-none cursor-pointer"
-                        >
-                          {settingsMusicUploading ? <Spinner className="h-4 w-4 animate-spin" /> : <><Music size={16} /> {t(" Выбрать аудиофайл")}</>}
-                        </Button>
-                      )}
-
+                    <ProfileMusicEditor music={settingsEditDraft} uploading={settingsMusicUploading} coverUploading={settingsCoverUploading}
+                      saving={settingsProfileSaving}
+                      onRemove={() => {
+                        pendingUploadsRef.current.music = undefined;
+                        pendingUploadsRef.current.musicCover = undefined;
+                        setSettingsEditDraft((prev: SettingsEditDraft) => ({ ...prev, musicUrl: null, musicTitle: "", musicAuthor: "", musicCoverUrl: null }));
+                      }}
+                      onChooseAudio={() => musicInputRef.current?.click()} onChooseCover={() => musicCoverInputRef.current?.click()}
+                      onTitleChange={musicTitle => setSettingsEditDraft((prev: SettingsEditDraft) => ({ ...prev, musicTitle }))}
+                      onAuthorChange={musicAuthor => setSettingsEditDraft((prev: SettingsEditDraft) => ({ ...prev, musicAuthor }))}
+                    />
                       <input
                         ref={musicInputRef}
                         type="file"
@@ -2520,7 +2242,6 @@ export const SettingsDrawer = React.memo(function SettingsDrawer(props: any) {
                         className="hidden"
                         onChange={uploadSettingsMusicCover}
                       />
-                    </div>
 
                   </div>
                 </div>
@@ -2954,7 +2675,7 @@ export const SettingsDrawer = React.memo(function SettingsDrawer(props: any) {
                               )}
                             </div>
 
-                            <div className="relative z-10 mt-2.5 flex max-w-full items-center justify-center gap-[5px] px-3">
+                            <div className="relative z-10 mt-2.5 flex max-w-full items-center justify-center gap-1 px-3">
                               <p className="min-w-0 truncate text-[19px] font-semibold leading-tight text-white tracking-tight">
                                 <VerifiedTitle showEmojiStatus={false} kind="user" link={selfProfile?.link ?? ""}>{selfProfile?.displayName ?? t("Профиль")}</VerifiedTitle>
                               </p>
@@ -3205,14 +2926,7 @@ export const SettingsDrawer = React.memo(function SettingsDrawer(props: any) {
                           </div>
 
                           {/* Horizontal Theme Swatches List (with onWheel for PC scrolling) */}
-                          <div
-                            onWheel={(e) => {
-                              if (e.deltaY !== 0) {
-                                e.currentTarget.scrollLeft += e.deltaY;
-                              }
-                            }}
-                            className="flex items-start gap-2.5 overflow-x-auto px-1 py-1.5 no-scrollbar snap-x scroll-smooth cursor-grab active:cursor-grabbing scroll-pl-1"
-                          >
+                          <HorizontalThemeStrip>
                             <ChatThemeCard create label={t("Создать")} onClick={showCustomThemeEditor} />
                             <AnimatePresence initial={false}>
                               {liveBg.customTheme && (
@@ -3220,11 +2934,11 @@ export const SettingsDrawer = React.memo(function SettingsDrawer(props: any) {
                                   key="custom-theme-card"
                                   className="relative shrink-0 snap-start overflow-hidden"
                                   initial={{ width: 0, height: 112, opacity: 0, marginRight: -10 }}
-                                  animate={{ width: 82, height: 156, opacity: 1, marginRight: 0 }}
+                                  animate={{ width: 82, height: 112, opacity: 1, marginRight: 0 }}
                                   exit={{ width: 0, height: 112, opacity: 0, marginRight: -10 }}
                                   transition={{ ...PANEL_TRANSITION, duration: PANEL_TRANSITION.duration }}
                                 >
-                                  <div className="w-[82px]">
+                                  <div className="relative w-[82px]">
                                     <ChatThemeCard
                                       pattern={liveBg.customTheme.backgroundMode === "image" ? null : undefined}
                                       label={liveBg.customTheme.name}
@@ -3234,19 +2948,8 @@ export const SettingsDrawer = React.memo(function SettingsDrawer(props: any) {
                                       selected={!!liveBg.customThemeEnabled}
                                       onClick={() => props.onUpdateLiveBackgroundSettings?.({ customThemeEnabled: true })}
                                     />
-                                    <div className="mt-1 flex w-full items-center justify-center">
-                                      <button
-                                        type="button"
-                                        aria-label={t("Редактировать свою тему")}
-                                        onClick={showCustomThemeEditor}
-                                        className="grid h-10 w-10 cursor-pointer place-items-center rounded-xl text-zinc-300 transition-colors hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/50"
-                                      >
-                                        <MdEdit size={22} />
-                                      </button>
-                                      <button
-                                        type="button"
-                                        aria-label={t("Удалить свою тему")}
-                                        onClick={() => {
+                                    <ThemeCardActions onEdit={showCustomThemeEditor}
+                                        onDelete={() => {
                                           if (themePresetTimerRef.current) {
                                             clearTimeout(themePresetTimerRef.current);
                                             themePresetTimerRef.current = null;
@@ -3257,12 +2960,7 @@ export const SettingsDrawer = React.memo(function SettingsDrawer(props: any) {
                                             customThemeEnabled: false,
                                             ...(liveBg.customThemeEnabled ? { neatPreset: "none" as const } : {}),
                                           });
-                                        }}
-                                        className="grid h-10 w-10 cursor-pointer place-items-center rounded-xl text-zinc-300 transition-colors hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/50"
-                                      >
-                                        <MdDelete size={22} />
-                                      </button>
-                                    </div>
+                                        }} />
                                   </div>
                                 </motion.div>
                               )}
@@ -3270,6 +2968,7 @@ export const SettingsDrawer = React.memo(function SettingsDrawer(props: any) {
                             {SETTINGS_LIVE_PRESETS.map((preset) => (
                               <ChatThemeCard
                                 key={preset.id}
+                                emoji={preset.icon}
                                 label={t(preset.label ?? "")}
                                 background={THEME_BACKDROP_MAP[preset.id]}
                                 selected={!liveBg.customThemeEnabled && localThemePreset === preset.id}
@@ -3277,7 +2976,7 @@ export const SettingsDrawer = React.memo(function SettingsDrawer(props: any) {
                                 onClick={() => handleSelectThemePreset(preset.id)}
                               />
                             ))}
-                          </div>
+                          </HorizontalThemeStrip>
                         </div>
                       );
                     })()}</PrivacySection>
@@ -3316,6 +3015,14 @@ export const SettingsDrawer = React.memo(function SettingsDrawer(props: any) {
                     props.onUpdateLiveBackgroundSettings?.({ customTheme: theme, customThemeEnabled: true });
                     setSettingsPanelView("chats");
                   }}
+                />
+              ) : settingsPanelView === "security-totp-disable" ? (
+                <TotpDisableScreen
+                  password={disablePasswordInput} showPassword={showDisablePasswordText}
+                  loading={disablePasswordLoading} error={disablePasswordError}
+                  onPasswordChange={value => { setDisablePasswordInput(value); setDisablePasswordError(null); }}
+                  onTogglePassword={() => setShowDisablePasswordText(value => !value)}
+                  onSubmit={event => void handleDisableTotpWithPassword(event)}
                 />
               ) : settingsPanelView === "security-totp" ? (
                 <div className={cn("p-4 pb-8 flex flex-col", Date.now() >= passwordVerifiedUntil ? "min-h-[calc(100vh-140px)] justify-center" : "space-y-4")}>
@@ -3359,7 +3066,7 @@ export const SettingsDrawer = React.memo(function SettingsDrawer(props: any) {
                         <Button
                           type="submit"
                           disabled={verifyPasswordLoading || !verifyPasswordInput}
-                          className="w-full h-11 rounded-[16px] bg-white hover:bg-zinc-200 text-zinc-950 font-bold text-sm transition-all shadow-md active:scale-98 cursor-pointer"
+                          className="w-full h-11 rounded-full bg-white hover:bg-zinc-200 text-zinc-950 font-bold text-sm transition-all shadow-md active:scale-98 cursor-pointer"
                         >
                           {verifyPasswordLoading ? <Spinner className="h-4 w-4 text-zinc-950 animate-spin" /> : t("Продолжить")}
                         </Button>
@@ -3381,11 +3088,12 @@ export const SettingsDrawer = React.memo(function SettingsDrawer(props: any) {
                         <div className="space-y-4">
                           {/* Minimalist Centered QR Card */}
                           <div className="flex flex-col items-center">
-                            <div className="relative w-fit mx-auto rounded-[24px] bg-white p-3.5 sm:p-4 shadow-[0_16px_36px_rgba(0,0,0,0.35)] flex items-center justify-center">
-                              <TotpQrCanvas
+                            <div className="relative mx-auto flex w-fit items-center justify-center overflow-hidden rounded-[30px] bg-white p-2 shadow-[0_18px_45px_rgba(0,0,0,.16)]">
+                              <StyledQrCode
                                 value={internalTotpUri || settingsTotpQrUrl || ""}
+                                label={t("QR-код для 2FA")}
                                 fallbackUrl={settingsTotpQrUrl}
-                                size={190}
+                                size={224}
                               />
                             </div>
 
@@ -3404,7 +3112,7 @@ export const SettingsDrawer = React.memo(function SettingsDrawer(props: any) {
                                       });
                                     }
                                   }}
-                                  className="inline-flex items-center gap-2 rounded-full bg-white/[0.05] hover:bg-white/[0.1] active:scale-95 transition-all px-3.5 py-1.5 text-zinc-300 hover:text-white border border-white/[0.07] cursor-pointer group"
+                                  className="inline-flex items-center gap-2 rounded-full bg-transparent active:opacity-70 transition-[color,opacity] px-3.5 py-1.5 text-zinc-300 hover:text-white border-0 cursor-pointer group focus-visible:outline-2 focus-visible:outline-white/60"
                                   title={t("Нажмите, чтобы скопировать ключ")}
                                 >
                                   <span className="text-[11px] text-zinc-400 group-hover:text-zinc-300 transition-colors">{t("Ключ:")}</span>
@@ -3454,7 +3162,7 @@ export const SettingsDrawer = React.memo(function SettingsDrawer(props: any) {
                               type="button"
                               disabled={settingsTotpLoading || totpCodeInput.trim().length !== 6}
                               onClick={() => void confirmTotpCodeInternal()}
-                              className="w-full h-11 rounded-[16px] bg-white hover:bg-zinc-200 text-zinc-950 font-bold text-sm transition-all shadow-md active:scale-98 disabled:opacity-40 cursor-pointer mt-2"
+                              className="w-full h-11 rounded-full bg-white hover:bg-zinc-200 text-zinc-950 font-bold text-sm transition-all shadow-md active:scale-98 disabled:opacity-40 cursor-pointer mt-2"
                             >
                               {settingsTotpLoading ? (
                                 <Spinner className="h-4 w-4 text-zinc-950 animate-spin" />
@@ -3487,9 +3195,9 @@ export const SettingsDrawer = React.memo(function SettingsDrawer(props: any) {
                             setDisablePasswordError(null);
                             setDisablePasswordInput("");
                             setShowDisablePasswordText(false);
-                            setShowDisableTotpModal(true);
+                            setSettingsPanelView("security-totp-disable");
                           }}
-                          className="w-full h-11 rounded-[16px] bg-red-500/15 hover:bg-red-500/25 text-red-400 font-semibold text-sm transition-all border-0 shadow-none"
+                          className="w-full h-11 rounded-full bg-red-500/15 hover:bg-red-500/25 text-red-400 font-semibold text-sm transition-all border-0 shadow-none"
                         >
                           {t("Отключить двухфакторную аутентификацию")}</Button>
                       </div>
@@ -3546,7 +3254,7 @@ export const SettingsDrawer = React.memo(function SettingsDrawer(props: any) {
                       type="button"
                       disabled={passwordLoading || !oldPasswordInput || !newPasswordInput || !confirmPasswordInput}
                       onClick={() => void changePasswordInternal()}
-                      className="w-full h-11 rounded-[16px] bg-white hover:bg-zinc-200 text-zinc-950 font-bold text-sm mt-2 transition-all shadow-md active:scale-98"
+                      className="w-full h-11 rounded-full bg-white hover:bg-zinc-200 text-zinc-950 font-bold text-sm mt-2 transition-all shadow-md active:scale-98"
                     >
                       {passwordLoading ? <Spinner className="h-4 w-4 text-zinc-950" /> : t("Обновить пароль")}
                     </Button>
@@ -3849,86 +3557,6 @@ export const SettingsDrawer = React.memo(function SettingsDrawer(props: any) {
       </motion.div>
     )}
     </AnimatePresence>
-
-      {/* Disable TOTP Password Modal */}
-      <AnimatePresence>
-        {showDisableTotpModal ? (
-          <motion.div
-            className="fixed inset-0 z-[330] flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/75 backdrop-blur-md select-none"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.16 }}
-            onClick={(e) => {
-              if (e.target === e.currentTarget) {
-                setShowDisableTotpModal(false);
-                setShowDisablePasswordText(false);
-              }
-            }}
-          >
-            <motion.div
-              data-app-panel className="relative w-full sm:max-w-[360px] rounded-t-[32px] sm:rounded-[28px] border-0 ring-0 bg-[#1c1c1e] sm:bg-[#1c1c1e]/95 p-6 pb-8 sm:pb-6 text-white shadow-[0_24px_60px_rgba(0,0,0,0.65)] backdrop-blur-2xl flex flex-col gap-3.5 text-center"
-              initial={{ y: "100%", opacity: 0.5 }}
-              animate={{ y: 0, opacity: 1 }}
-              exit={{ y: "100%", opacity: 0 }}
-              transition={PANEL_TRANSITION}
-              onClick={(e) => e.stopPropagation()}
-            >
-              <div className="mx-auto flex items-center justify-center -my-1">
-                <MonkeyPasswordAnimation
-                  hasPassword={disablePasswordInput.length > 0}
-                  showPassword={showDisablePasswordText}
-                  size={105}
-                />
-              </div>
-
-              <div className="flex flex-col gap-1 mt-0.5">
-                <h3 className="text-[18px] font-bold text-white tracking-tight">{t("Отключить 2FA")}</h3>
-                <p className="text-[13px] text-zinc-400 max-w-[280px] mx-auto leading-snug">
-                  {t("Для отключения защиты подтвердите ваш текущий пароль")}</p>
-              </div>
-
-              <form onSubmit={(e) => void handleDisableTotpWithPassword(e)} className="space-y-3 mt-1.5 text-left">
-                <div className="relative rounded-[18px] border border-white/[0.08] bg-white/[0.03] focus-within:border-[var(--ui-accent-solid,#38bdf8)] transition-all px-4 py-3.5 flex items-center">
-                  <input
-                    type={showDisablePasswordText ? "text" : "password"}
-                    value={disablePasswordInput}
-                    onChange={(e) => {
-                      setDisablePasswordInput(e.target.value);
-                      if (disablePasswordError) setDisablePasswordError(null);
-                    }}
-                    placeholder={t("Текущий пароль")}
-                    autoFocus
-                    className="w-full pr-8 bg-transparent text-[15px] font-normal text-white placeholder:text-zinc-500 outline-none"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowDisablePasswordText(!showDisablePasswordText)}
-                    className="absolute right-3.5 text-zinc-400 hover:text-white transition-colors cursor-pointer"
-                    aria-label={showDisablePasswordText ? t("Скрыть пароль") : t("Показать пароль")}
-                  >
-                    {showDisablePasswordText ? <EyeOff size={18} /> : <Eye size={18} />}
-                  </button>
-                </div>
-
-                {disablePasswordError ? (
-                  <p className="text-xs font-semibold text-red-400 px-1">{t(disablePasswordError ?? "")}</p>
-                ) : null}
-
-                <div className="pt-1.5">
-                  <Button
-                    type="submit"
-                    disabled={disablePasswordLoading || !disablePasswordInput}
-                    className="w-full h-11 rounded-[16px] bg-white hover:bg-zinc-200 text-zinc-950 text-[13.5px] font-bold transition-all shadow-md active:scale-[0.98] disabled:opacity-40 cursor-pointer"
-                  >
-                    {disablePasswordLoading ? <Spinner className="h-4 w-4 text-zinc-950 animate-spin" /> : t("Отключить")}
-                  </Button>
-                </div>
-              </form>
-            </motion.div>
-          </motion.div>
-        ) : null}
-      </AnimatePresence>
 
       {/* Detailed Session Info Modal / Bottom Sheet on Mobile */}
       <AnimatePresence>

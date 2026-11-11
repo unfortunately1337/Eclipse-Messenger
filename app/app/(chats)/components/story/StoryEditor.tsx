@@ -185,7 +185,7 @@ function StoryEditorSession({ isDesktop, initialDraft, closeStoryDraft, storyUpl
     const visibleOverlay = drawing && overlay
       ? { ...overlay, strokes: [...overlay.strokes, drawing] }
       : overlay;
-    drawStoryOverlayToCanvas(canvas, visibleOverlay, rect.width, rect.height);
+    drawStoryOverlayToCanvas(canvas, visibleOverlay, stage.clientWidth, stage.clientHeight);
   }, [updateStageRect]);
 
   const scheduleStoryOverlayCanvasRender = useCallback(() => {
@@ -1499,7 +1499,11 @@ function StoryEditorSession({ isDesktop, initialDraft, closeStoryDraft, storyUpl
                           disabled={storyUploading}
                           onClick={() => {
                             flushStoryMediaTransform();
-                            submitStoryDraft(storyDraftRef.current ?? storyDraft);
+                            const draft = storyDraftRef.current ?? storyDraft;
+                            const stage = storyOverlayStageRef.current;
+                            submitStoryDraft(stage ? { ...draft, overlay: { ...draft.overlay,
+                              viewport: { width: stage.clientWidth, height: stage.clientHeight },
+                            } } : draft);
                           }}
                           aria-label={t("Опубликовать")}
                           initial={{ opacity: 0, scale: 0.85 }}

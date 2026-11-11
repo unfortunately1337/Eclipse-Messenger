@@ -21,6 +21,14 @@ import { switchCallCamera, type CallCameraFacing } from "@/lib/client/call-camer
 import { callClientId } from "@/lib/client/call-p2p-signaling";
 import { personalCallStatus } from "@/lib/client/call-status";
 
+const noiseSuppressionPreferenceKey = "eclipse:call:noise-suppression";
+
+function microphoneOptions(kind: CallView["kind"]) {
+  if (kind !== "direct") return undefined;
+  try { return { noiseSuppression: localStorage.getItem(noiseSuppressionPreferenceKey) !== "off" }; }
+  catch { return { noiseSuppression: true }; }
+}
+
 const TrackElement = memo(function TrackElement({ track, local, audio, muted = false, volume = 1, mirror = true }: { track: CallMediaTrack; local: boolean; audio: boolean; muted?: boolean; volume?: number; mirror?: boolean }) {
   const container = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -58,10 +66,12 @@ export const CallRoomPanel = memo(function CallRoomPanel({ call, selfId, glass, 
   }, [error, t]);
   const [minimized, setMinimized] = useState(false);
   const [mediaBusy, setMediaBusy] = useState(false);
+  const [pendingNoiseSuppression, setPendingNoiseSuppression] = useState<boolean | null>(null);
   const [cameraSwitching, setCameraSwitching] = useState(false);
   const [cameraFacing, setCameraFacing] = useState<CallCameraFacing>("user");
   const mediaLock = useRef(false);
   const [audioBlocked, setAudioBlocked] = useState(false);
+  const [audioRecoveryVisible, setAudioRecoveryVisible] = useState(false);
   const participantAudio = useParticipantAudio(call);
   const intentionalHangup = useRef(false);
   const minimize = useCallback(() => setMinimized(true), []);
@@ -110,9 +120,11 @@ export const CallRoomPanel = memo(function CallRoomPanel({ call, selfId, glass, 
         // P2P connect() starts negotiation; only its connection events mean
         // media is connected. Do not treat SDK initialization as an answer.
         setState(session.state === "connected" ? "На связи" : "Соединение…");
-        try { await session.startAudio(); } catch { setAudioBlocked(true); }
-        try { await session.localParticipant.setMicrophoneEnabled(true); }
+        try { await session.localParticipant.setMicrophoneEnabled(true, microphoneOptions(call.kind)); }
         catch { if (!cancelled) setError("Не удалось включить микрофон. Проверьте разрешения браузера."); }
+        if (!cancelled) void session.startAudio().catch(() => {
+          if (!cancelled && connection.transport !== "p2p") setAudioBlocked(true);
+        });
         if (initialVideo && !cancelled) {
           try { await session.localParticipant.setCameraEnabled(true); }
           catch { if (!cancelled) setError("Не удалось включить камеру. Можно продолжить голосом."); }
@@ -127,6 +139,25 @@ export const CallRoomPanel = memo(function CallRoomPanel({ call, selfId, glass, 
     return () => { cancelled = true; rendering.dispose(); if (active) { active.removeAllListeners(); void active.disconnect(true); } };
   }, [call.id, call.kind, call.transport, call.onThisSession, call.requesting, callEnded, initialVideo]);
 
+  useEffect(() => {
+    if (call.kind !== "direct" || !audioBlocked || !room?.ready || callEnded) return;
+    const timer = window.setTimeout(() => setAudioRecoveryVisible(true), 450);
+    const retryAudio = (event: MouseEvent) => {
+      if (!event.isTrusted) return;
+      void room.startAudio().catch(() => {});
+    };
+    window.addEventListener("click", retryAudio);
+    return () => {
+      clearTimeout(timer);
+      window.removeEventListener("click", retryAudio);
+      setAudioRecoveryVisible(false);
+    };
+  }, [audioBlocked, room, call.kind, callEnded]);
+
+  const enableAudio = () => {
+    void room?.startAudio().then(() => setAudioBlocked(false)).catch(() => setError("Разрешите воспроизведение звука в браузере"));
+  };
+
   const toggle = useCallback(async (kind: "mic" | "camera" | "screen") => {
     if (!room?.ready || mediaLock.current || callEnded || intentionalHangup.current) return;
     if (kind === "screen" && !room.localParticipant.isScreenShareEnabled && !navigator.mediaDevices?.getDisplayMedia) {
@@ -138,7 +169,7 @@ export const CallRoomPanel = memo(function CallRoomPanel({ call, selfId, glass, 
     setMediaBusy(true);
     setError(null);
     try {
-      if (kind === "mic") await room.localParticipant.setMicrophoneEnabled(!room.localParticipant.isMicrophoneEnabled);
+      if (kind === "mic") await room.localParticipant.setMicrophoneEnabled(!room.localParticipant.isMicrophoneEnabled, microphoneOptions(call.kind));
       if (kind === "camera") {
         await room.localParticipant.setCameraEnabled(!room.localParticipant.isCameraEnabled, { facingMode: cameraFacing });
         if (intentionalHangup.current || !room.ready) await room.localParticipant.setCameraEnabled(false);
@@ -164,7 +195,7 @@ export const CallRoomPanel = memo(function CallRoomPanel({ call, selfId, glass, 
           : "Не удалось включить камеру. Проверьте разрешения браузера.");
       } else setError("Не удалось переключить устройство. Проверьте разрешения браузера.");
     } finally { mediaLock.current = false; setMediaBusy(false); }
-  }, [room, callEnded, cameraFacing, t]);
+  }, [room, call.kind, callEnded, cameraFacing, t]);
 
   const flipCamera = useCallback(async () => {
     if (!room?.ready || mediaLock.current || callEnded || intentionalHangup.current || !room.localParticipant.isCameraEnabled) return;
@@ -207,6 +238,30 @@ export const CallRoomPanel = memo(function CallRoomPanel({ call, selfId, glass, 
   const finished = call.status === "ended" || Boolean(localEndOutcome) || state === "Звонок завершён";
   const endOutcome = call.endOutcome ?? localEndOutcome;
   const controlsDisabled = !room?.ready || mediaBusy || busy || finished;
+  const microphoneTrack = room?.localParticipant.getTrackPublication("microphone")?.track?.mediaStreamTrack;
+  const noiseSuppression = microphoneTrack?.getSettings().noiseSuppression;
+  const noiseSuppressionModes = microphoneTrack?.getCapabilities?.().noiseSuppression;
+  const canToggleNoiseSuppression = room?.localParticipant.setNoiseSuppression && microphoneTrack?.readyState === "live" && typeof noiseSuppression === "boolean" &&
+    (!noiseSuppressionModes || (noiseSuppressionModes.includes(true) && noiseSuppressionModes.includes(false)));
+
+  const toggleNoiseSuppression = async () => {
+    if (!room?.localParticipant.setNoiseSuppression || !canToggleNoiseSuppression || controlsDisabled || mediaLock.current || intentionalHangup.current) return;
+    const enabled = !noiseSuppression;
+    mediaLock.current = true;
+    setPendingNoiseSuppression(enabled);
+    setError(null);
+    try {
+      await room.localParticipant.setNoiseSuppression(enabled);
+      if (!room.ready) return;
+      try { localStorage.setItem(noiseSuppressionPreferenceKey, enabled ? "on" : "off"); } catch { /* Storage may be disabled. */ }
+    } catch {
+      if (!intentionalHangup.current && room.ready) setError("Не удалось переключить шумоподавление");
+    } finally {
+      mediaLock.current = false;
+      setPendingNoiseSuppression(null);
+    }
+  };
+
   const remote = participants.find(person => person !== room?.localParticipant);
   const remoteScreen = visibleCallTrack(remote, "screen_share");
   const sharedVideo = screen ? visibleCallTrack(room?.localParticipant, "screen_share") : undefined;
@@ -216,7 +271,7 @@ export const CallRoomPanel = memo(function CallRoomPanel({ call, selfId, glass, 
   const localVideo = camera ? visibleCallTrack(room?.localParticipant, "camera") : undefined;
   const peer = call.peer ?? call.participants.find(person => person.id !== selfId);
   const peerAudio = participantAudio.get(peer?.id ?? "");
-  const readImmediateLevels = useCallAudioLevels(room?.localParticipant.getTrackPublication("microphone")?.track?.mediaStreamTrack, remote?.getTrackPublication("microphone")?.track?.mediaStreamTrack, call.kind === "direct" && connected && !finished);
+  const readImmediateLevels = useCallAudioLevels(microphoneTrack, remote?.getTrackPublication("microphone")?.track?.mediaStreamTrack, call.kind === "direct" && connected && !finished);
   const readVoiceLevels = useCallback(() => {
     if (!room || room.state !== "connected" || finished) return { local: 0, remote: 0 };
     const immediate = readImmediateLevels();
@@ -231,21 +286,23 @@ export const CallRoomPanel = memo(function CallRoomPanel({ call, selfId, glass, 
     <>
     {participants.filter(person => person !== room?.localParticipant).flatMap(person => [...person.audioTrackPublications.values()].map(publication => publication.track && <TrackElement key={`${person.identity}:${publication.trackSid}`} track={publication.track} local={false} audio muted={participantAudio.get(call.participants.find(p => p.identity === person.identity)?.id ?? "").muted} volume={participantAudio.get(call.participants.find(p => p.identity === person.identity)?.id ?? "").volume}/>))}
     {call.kind === "direct" ? <PersonalCallWindow
+      callId={call.id}
       active={!finished && call.status === "active" && call.onThisSession && connected && Boolean(remote)} endOutcome={finished ? endOutcome ?? "completed" : undefined}
       signal={callConnectionSignal(room?.state, [room?.localParticipant.connectionQuality ?? "unknown", remote?.connectionQuality ?? "unknown"], finished)}
       name={call.title} avatarUrl={peer?.avatarUrl ?? null} backgroundUrl={call.peer?.backgroundUrl ?? null}
       status={personalStatus} startedAt={!finished && call.status === "active" && call.startedAt && call.onThisSession && connected && remote ? call.startedAt : null}
       incoming={call.incoming && !finished} owned={call.onThisSession && !finished} minimized={minimized} glass={glass} busy={busy} controlsDisabled={controlsDisabled}
       microphone={microphone} camera={camera} sound={!peerAudio.muted} volume={peerAudio.volume} onVolume={value => { if (peer) participantAudio.update(peer.id, { volume: value, muted: value === 0 }); }} sharing={screen} speaking={remote?.isSpeaking ?? false} readVoiceLevels={readVoiceLevels}
+      noiseSuppression={pendingNoiseSuppression ?? (canToggleNoiseSuppression ? noiseSuppression : undefined)} noiseSuppressionPending={pendingNoiseSuppression !== null} onToggleNoiseSuppression={() => void toggleNoiseSuppression()}
       video={!finished && mainVideo ? <TrackElement track={mainVideo} local={presentation.local} audio={false} /> : undefined}
       localScreen={presentation.local} screenVideo={presentation.screen} screenOwner={presentation.local ? t("Вы демонстрируете свой экран") : t("Демонстрация экрана")}
       secondaryVideo={!finished && presentation.secondary ? <TrackElement track={presentation.secondary} local={false} audio={false} /> : undefined}
       sharedPreview={!finished && presentation.localPreview ? <div className="grid h-full place-items-center bg-[#202326] text-zinc-300"><MonitorUp size={24} aria-label={t("Вы демонстрируете экран")} /></div> : undefined}
       localVideo={!finished && localVideo ? <TrackElement track={localVideo} local audio={false} mirror={cameraFacing !== "environment"} /> : undefined}
-      audioBlocked={audioBlocked} canShare={typeof navigator !== "undefined" && Boolean(navigator.mediaDevices?.getDisplayMedia)}
+      audioBlocked={audioBlocked && audioRecoveryVisible} canShare={typeof navigator !== "undefined" && Boolean(navigator.mediaDevices?.getDisplayMedia)}
       onMinimize={minimize} onExpand={expand} onAccept={() => onJoin(call.id)} onHangup={() => hangup()}
       onMicrophone={() => void toggle("mic")} onCamera={() => void toggle("camera")} onSound={() => { if (peer) participantAudio.update(peer.id, { ...peerAudio, muted: !peerAudio.muted }); }} onShare={() => void toggle("screen")}
-      onEnableAudio={() => void room?.startAudio().then(() => setAudioBlocked(false)).catch(() => setError("Разрешите воспроизведение звука в браузере"))}
+      onEnableAudio={enableAudio}
       onFlipCamera={() => void flipCamera()} cameraSwitching={cameraSwitching}
     /> : <AnimatePresence mode="wait">
       {minimized ? (
@@ -269,7 +326,7 @@ export const CallRoomPanel = memo(function CallRoomPanel({ call, selfId, glass, 
               </div>;
             })}</div> : <div className="flex min-h-48 flex-col items-center justify-center gap-4"><div className="grid h-24 w-24 place-items-center rounded-full bg-white/8"><Phone size={34}/></div><p className="text-center text-sm text-zinc-300">{status}</p></div>}
           </div>
-          {audioBlocked && <button type="button" className="mt-3 flex items-center justify-center gap-2 rounded-full bg-white/10 px-4 py-3 text-sm" onClick={() => void room?.startAudio().then(() => setAudioBlocked(false)).catch(() => setError("Разрешите воспроизведение звука в браузере"))}><Volume2 size={18}/>{t("Включить звук звонка")}</button>}
+          {audioBlocked && <button type="button" className="mt-3 flex items-center justify-center gap-2 rounded-full bg-white/10 px-4 py-3 text-sm" onClick={enableAudio}><Volume2 size={18}/>{t("Включить звук звонка")}</button>}
           <div className="mt-5 flex flex-wrap items-center justify-center gap-3">
             {call.incoming ? <><button type="button" disabled={busy} onClick={() => onJoin(call.id)} className="flex h-12 items-center gap-2 rounded-full bg-emerald-500 px-5 font-medium disabled:opacity-50"><Phone size={20}/>{t("Принять")}</button><button type="button" disabled={busy} onClick={() => hangup() } className="flex h-12 items-center gap-2 rounded-full bg-red-500 px-5 font-medium disabled:opacity-50"><PhoneOff size={20}/>{t("Отклонить")}</button></> : call.onThisSession ? <>
               <button type="button" disabled={controlsDisabled} onClick={() => void toggle("mic")} aria-label={t(microphone ? "Выключить микрофон" : "Включить микрофон")} aria-pressed={microphone} className="grid h-12 w-12 place-items-center rounded-full bg-white/10 disabled:opacity-40">{microphone ? <Mic size={21}/> : <MicOff size={21}/>}</button>

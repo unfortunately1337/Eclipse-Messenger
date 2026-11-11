@@ -2,7 +2,7 @@
 
 import { useRef, useState } from "react";
 import dynamic from "next/dynamic";
-import { SmilePlus as FaceSlightlySmilingPlus } from "lucide-react";
+import { TbMoodPlus } from "react-icons/tb";
 import { useReducedMotion } from "framer-motion";
 import { useTranslation } from "@/components/LocaleProvider";
 import { useEmojiEntry } from "@/lib/client/pack-items";
@@ -32,8 +32,8 @@ export function EmojiStatusControl({ value, glass, onChange }: {
   return <>
     <button ref={triggerRef} type="button" data-emoji-status-trigger aria-label={t("Эмодзи-статус")} aria-haspopup="dialog" aria-expanded={open}
       onClick={() => { setLoaded(true); setOpen(true); setError(null); }}
-      className={`inline-flex shrink-0 items-center justify-center rounded-full text-white/80 transition-colors hover:bg-white/10 focus-visible:outline-2 focus-visible:outline-white ${entry ? "size-8" : "size-[26px]"}`}>
-      {entry ? <EmojiStatusIcon entry={entry} animate={!reduced && !open} size={28} /> : <FaceSlightlySmilingPlus size={21} strokeWidth={1.75} />}
+      className={`inline-flex shrink-0 items-center justify-center rounded-full text-white/80 transition-colors hover:bg-white/10 focus-visible:outline-2 focus-visible:outline-white ${entry ? "size-7" : "size-6"}`}>
+      {entry ? <EmojiStatusIcon entry={entry} animate={!reduced && !open} size={24} /> : <TbMoodPlus size={19} />}
     </button>
     {loaded && <Picker open={open} onOpenChange={setOpen} value={value} onSelect={id => void select(id)} glass={glass} saving={saving} error={error} triggerRef={triggerRef} />}
   </>;

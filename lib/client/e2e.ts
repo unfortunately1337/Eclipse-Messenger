@@ -16,7 +16,7 @@ const E2E_SYNC_MARKER_SESSION_KEY = "e2e-sync-public-key";
 const PASSWORD_DERIVATION_ITERATIONS = 150_000;
 
 // Legacy keys accidentally used in previous builds. Keep migration support.
-const LEGACY_PRIVATE_KEY_STORAGE = "MC4CAQAwBQYDK2VuBCIEIG8J4GdS5Tz8hVq6k1x0wZxWm4c7j7vZ1z2KqP9mYp8R"; // gitleaks:allow -- Legacy localStorage property name, not encryption key material.
+const LEGACY_PRIVATE_KEY_STORAGE = "MC4CAQAwBQYDK2VuBCIEIG8J4GdS5Tz8hVq6k1x0wZxWm4c7j7vZ1z2KqP9mYp8R";
 const LEGACY_PUBLIC_KEY_STORAGE = "MCowBQYDK2VuAyEA5yZkF2wV8x1yJq3nQ0k9lVvP3z6YkW4pT2nQh6YpV7I=";
 
 let memoryPrivateKeyBase64: string | null = null;

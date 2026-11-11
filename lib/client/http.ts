@@ -3,6 +3,8 @@
 import { clearLocalE2EIdentity } from "@/lib/client/e2e";
 import { invalidateE2EServerStateCache } from "@/lib/client/e2e-server-sync";
 import { clearUserCaches } from "@/lib/client/user-cache";
+import { ApiRequestError } from "./api-error";
+export { ApiRequestError } from "./api-error";
 
 let forcedLogoutInProgress = false;
 let csrfInitialization: Promise<string> | null = null;
@@ -301,18 +303,18 @@ async function performApiRequest<T>(
       clearTimeout(timeoutId);
     }
     if (Array.isArray(parsed?.details) && parsed.details.length > 0) {
-      throw new Error(String(parsed.details[0]));
+      throw new ApiRequestError(String(parsed.details[0]), res.status, parsed.details);
     }
 
     if (parsed?.error) {
-      throw new Error(parsed.error);
+      throw new ApiRequestError(parsed.error, res.status, parsed.details);
     }
 
     if (rawText) {
-      throw new Error(`HTTP ${res.status}: ${rawText.slice(0, 180)}`);
+      throw new ApiRequestError(`HTTP ${res.status}: ${rawText.slice(0, 180)}`, res.status);
     }
 
-    throw new Error(`HTTP ${res.status}: Ошибка запроса`);
+    throw new ApiRequestError(`HTTP ${res.status}: Ошибка запроса`, res.status);
   }
 
   if (timeoutId) {

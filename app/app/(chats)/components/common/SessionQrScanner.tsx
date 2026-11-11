@@ -10,6 +10,7 @@ import { useIsPresent } from "framer-motion";
 import { apiRequest } from "@/lib/client/http";
 import { extractLoginQrToken, extractLoginQrSecret } from "@/lib/client/login-qr-token";
 import { encryptQrKeyTransfer } from "@/lib/client/e2e-qr-transfer";
+import { createInvertedQrReader } from "@/lib/client/inverted-qr-reader";
 import { Spinner } from "@/components/ui/spinner";
 
 type ScannerState = "starting" | "scanning" | "reading" | "approving" | "success" | "error";
@@ -79,7 +80,24 @@ export default function SessionQrScanner({ onSuccess }: { onSuccess: () => void;
         if (!mounted.current || sequence !== generation.current) return;
         const current = new Html5Qrcode(id, { verbose: false, formatsToSupport: [Html5QrcodeSupportedFormats.QR_CODE] });
         scanner.current = current;
-        await current.start(camera || { facingMode: "environment" }, { fps: 10, aspectRatio: 1 }, raw => { if (sequence === generation.current) decoded(raw); }, () => {});
+        let invertedReader: Awaited<ReturnType<typeof createInvertedQrReader>> | undefined;
+        let inversionBusy = false, lastInversion = 0;
+        const tryInvertedFrame = () => {
+          if (!mounted.current || sequence !== generation.current || approving.current || inversionBusy || performance.now() - lastInversion < 500) return;
+          const video = document.getElementById(id)?.querySelector("video");
+          if (!video || video.readyState < 2) return;
+          inversionBusy = true; lastInversion = performance.now();
+          void (async () => {
+            try {
+              invertedReader ??= await createInvertedQrReader();
+              if (!mounted.current || sequence !== generation.current || approving.current) return;
+              const raw = await invertedReader.scanVideo(video);
+              if (mounted.current && sequence === generation.current) decoded(raw);
+            } catch { /* No inverted code in this frame. The normal scanner keeps running. */ }
+            finally { inversionBusy = false; }
+          })();
+        };
+        await current.start(camera || { facingMode: "environment" }, { fps: 10, aspectRatio: 1 }, raw => { if (sequence === generation.current) decoded(raw); }, tryInvertedFrame);
         if (!mounted.current || sequence !== generation.current) { await stop(); return; }
         if (approving.current) return;
         setState("scanning");
@@ -125,7 +143,12 @@ export default function SessionQrScanner({ onSuccess }: { onSuccess: () => void;
         if (!mounted.current || sequence !== generation.current) return;
         const current = new Html5Qrcode(id, { verbose: false, formatsToSupport: [Html5QrcodeSupportedFormats.QR_CODE] });
         scanner.current = current;
-        const raw = await current.scanFile(file, false);
+        let raw: string;
+        try { raw = await current.scanFile(file, false); }
+        catch {
+          if (!mounted.current || sequence !== generation.current) return;
+          raw = await (await createInvertedQrReader()).scanFile(file);
+        }
         if (!mounted.current || sequence !== generation.current) return;
         const token = extractLoginQrToken(raw, window.location.origin);
         if (!token) throw new Error(t("На изображении нет QR-кода входа Eclipse."));
@@ -153,9 +176,9 @@ export default function SessionQrScanner({ onSuccess }: { onSuccess: () => void;
     {error && <p role="alert" className="max-w-[300px] text-[13px] leading-5 text-zinc-400">{t(error ?? "")}</p>}
     <div className="flex w-full max-w-[300px] flex-col gap-2">
       <input ref={fileInput} type="file" accept="image/*" className="hidden" aria-label={t("Фото QR-кода")} onChange={event => { readImage(event.target.files?.[0]); event.target.value = ""; }} />
-      <button type="button" disabled={busy} onClick={() => fileInput.current?.click()} className="flex h-11 items-center justify-center gap-2 rounded-full bg-white/[0.08] text-[14px] font-medium text-zinc-100 transition-colors hover:bg-white/[0.12] disabled:opacity-40 cursor-pointer"><ImagePlus size={18} />{t("Выбрать фото QR-кода")}</button>
-      {state === "error" && <button type="button" onClick={() => start(cameras[cameraIndex]?.id)} className="flex h-10 items-center justify-center gap-2 rounded-full text-[13px] text-zinc-300 hover:bg-white/[0.05] cursor-pointer"><RefreshCw size={16} />{t("Запустить камеру снова")}</button>}
-      {cameras.length > 1 && <button type="button" disabled={busy} onClick={() => { const next = (cameraIndex + 1) % cameras.length; setCameraIndex(next); start(cameras[next].id); }} className="flex h-10 items-center justify-center gap-2 rounded-full text-[13px] text-zinc-300 hover:bg-white/[0.05] disabled:opacity-40 cursor-pointer"><SwitchCamera size={17} />{t("Сменить камеру")}</button>}
+      <button type="button" disabled={busy} onClick={() => fileInput.current?.click()} className="flex h-11 items-center justify-center gap-2 rounded-full bg-transparent text-[14px] font-semibold text-white/90 transition-colors hover:text-white disabled:opacity-40 cursor-pointer"><ImagePlus size={18} />{t("Выбрать фото QR-кода")}</button>
+      {state === "error" && <button type="button" onClick={() => start(cameras[cameraIndex]?.id)} className="flex h-10 items-center justify-center gap-2 rounded-full bg-transparent text-[13px] text-zinc-300 hover:text-white cursor-pointer"><RefreshCw size={16} />{t("Запустить камеру снова")}</button>}
+      {cameras.length > 1 && <button type="button" disabled={busy} onClick={() => { const next = (cameraIndex + 1) % cameras.length; setCameraIndex(next); start(cameras[next].id); }} className="flex h-10 items-center justify-center gap-2 rounded-full bg-transparent text-[13px] text-zinc-300 hover:text-white disabled:opacity-40 cursor-pointer"><SwitchCamera size={17} />{t("Сменить камеру")}</button>}
     </div>
   </div>;
 }

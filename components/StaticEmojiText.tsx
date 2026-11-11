@@ -1,50 +1,55 @@
 "use client";
 import React from "react";
+import emojiMap from "@/public/emoji-map.json";
 import { splitCustomEmoji } from "@/lib/custom-emoji";
 import { useEmojiEntry } from "@/lib/client/pack-items";
+const emojiPattern = /[\p{Emoji_Presentation}\p{Emoji_Modifier_Base}\p{Emoji_Modifier}\p{Extended_Pictographic}]|\u20E3/u;
+let segmenter: Intl.Segmenter | undefined;
 function renderStaticUnicode(
   text: string,
   options?: { size?: number; className?: string }
 ): React.ReactNode[] {
   if (!text) return [];
+  if (!emojiPattern.test(text)) return [text];
   const size = options?.size;
   const customClass = options?.className;
   const style = size ? { width: size, height: size } : undefined;
 
   try {
     if (typeof Intl !== "undefined" && Intl.Segmenter) {
-      const segmenter = new Intl.Segmenter("en", { granularity: "grapheme" });
-      const segments = Array.from(segmenter.segment(text));
+      segmenter ??= new Intl.Segmenter("en", { granularity: "grapheme" });
 
       const elements: React.ReactNode[] = [];
       let currentText = "";
 
-      const isEmojiRegex = /[\p{Emoji_Presentation}\p{Emoji_Modifier_Base}\p{Emoji_Modifier}\p{Extended_Pictographic}]/u;
-
-      for (let i = 0; i < segments.length; i++) {
-        const seg = segments[i].segment;
-
-        const isBasicAscii = /^[a-zA-Z0-9\s.,!?;:"'()\-+=_@#$*%^&|<>{}[\]~`\\/]+$/.test(seg);
-        const isEmoji = !isBasicAscii || seg.includes("\uFE0F") || seg.includes("\u20E3");
-
-        if (isEmoji && isEmojiRegex.test(seg)) {
+      let i = 0;
+      for (const { segment: seg } of segmenter.segment(text)) {
+        i++;
+        if (emojiPattern.test(seg)) {
           if (currentText) {
             elements.push(<span key={`txt-${i}`}>{currentText}</span>);
             currentText = "";
           }
+          const typedMap = emojiMap as Record<string, string>;
+          const filename = typedMap[seg] || typedMap[seg + "\uFE0F"] || typedMap[seg.replace(/\uFE0F/g, "")];
+          const src = filename
+            ? `https://cdn.jsdelivr.net/npm/emoji-datasource-apple/img/apple/64/${filename}`
+            : `https://emojicdn.elk.sh/${encodeURIComponent(seg)}?style=apple`;
+
           elements.push(
-            <span
+            <img
               key={`emo-${i}`}
-              role="img"
-              aria-label={seg}
+              src={src}
+              alt={seg}
               className={
                 customClass ||
                 (size
                   ? "inline-block object-contain pointer-events-none select-none"
                   : "inline-block h-[1.15em] w-[1.15em] align-[-0.15em] mx-[0.05em] select-all object-contain pointer-events-none")
               }
-              style={{...style, fontSize:size, lineHeight:1.15}}
-            >{seg}</span>
+              style={style}
+              loading="lazy"
+            />
           );
         } else {
           currentText += seg;
@@ -57,7 +62,7 @@ function renderStaticUnicode(
 
       return elements;
     }
-  } catch (e) {
+  } catch {
     // fallback
   }
 

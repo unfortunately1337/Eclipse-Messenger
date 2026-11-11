@@ -2,6 +2,7 @@ import { createHash, randomUUID } from "crypto";
 import argon2 from "argon2";
 import { Prisma } from "@prisma/client";
 import type { BotManagementAction, BotManagementResult, BotManagementState, BotManagementStep } from "@/lib/bot-management";
+import { BOT_DOCUMENTATION_TEXT } from "@/lib/bot-management";
 import type { EclipseSystemMessage, EclipseSystemPayload } from "@/lib/eclipse-system";
 import { prisma } from "./prisma";
 import { HttpError } from "./http";
@@ -137,6 +138,11 @@ export async function runBotManagement(ownerId: string, input: BotManagementInpu
     } else if (input.action === "bots") {
       echo = "Боты"; step = "bots"; clearDraft();
       body = "Здесь можно создать своего бота и управлять подключением. Выберите «Создать бота» или «Мои боты».";
+    } else if (input.action === "documentation") {
+      if (step !== "bots") invalidStep();
+      echo = "Документация";
+      title = "Документация";
+      body = BOT_DOCUMENTATION_TEXT;
     } else if (input.action === "create") {
       if (step !== "bots") invalidStep();
       if (await db.managedBot.count({ where: { ownerId } }) >= 10) throw new HttpError(400, "Можно создать до 10 ботов. Лимит уже достигнут.");
@@ -289,6 +295,7 @@ export async function runBotManagement(ownerId: string, input: BotManagementInpu
     const messages: EclipseSystemMessage[] = [];
     const write = async (senderId: string, role: "user" | "assistant", messageTitle: string, messageBody: string, botToken?: string) => {
       const payload: EclipseSystemPayload = { title: messageTitle, body: "", eventType: "bot_management", botRole: role,
+        ...(role === "assistant" && input.action === "documentation" ? { metadata: { botDocumentation: true } } : {}),
         protectedBody: encryptAtRest(JSON.stringify({ body: messageBody, ...(botToken ? { botToken } : {}) })) };
       const message = await db.message.create({ data: { conversationId, senderId, isSystemMessage: true, systemPayload: payload as Prisma.InputJsonValue } });
       messages.push({ id: message.id, senderId, senderType: "system", systemPayload: revealEclipsePayload(message.systemPayload), createdAt: message.createdAt.toISOString(), reactions: [] });

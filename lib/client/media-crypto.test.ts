@@ -36,6 +36,12 @@ describe("client attachment encryption", () => {
     await vi.advanceTimersByTimeAsync(3001);
     expect(getEncryptedMediaPreview(src)).toBeUndefined();
   });
+  it("provides the final video proportions even before its encrypted bytes arrive", async () => {
+    const encrypted = await encryptMediaBlob(new Blob(["video"], { type: "video/mp4" }));
+    const src = encrypted.protectUrl("/media/video.bin", "direct:test", null, { aspectRatio: 9 / 16 });
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(null, { status: 404 })));
+    expect(resolveMessageMedia({ kind: "video", src })).toMatchObject({ src: "", aspectRatio: 9 / 16 });
+  });
   it("keeps downloading a video beyond 45 seconds while chunks continue arriving", async () => {
     const encrypted = await encryptMediaBlob(new Blob(["a progressively downloaded video"], { type: "video/mp4" }));
     const bytes = new Uint8Array(await encrypted.blob.arrayBuffer());

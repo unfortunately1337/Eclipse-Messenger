@@ -10,6 +10,14 @@ export function getPanelVisualStyle(transparent: boolean): CSSProperties {
   };
 }
 
+export function getProfileMenuVisualStyle(transparent: boolean): CSSProperties {
+  return {
+    ...getPanelVisualStyle(transparent),
+    border: "1px solid rgba(255,255,255,0.07)",
+    boxShadow: "0 18px 42px rgba(0,0,0,0.55), inset 0 1px 0 rgba(255,255,255,0.06)",
+  };
+}
+
 /** Shared material for the chat header, pinned message and floating mini-player. */
 export function getChatHeaderVisualStyle(transparent: boolean): CSSProperties {
   return {

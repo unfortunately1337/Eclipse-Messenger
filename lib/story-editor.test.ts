@@ -3,6 +3,15 @@ import { singleStoryEmoji, storyColorToHsv, storyHsvToColor } from "./story-edit
 import { normalizeStoryOverlay, parseStoryOverlay, stringifyStoryOverlay } from "./story-overlay";
 
 describe("story editor overlays", () => {
+  it("keeps the composition coordinate space and strokes across publication", () => {
+    const viewport = { width: 393, height: 852 };
+    const strokes = [{ id: "pencil", color: "#ff0000", width: 6, points: [{ x: .2, y: .3 }, { x: .8, y: .7 }] }];
+    const published = parseStoryOverlay(stringifyStoryOverlay({ viewport, strokes }));
+    expect(published?.viewport).toEqual(viewport);
+    expect(published?.strokes).toEqual(strokes);
+    expect(normalizeStoryOverlay({ viewport: { width: 0, height: Infinity } }).viewport).toBeUndefined();
+    expect(normalizeStoryOverlay({ strokes }).viewport).toBeUndefined();
+  });
   it("recognizes a single composed emoji", () => {
     for (const value of ["❤️", "👨‍👩‍👧‍👦", "👍🏽", "🇷🇺", "1️⃣"]) expect(singleStoryEmoji(value)).toBe(value);
     for (const value of ["😀🔥", "hello", "😀 text", ""]) expect(singleStoryEmoji(value)).toBeNull();

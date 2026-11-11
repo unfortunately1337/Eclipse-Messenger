@@ -8,7 +8,7 @@ import { p2pEncoding, p2pQuality, type P2PQuality } from "./call-p2p-quality";
 const sources = ["microphone", "camera", "screen_share", "screen_share_audio"] as const;
 const mediaKey = { microphone: "microphone", camera: "camera", screen_share: "screen", screen_share_audio: "screenAudio" } as const;
 const emptyMedia = (): CallMediaState => ({ microphone: false, camera: false, screen: false, screenAudio: false });
-const audioConstraints: MediaTrackConstraints = { echoCancellation: true, noiseSuppression: true, autoGainControl: true, channelCount: 1, sampleRate: 48000 };
+const audioConstraints: MediaTrackConstraints = { echoCancellation: true, autoGainControl: true, channelCount: 1, sampleRate: 48000 };
 type AudioOutput = { elements: Set<HTMLMediaElement>; source?: MediaStreamAudioSourceNode; gain?: GainNode; volume: number };
 
 export class P2PCallSession extends CallMediaEvents implements CallMediaSession, NativeTrackHost {
@@ -54,7 +54,8 @@ export class P2PCallSession extends CallMediaEvents implements CallMediaSession,
     super();
     const person = this.person(true);
     this.localParticipant = Object.assign(person, {
-      setMicrophoneEnabled: (enabled: boolean) => this.microphone(enabled),
+      setMicrophoneEnabled: (enabled: boolean, options?: { noiseSuppression?: boolean }) => this.microphone(enabled, options?.noiseSuppression),
+      setNoiseSuppression: (enabled: boolean) => this.setNoiseSuppression(enabled),
       setCameraEnabled: (enabled: boolean, options?: { facingMode?: CameraRestartOptions["facingMode"] }) => this.camera(enabled, options?.facingMode),
       setScreenShareEnabled: (enabled: boolean) => this.screen(enabled),
     });
@@ -275,10 +276,12 @@ export class P2PCallSession extends CallMediaEvents implements CallMediaSession,
   diagnostics() { return { transport: "p2p", state: this.state, quality: this.quality, ...this.sample }; }
 
   // Media capture, output and stats are implemented below, independent of UI.
-  private async replace(source: CallTrackSource, native: MediaStreamTrack) {
+  private async replace(source: CallTrackSource, native: MediaStreamTrack, enabled = true) {
     if (this.closed) { native.stop(); throw new DOMException("Call ended", "AbortError"); }
+    native.enabled = enabled;
     try { await this.transceivers.get(source)?.sender.replaceTrack(native); }
     catch (error) { native.stop(); throw error; }
+    if (this.closed) { native.stop(); throw new DOMException("Call ended", "AbortError"); }
     const current = this.localTracks.get(source);
     if (current) current.replace(native); else this.localTracks.set(source, new NativeCallTrack(source, native, this, true));
     native.onended = () => {
@@ -287,13 +290,15 @@ export class P2PCallSession extends CallMediaEvents implements CallMediaSession,
       void this.transceivers.get(source)?.sender.replaceTrack(null).catch(() => {});
       this.emit("update"); void this.sendMedia().catch(() => {});
     };
-    this.self[mediaKey[source]] = true;
+    this.self[mediaKey[source]] = enabled;
     this.emit("update"); await this.sendMedia().catch(() => {}); await this.applyQuality();
   }
-  private async microphone(enabled: boolean) {
+  private async microphone(enabled: boolean, noiseSuppression = true) {
     const current = this.localTracks.get("microphone");
     if (enabled && (!current || current.mediaStreamTrack.readyState === "ended")) {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: audioConstraints });
+      const audio = { ...audioConstraints, noiseSuppression };
+      if (!noiseSuppression) audio.advanced = [{ echoCancellation: true, autoGainControl: true, noiseSuppression: false }];
+      const stream = await navigator.mediaDevices.getUserMedia({ audio });
       await this.replace("microphone", stream.getAudioTracks()[0]);
     } else {
       if (current) current.mediaStreamTrack.enabled = enabled;
@@ -301,6 +306,29 @@ export class P2PCallSession extends CallMediaEvents implements CallMediaSession,
       if (enabled && current && sender && sender.track !== current.mediaStreamTrack) await sender.replaceTrack(current.mediaStreamTrack);
       this.self.microphone = enabled; this.emit("update"); await this.sendMedia().catch(() => {});
     }
+  }
+  private async setNoiseSuppression(enabled: boolean) {
+    const current = this.localTracks.get("microphone")?.mediaStreamTrack;
+    if (this.closed || !current || current.readyState !== "live") throw new DOMException("Microphone unavailable", "AbortError");
+    const { echoCancellation, autoGainControl } = current.getSettings();
+    const constraints = {
+      ...current.getConstraints(),
+      ...(echoCancellation !== undefined && { echoCancellation: { exact: echoCancellation } }),
+      ...(autoGainControl !== undefined && { autoGainControl: { exact: autoGainControl } }),
+      noiseSuppression: { exact: enabled },
+    };
+    await current.applyConstraints(constraints).catch(() => {});
+    if (this.closed) throw new DOMException("Call ended", "AbortError");
+    if (current.readyState === "live" && current.getSettings().noiseSuppression === enabled) return;
+
+    // Some browsers can only change microphone processing on a fresh capture.
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: constraints });
+    const track = stream.getAudioTracks()[0];
+    if (track.getSettings().noiseSuppression !== enabled) {
+      track.stop();
+      throw new Error("Noise suppression was not applied");
+    }
+    await this.replace("microphone", track, this.self.microphone);
   }
   private async camera(enabled: boolean, facingMode: CameraRestartOptions["facingMode"] = "user") {
     if (!enabled) { await this.transceivers.get("camera")?.sender.replaceTrack(null); this.localTracks.get("camera")?.stop(); this.self.camera = false; this.emit("update"); await this.sendMedia().catch(() => {}); return; }
@@ -342,13 +370,13 @@ export class P2PCallSession extends CallMediaEvents implements CallMediaSession,
       output.gain.gain.value = output.volume; output.source.connect(output.gain); output.gain.connect(context.destination);
     }
     element.muted = Boolean(output.gain); element.volume = output.gain ? 0 : output.volume;
-    void element.play().catch(() => { this.canPlaybackAudio = false; this.emit("audioPlayback"); });
-    if (context?.state === "suspended") { this.canPlaybackAudio = false; this.emit("audioPlayback"); }
+    void this.startAudio().catch(() => {});
   }
   detachAudio(track: NativeCallTrack, element: HTMLMediaElement) {
     const output = this.outputs.get(track); if (!output) return;
     output.elements.delete(element);
     if (!output.elements.size) { output.source?.disconnect(); output.gain?.disconnect(); this.outputs.delete(track); }
+    if (!this.outputs.size) this.setAudioPlayback(true);
   }
   volume(track: NativeCallTrack, volume: number) {
     const output = this.outputs.get(track); if (!output) return;
@@ -360,11 +388,33 @@ export class P2PCallSession extends CallMediaEvents implements CallMediaSession,
     if (this.closed || typeof AudioContext === "undefined") return undefined;
     try { return this.audio ??= new AudioContext(); } catch { return undefined; }
   }
+  private setAudioPlayback(allowed: boolean) {
+    if (this.closed || this.canPlaybackAudio === allowed) return;
+    this.canPlaybackAudio = allowed;
+    this.emit("audioPlayback");
+  }
   async startAudio() {
-    const context = this.audioContext(); if (context?.state === "suspended") await context.resume();
-    await Promise.all([...this.outputs.values()].flatMap(output => [...output.elements].map(element => element.play())));
-    if (context && context.state !== "running") throw new Error("Audio playback requires a user gesture");
-    this.canPlaybackAudio = true; this.emit("audioPlayback");
+    if (this.closed) return;
+    const context = this.audioContext();
+    const playback: Promise<void>[] = [];
+    for (const output of this.outputs.values()) for (const element of output.elements) {
+      const play = element.play().catch(error => {
+        // A muted element is only an attachment when the gain node plays the audio.
+        if (!output.gain && output.elements.has(element) && error?.name === "NotAllowedError") throw error;
+      });
+      if (!output.gain) playback.push(play);
+    }
+    if (context && context.state !== "running") {
+      if (this.outputs.size) this.setAudioPlayback(false);
+      playback.push(context.resume());
+    }
+    try {
+      await Promise.all(playback);
+      if (!context || context.state === "running") this.setAudioPlayback(true);
+    } catch (error) {
+      if (this.outputs.size && error instanceof DOMException && error.name === "NotAllowedError") this.setAudioPlayback(false);
+      throw error;
+    }
   }
   private async applyQuality() {
     if (this.closed) return;

@@ -20,15 +20,18 @@ import { watchMediaPortalTargets } from "@/lib/client/media-portal-targets";
 import { CallVoiceWaves, type CallVoiceLevels } from "./CallVoiceWaves";
 import { CallAvatarVoiceHalo } from "./CallAvatarVoiceHalo";
 import CallVideoStage from "./CallVideoStage";
-import { CallAmbientRibbon } from "./CallAmbientRibbon";
+import { CallAmbientGradient } from "./CallAmbientGradient";
 import { CallElapsed } from "./CallElapsed";
+import { CallConnectionEmojis } from "./CallConnectionEmojis";
 import { getEffectiveProfileGradient, isMediaBackgroundUrl } from "@/lib/profile-gradients";
 
 type Props = {
+  callId?: string;
   name: string; avatarUrl: string | null; backgroundUrl: string | null;
   status: string; startedAt: number | null; incoming: boolean; owned: boolean;
   minimized: boolean; glass: boolean; busy: boolean; controlsDisabled: boolean;
   microphone: boolean; camera: boolean; sound: boolean; volume: number; onVolume: (value: number) => void; sharing: boolean; speaking: boolean;
+  noiseSuppression?: boolean; noiseSuppressionPending: boolean; onToggleNoiseSuppression: () => void;
   signal?: CallSignal;
   active?: boolean;
   endOutcome?: CallView["endOutcome"];
@@ -82,6 +85,10 @@ export default function PersonalCallWindow(props: Props) {
   const [waveComplete, setWaveComplete] = useState(false);
   const connecting = props.startedAt === null && props.status === "Соединение…";
   const connected = props.startedAt !== null;
+  const [connectionEmojisAt, setConnectionEmojisAt] = useState<number | null>(null);
+  useEffect(() => {
+    if ((connecting || connected) && connectionEmojisAt === null) setConnectionEmojisAt(Date.now());
+  }, [connecting, connected, connectionEmojisAt]);
   const [wasConnected, setWasConnected] = useState(connected);
   if (connected && !wasConnected) setWasConnected(true);
   const failed = Boolean(props.endOutcome && props.endOutcome !== "completed");
@@ -182,18 +189,17 @@ export default function PersonalCallWindow(props: Props) {
     return () => { clearTimeout(focusTimer); document.removeEventListener("keydown", keydown); if (previous instanceof HTMLElement && previous.isConnected) previous.focus({ preventScroll: true }); };
   }, [minimized, onMinimize]);
 
-  const control = `grid shrink-0 place-items-center rounded-full border ${props.glass ? "border-white/[0.07] bg-[rgba(40,40,44,0.28)] shadow-[inset_0_1px_0_rgba(255,255,255,0.06)] backdrop-blur-[8px] backdrop-saturate-[1.05]" : "border-transparent bg-[#252527] shadow-none backdrop-blur-none"} transition-[background-color,color,transform] duration-200 hover:bg-white/20 active:scale-95 active:bg-[var(--ui-accent-solid,#d4d6da)] active:text-[color:var(--ui-accent-contrast,#18181b)] aria-pressed:border-transparent aria-pressed:bg-[var(--ui-accent-solid,#d4d6da)] aria-pressed:text-[color:var(--ui-accent-contrast,#18181b)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--ui-accent-solid,#d4d6da)] disabled:opacity-35`;
-  const minimizeControl = <div className="flex flex-col items-center gap-2"><button type="button" onClick={props.onMinimize} aria-label={t("Свернуть звонок")} className={`${control} h-12 w-12 text-zinc-300 hover:text-white`}><ChevronDown size={24} /></button><span className="text-[10px] text-zinc-400 md:text-[11px]">{t("Свернуть")}</span></div>;
+  const controlSurface = `grid shrink-0 place-items-center rounded-full border ${props.glass ? "border-white/[0.07] bg-[rgba(40,40,44,0.28)] shadow-[inset_0_1px_0_rgba(255,255,255,0.06)] backdrop-blur-[8px] backdrop-saturate-[1.05]" : "border-transparent bg-[#252527] shadow-none backdrop-blur-none"}`;
+  const control = `${controlSurface} transition-[background-color,color,transform] duration-200 hover:bg-white/20 active:scale-95 active:bg-[var(--ui-accent-solid,#d4d6da)] active:text-[color:var(--ui-accent-contrast,#18181b)] aria-pressed:border-transparent aria-pressed:bg-[var(--ui-accent-solid,#d4d6da)] aria-pressed:text-[color:var(--ui-accent-contrast,#18181b)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--ui-accent-solid,#d4d6da)] disabled:opacity-35`;
   const background = getEffectiveProfileGradient(backgroundUrl, name, name) || "linear-gradient(155deg,#24242b 0%,#17171d 65%,#131318 100%)";
 
   const signal = props.signal ?? { bars: 0, state: "unknown" };
   const signalLabel = t(signal.state === "reconnecting" ? "Восстанавливаем соединение…" : signal.state === "lost" ? "Соединение потеряно" : signal.state === "poor" ? "Слабое соединение" : signal.state === "unknown" ? "Оцениваем качество соединения" : signal.bars === 4 ? "Отличное соединение" : "Хорошее соединение");
-  const toolbarStyle = props.glass ? {
-    backgroundColor: "rgba(40,44,47,0.38)",
-    backdropFilter: "blur(20px) saturate(1.3)", WebkitBackdropFilter: "blur(20px) saturate(1.3)",
+  const menuStyle = props.glass ? {
+    backgroundColor: "rgba(38,42,44,0.68)",
+    backdropFilter: "blur(28px) saturate(1.3)", WebkitBackdropFilter: "blur(28px) saturate(1.3)",
     boxShadow: "0 5px 18px rgba(0,0,0,0.12), inset 0 1px 0 rgba(255,255,255,0.16), inset 0 0 0 1px rgba(255,255,255,0.055)",
   } : getPanelVisualStyle(false);
-  const menuStyle = props.glass ? { ...toolbarStyle, backgroundColor: "rgba(38,42,44,0.68)", backdropFilter: "blur(28px) saturate(1.3)", WebkitBackdropFilter: "blur(28px) saturate(1.3)" } : getPanelVisualStyle(false);
 
   return <>
     {miniTarget ? createPortal(<AnimatePresence>
@@ -216,7 +222,7 @@ export default function PersonalCallWindow(props: Props) {
         <motion.section ref={dialog} tabIndex={-1} role="dialog" aria-modal="true" aria-label={`${t("Звонок")}: ${name}`} initial={false} className="relative flex h-full w-full flex-col overflow-hidden text-white outline-none" style={windowMaterial}>
           {!showWave && !terminal && <div data-call-ambient aria-hidden className="pointer-events-none absolute inset-0 overflow-hidden">
             <div className="absolute inset-0 opacity-[0.06]" style={{ background }} />
-            <CallAmbientRibbon glass={props.glass} connecting={connecting} reducedMotion={Boolean(reducedMotion)} />
+            <CallAmbientGradient glass={props.glass} connecting={connecting} reducedMotion={Boolean(reducedMotion)} />
           </div>}
           {showWave && <motion.div ref={connectionWave} data-call-connected-wave={failed ? undefined : true} data-call-outcome-wave={failed ? "failed" : completed ? "completed" : "connected"} aria-hidden className="pointer-events-none absolute rounded-full" style={{ willChange: "transform", backfaceVisibility: "hidden", background: failed ? "radial-gradient(circle,rgba(152,48,56,0.68) 0%,rgba(116,34,43,0.76) 45%,rgba(75,23,31,0.86) 75%,rgba(49,19,25,0.92) 100%)" : "radial-gradient(circle,rgba(34,112,78,0.68) 0%,rgba(25,83,61,0.76) 45%,rgba(17,57,43,0.86) 75%,rgba(14,40,33,0.92) 100%)" }} initial={waveComplete || reducedMotion ? false : { scale: 0, opacity: 1 }} animate={{ scale: returning ? 0 : 1, opacity: 1 }} transition={{ duration: reducedMotion ? 0 : returning ? CALL_RETURN_SECONDS : failed ? CALL_END_EFFECT_MS / 1000 : CALL_CONNECT_SECONDS, ease: returning ? [0.4, 0, 0.6, 1] : [0.4, 0, 0.2, 1] }} onAnimationComplete={() => { if (returning) setTerminalSettled(true); else setWaveComplete(true); }} />}
           {!showWave && !terminal && props.glass && isMediaBackgroundUrl(backgroundUrl) && <div className="pointer-events-none absolute -inset-8 opacity-20 blur-2xl"><MediaBanner src={backgroundUrl} alt="" className="h-full w-full" mediaClassName="object-cover" autoPlay={false} /></div>}
@@ -226,21 +232,33 @@ export default function PersonalCallWindow(props: Props) {
               <div aria-hidden className="absolute inset-0" style={{ background: "linear-gradient(to bottom,rgba(0,0,0,.35),transparent 28%,transparent 62%,rgba(0,0,0,.7))" }} />
             </motion.div>}
           </AnimatePresence>
-          <header inert={!active} aria-hidden={!active} className="relative z-40 flex min-h-[calc(env(safe-area-inset-top)+52px)] shrink-0 justify-end px-4 pt-[calc(env(safe-area-inset-top)+12px)] md:min-h-[60px] md:px-5 md:pt-5">
+          <header className="relative z-40 flex min-h-[calc(env(safe-area-inset-top)+52px)] shrink-0 justify-end px-4 pt-[calc(env(safe-area-inset-top)+12px)] md:min-h-[60px] md:px-5 md:pt-5">
+            {owned && !incoming && !terminal && <button type="button" onClick={props.onMinimize} aria-label={t("Свернуть звонок")} className={`${control} absolute left-4 size-10 text-zinc-300 hover:text-white md:left-5`}><ChevronDown size={23} /></button>}
+            <AnimatePresence initial={false}>{connectionEmojisAt !== null && !terminal && <motion.div key="connection-symbols" className="pointer-events-none absolute left-1/2 -translate-x-1/2" initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -3 }} transition={{ duration: reducedMotion ? 0 : .18 }}>
+              <CallConnectionEmojis callId={props.callId ?? name} startedAt={connectionEmojisAt} glass={props.glass} />
+            </motion.div>}</AnimatePresence>
             <AnimatePresence initial={false}>{active && <motion.div ref={toolbar} key="connection-toolbar" className="relative" initial={{ opacity: 0, scale: 0.94, y: -4 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.96, y: -3 }} transition={{ duration: reducedMotion ? 0 : 0.18 }}>
-              <div data-call-connection-toolbar className="flex h-10 items-center rounded-full p-1" style={toolbarStyle}>
-                <div role="img" aria-label={signalLabel} title={signalLabel} data-call-signal={signal.state} className="grid h-8 w-8 place-items-center" aria-live="off">
+              <div data-call-connection-toolbar className="flex items-center gap-1.5 min-[360px]:gap-2">
+                <div role="img" aria-label={signalLabel} title={signalLabel} data-call-signal={signal.state} className={`${controlSurface} size-8 min-[360px]:size-10`} aria-live="off">
                   <svg width="22" height="22" viewBox="0 0 24 24" aria-hidden>
                     {[5, 8, 11, 14].map((height, index) => <motion.rect key={height} x={3 + index * 5} y={19 - height} width="3" height={height} rx="1.5" initial={false} animate={{ opacity: index < signal.bars ? 1 : 0.22, fill: signal.state === "poor" || signal.state === "reconnecting" ? "#fbbf24" : signal.state === "lost" ? "#f87171" : signal.state === "good" ? "#a7f3d0" : "#d4d4d8" }} transition={{ duration: reducedMotion ? 0 : 0.22 }} />)}
                   </svg>
                 </div>
-                <button ref={menuButton} type="button" aria-label={t("Параметры звонка")} aria-haspopup="dialog" aria-controls={menuId} aria-expanded={volumeOpen} onClick={() => setVolumeOpen(value => !value)} className="grid h-8 w-8 place-items-center rounded-[12px] text-zinc-200 transition-colors hover:bg-white/10 focus-visible:outline-2 focus-visible:outline-white/60"><IoMdMore size={22} className="block shrink-0" /></button>
+                <button ref={menuButton} type="button" aria-label={t("Параметры звонка")} aria-haspopup="dialog" aria-controls={menuId} aria-expanded={volumeOpen} onClick={() => setVolumeOpen(value => !value)} className={`${control} size-8 text-zinc-200 hover:text-white aria-expanded:text-white min-[360px]:size-10`}><IoMdMore size={22} className="block shrink-0" /></button>
               </div>
-              <AnimatePresence>{volumeOpen && <motion.div id={menuId} data-call-volume-menu tabIndex={-1} role="dialog" aria-label={t("Громкость собеседника")} {...menuPopoverMotion(reducedMotion)} className="absolute right-0 top-[calc(100%+8px)] z-50 w-[228px] max-w-[calc(100vw-32px)] origin-top-right rounded-[22px] p-1.5 text-zinc-100 outline-none" style={menuStyle}>
+              <AnimatePresence>{volumeOpen && <motion.div id={menuId} data-call-volume-menu tabIndex={-1} role="dialog" aria-label={t("Параметры звонка")} {...menuPopoverMotion(reducedMotion)} className="absolute right-0 top-[calc(100%+8px)] z-50 w-[228px] max-w-[calc(100vw-32px)] origin-top-right rounded-[22px] p-1.5 text-zinc-100 outline-none" style={menuStyle}>
                       <div className="flex items-center justify-between gap-3 px-3 pb-1 pt-2.5 text-[12px]"><span className="truncate text-zinc-200">{t("Громкость")}</span><span className="tabular-nums text-zinc-400">{props.sound ? Math.round(props.volume * 100) : 0}%</span></div>
                       <input type="range" min="0" max="100" step="1" aria-label={t("Громкость собеседника")} value={props.sound ? Math.round(props.volume * 100) : 0} onChange={event => props.onVolume(Number(event.target.value) / 100)} className="call-volume-slider mx-3 mb-2 h-9 w-[calc(100%-24px)] cursor-pointer" style={{ "--call-volume": `${props.sound ? Math.round(props.volume * 100) : 0}%` } as import("react").CSSProperties} />
                       <button type="button" onClick={() => { if (props.sound && props.volume > 0) props.onSound(); else props.onVolume(props.volume > 0 ? props.volume : 1); }} className="flex w-full items-center gap-2 rounded-[10px] px-3 py-2.5 text-left text-[12px] font-medium text-zinc-200 transition-colors hover:bg-white/5">{props.sound && props.volume > 0 ? <FaVolumeMute size={18} /> : <Volume2 size={18} />}{t(props.sound && props.volume > 0 ? "Выключить звук" : "Включить звук")}</button>
-
+                      {props.audioBlocked && <button type="button" onClick={props.onEnableAudio} className="flex w-full items-center gap-2 rounded-[10px] px-3 py-2.5 text-left text-[12px] font-medium text-zinc-200 transition-colors hover:bg-white/5 focus-visible:outline-2 focus-visible:outline-white/60"><Volume2 size={18} />{t("Включить звук звонка")}</button>}
+                      {props.noiseSuppression !== undefined && (
+                        <button type="button" role="switch" aria-checked={props.noiseSuppression} aria-disabled={props.noiseSuppressionPending || undefined} disabled={controlsDisabled} onClick={props.onToggleNoiseSuppression} className="group flex min-h-10 w-full items-center justify-between gap-3 rounded-[10px] px-3 py-2 text-left text-[12px] font-medium text-zinc-200 transition-colors hover:bg-white/5 focus-visible:outline-2 focus-visible:outline-white/60 disabled:opacity-50">
+                          {t("Шумоподавление")}
+                          <span aria-hidden className="flex h-5 w-9 shrink-0 items-center rounded-full bg-white/15 px-0.5 transition-colors group-aria-checked:bg-[var(--ui-accent-solid,#d4d6da)]">
+                            <motion.span initial={false} animate={{ x: props.noiseSuppression ? 16 : 0 }} transition={{ duration: reducedMotion ? 0 : 0.16, ease: [0.2, 0.75, 0.25, 1] }} className="size-4 rounded-full bg-white transition-colors group-aria-checked:bg-[var(--ui-accent-contrast,#18181b)]" />
+                          </span>
+                        </button>
+                      )}
               </motion.div>}</AnimatePresence>
             </motion.div>}</AnimatePresence>
           </header>
@@ -268,13 +286,10 @@ export default function PersonalCallWindow(props: Props) {
             </motion.div>}</AnimatePresence>
           </div>
           <footer className={`relative z-30 flex shrink-0 flex-col items-center gap-3 px-5 pb-[calc(env(safe-area-inset-bottom)+28px)] pt-3 md:gap-2 md:px-8 md:pb-10 md:pt-5 ${incomingLayout ? "min-h-[128px] md:min-h-[148px]" : "min-h-[112px] md:min-h-[132px]"}`}>
-            {props.audioBlocked && <button type="button" onClick={props.onEnableAudio} className="flex items-center gap-2 rounded-full px-4 py-2.5 text-[12px] text-zinc-200"><Volume2 size={16} />{t("Включить звук звонка")}</button>}
             {incoming ? <div className="flex items-end gap-8 md:gap-14">
               <div className="flex flex-col items-center gap-2"><button type="button" disabled={busy} onClick={props.onHangup} aria-label={t("Отклонить")} className={`${control} h-16 w-16 text-red-400 hover:text-red-300`}><IoCall size={27} /></button><span className="text-[11px] text-zinc-400">{t("Отклонить")}</span></div>
-              {minimizeControl}
               <div className="flex flex-col items-center gap-2"><button type="button" disabled={busy} onClick={props.onAccept} aria-label={t("Принять")} className={`${control} h-16 w-16 text-emerald-400 hover:text-emerald-300`}><IoCall size={27} /></button><span className="text-[11px] text-zinc-400">{t("Принять")}</span></div>
-            </div> : owned ? <div data-call-controls className={`mx-auto flex w-full max-w-[480px] items-start justify-center gap-2 min-[360px]:gap-3 sm:gap-4 md:gap-6 ${props.camera && props.onFlipCamera ? "[--call-flip-width:40px] sm:[--call-flip-width:48px] [&>div]:w-10 [&>div]:shrink-0 [&>div>button]:h-10 [&>div>button]:w-10 [&>div>span]:text-[9px] min-[360px]:[&>div>span]:text-[10px] sm:[&>div]:w-auto sm:[&>div>button]:h-12 sm:[&>div>button]:w-12 md:[&>div>span]:text-[11px]" : ""}`}>
-              {minimizeControl}
+            </div> : owned ? <div data-call-controls className={`mx-auto flex w-full max-w-[480px] items-start justify-center gap-2 min-[360px]:gap-3 sm:gap-4 md:gap-6 ${props.camera && props.onFlipCamera ? "[--call-flip-width:40px] sm:[--call-flip-width:48px] [&>div]:w-10 [&>div]:shrink-0 [&>div>button]:h-10 [&>div>button]:w-10 sm:[&>div]:w-auto sm:[&>div>button]:h-12 sm:[&>div>button]:w-12" : ""}`}>
               <div className="flex flex-col items-center gap-2"><button type="button" disabled={controlsDisabled} onClick={props.onMicrophone} aria-label={t(props.microphone ? "Выключить микрофон" : "Включить микрофон")} aria-pressed={props.microphone} className={`${control} h-12 w-12 ${props.microphone ? "text-zinc-200" : "text-white"}`}>{props.microphone ? <FaMicrophone size={21} /> : <FaMicrophoneSlash size={21} />}</button><span className="text-[10px] text-zinc-400 md:text-[11px]">{t("Микрофон")}</span></div>
               <div className="flex flex-col items-center gap-2"><button type="button" disabled={controlsDisabled} onClick={() => { setOwnCameraFocused(null); props.onCamera(); }} aria-label={t(props.camera ? "Выключить камеру" : "Включить камеру")} aria-pressed={props.camera} className={`${control} h-12 w-12 ${props.camera ? "text-white" : "text-zinc-200"}`}>{props.camera ? <BsCameraVideoFill size={21} /> : <BsCameraVideoOffFill size={21} />}</button><span className="text-[10px] text-zinc-400">{t("Камера")}</span></div>
               <AnimatePresence initial={false}>{props.camera && props.onFlipCamera && <motion.div key="flip-camera" initial={{ width: 0, opacity: 0, x: -8, scale: 0.8, marginLeft: -6 }} animate={{ width: "var(--call-flip-width,48px)", opacity: 1, x: 0, scale: 1, marginLeft: 0 }} exit={{ width: 0, opacity: 0, x: -8, scale: 0.8, marginLeft: -6 }} transition={{ duration: reducedMotion ? 0 : 0.24, ease: [0.22, 1, 0.36, 1] }} className="flex shrink-0 flex-col items-center gap-2"><button type="button" data-call-camera-flip onClick={props.onFlipCamera} disabled={controlsDisabled} aria-label={t("Перевернуть камеру")} aria-busy={props.cameraSwitching} className={`${control} h-12 w-12 text-zinc-200`}><motion.span animate={{ rotate: props.cameraSwitching ? 180 : 0 }} transition={{ duration: 0.25 }}><FaArrowsRotate size={18} /></motion.span></button><span className="whitespace-nowrap text-[10px] text-zinc-400">{t("Поворот")}</span></motion.div>}</AnimatePresence>

@@ -26,7 +26,7 @@ function normalizeStoryTtlHours(ttlHours?: number | null): StoryTtlHours {
   return STORY_DEFAULT_TTL_HOURS;
 }
 
-export async function deleteStoryById(storyId: string) {
+export async function deleteStoryById(storyId: string, deferMediaCleanup = false) {
   const story = await prisma.story.findUnique({
     where: { id: storyId },
     select: { id: true, mediaUrl: true, authorId: true },
@@ -35,9 +35,10 @@ export async function deleteStoryById(storyId: string) {
 
   await prisma.story.delete({ where: { id: story.id } });
 
-  await deleteUnusedOwnedPublicMedia(story.mediaUrl, story.authorId).catch(error => {
+  const cleanup = deleteUnusedOwnedPublicMedia(story.mediaUrl, story.authorId).catch(error => {
     console.warn("Story media cleanup failed", error);
   });
+  if (!deferMediaCleanup) await cleanup;
 
   return true;
 }

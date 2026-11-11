@@ -155,70 +155,17 @@
   display: none;
 }
 
-/* Telegram iOS-Style Vaporize / Thanos Snap Message Deletion */
+[data-theme-strip] { scrollbar-width: none !important; }
+[data-theme-strip]::-webkit-scrollbar {
+  display: none !important;
+  width: 0 !important;
+  height: 0 !important;
+  background: transparent !important;
+}
+
 .message-dissolve-target {
   pointer-events: none !important;
-  will-change: opacity, transform;
-  animation: tg-message-vaporize 0.22s cubic-bezier(0.25, 1, 0.5, 1) forwards;
 }
-
-@keyframes tg-message-vaporize {
-  0% {
-    opacity: 1;
-    transform: scale3d(1, 1, 1);
-  }
-  100% {
-    opacity: 0;
-    transform: scale3d(0.98, 0.98, 1);
-  }
-}
-
-.message-dissolve-particles {
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  z-index: 25;
-  overflow: visible;
-}
-
-.message-dissolve-particle {
-  position: absolute;
-  pointer-events: none;
-  will-change: transform, opacity;
-  border-radius: 9999px;
-  background: #ffffff;
-  transform: translate3d(-50%, -50%, 0) scale(1);
-  animation: tg-particle-vaporize 0.28s cubic-bezier(0.25, 1, 0.5, 1) forwards;
-}
-
-/* Authentic Telegram iOS White Dust / Sparkle Particle Variations */
-.message-dissolve-particle-bright {
-  background: #ffffff;
-  box-shadow: 0 0 2px rgba(255, 255, 255, 0.9);
-}
-
-.message-dissolve-particle-subtle {
-  background: rgba(255, 255, 255, 0.75);
-}
-
-.message-dissolve-particle-dim {
-  background: rgba(255, 255, 255, 0.45);
-}
-
-@keyframes tg-particle-vaporize {
-  0% {
-    opacity: 1;
-    transform: translate3d(-50%, -50%, 0) scale(1);
-  }
-  35% {
-    opacity: 0.9;
-  }
-  100% {
-    opacity: 0;
-    transform: translate3d(calc(-50% + var(--dx)), calc(-50% + var(--dy)), 0) scale(0.15);
-  }
-}
-
 
 @keyframes chat-header-gradient-flow {
   0% {
@@ -418,6 +365,11 @@ html[data-app-transparent-visual="false"] {
 html[data-app-transparent-visual="true"] [data-verification-details] {
   --app-panel-background: rgba(28, 28, 30, 0.98);
 }
+html[data-app-transparent-visual="true"] [data-story-pack-picker] {
+  --app-panel-background: rgba(24, 24, 24, 0.72);
+  --app-panel-filter: blur(16px) saturate(1.1);
+  --app-panel-highlight: 0 12px 32px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.06);
+}
 /* Keep the standard filter after the Safari prefix so CSS optimization retains it. */
 html[data-app-transparent-visual] :is([data-app-panel], .app-panel-surface, [data-slot="dropdown-menu-content"], [data-slot="dropdown-menu-sub-content"]) {
   background-color: var(--app-panel-background) !important;
@@ -438,6 +390,19 @@ html[data-app-transparent-visual] :is([data-app-panel], .app-panel-surface) * {
 }
 
 /* Confirmation dialogs share one compact layout in both material modes. */
+/* Popovers need their own material; the panel's descendant optimization must
+   not strip the blur from a menu floating above its cards. */
+html[data-app-transparent-visual] [data-profile-action-menu] {
+  -webkit-backdrop-filter: var(--app-panel-filter) !important;
+  backdrop-filter: var(--app-panel-filter) !important;
+}
+
+/* This surface slides over the sidebar, which is hidden after entry. A stable
+   backing keeps that handoff from flashing through the settings content. */
+html[data-app-transparent-visual="true"] [data-settings-drawer] {
+  --app-panel-background: #1c1c1e;
+}
+
 html[data-app-transparent-visual="true"] [data-confirmation-dialog] {
   --app-panel-background: rgba(32, 32, 36, 0.9);
   --app-panel-filter: blur(18px) saturate(1.12);
