@@ -7,6 +7,7 @@ import { replaceRecordingCamera, type RecordingCameraRequest } from "@/lib/clien
 import { apiRequest } from "@/lib/client/http";
 
 import { showAppToast } from "@/lib/client/app-toast";
+import { isCallPlaybackActive, subscribeCallPlayback } from "@/lib/client/call-playback";
 
 import { type RealtimeSendingPayload } from "../../types";
 
@@ -281,6 +282,17 @@ export function useComposerCapture(sources: ComposerCaptureSources): ComposerCap
     return attachVideoPreviewStreamAction({ activeVideoDeviceIdRef, videoPreviewRef }, stream);
   }, []);
 
+  useEffect(() => {
+    const cancelDuringCall = () => {
+      if (!isCallPlaybackActive()) return;
+      clearVoiceHoldStartTimer();
+      if (voiceRecorderRef.current || voiceStreamRef.current || voiceHoldActiveRef.current) cancelVoiceRecording();
+      if (videoRecorderRef.current || videoStreamRef.current) cancelVideoRecording();
+    };
+    cancelDuringCall();
+    return subscribeCallPlayback(cancelDuringCall);
+  }, [cancelVideoRecording, cancelVoiceRecording, clearVoiceHoldStartTimer]);
+
   const refreshVideoInputDevices = useCallback(async () => {
     try {
       const devices = await navigator.mediaDevices.enumerateDevices();
@@ -434,6 +446,7 @@ export function useComposerCapture(sources: ComposerCaptureSources): ComposerCap
   }, [voiceRecording, videoRecording, voiceRecordingLocked, videoRecordingLocked, handleMicPointerMove, clearVoiceHoldStartTimer, cancelVoiceRecording, cancelVideoRecording, finishVoiceRecording, finishVideoRecording]);
 
   const handleMicClick = useCallback(() => {
+    if (isCallPlaybackActive()) return;
     if (skipMicTapRef.current) {
       skipMicTapRef.current = false;
       return;

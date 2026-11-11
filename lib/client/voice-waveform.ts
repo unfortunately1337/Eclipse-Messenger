@@ -136,79 +136,39 @@ type VoiceWaveformCaptureOptions = {
   captureSamplesRef?: MutableRefObject<number[]>;
 };
 
-export function useVoiceWaveformLevels(
+export function useVoiceRecordingAmplitude(
   stream: MediaStream | null,
   active: boolean,
   options?: VoiceWaveformCaptureOptions,
 ) {
-  const [levels, setLevels] = useState<number[]>(() => Array(VOICE_WAVEFORM_BAR_COUNT).fill(0));
-  const sessionRef = useRef<AnalyserSession | null>(null);
-  const historyRef = useRef<number[]>(Array(VOICE_WAVEFORM_BAR_COUNT).fill(0));
-  const frameRef = useRef<number | null>(null);
-  const ampBufferRef = useRef<Uint8Array<ArrayBuffer> | null>(null);
-  const lastSampleAtRef = useRef(0);
+  const amplitude = useRef(0);
+  const captureSamplesRef = options?.captureSamplesRef;
 
   useEffect(() => {
-    if (!active || !stream) {
-      if (frameRef.current !== null) {
-        cancelAnimationFrame(frameRef.current);
-        frameRef.current = null;
-      }
-      sessionRef.current?.cleanup();
-      sessionRef.current = null;
-      ampBufferRef.current = null;
-      lastSampleAtRef.current = 0;
-      const defaults = Array(VOICE_WAVEFORM_BAR_COUNT).fill(0);
-      historyRef.current = defaults;
-      queueMicrotask(() => {
-        setLevels(defaults);
-      });
-      return;
-    }
-
-    if (stream.getAudioTracks().length === 0) return;
+    amplitude.current = 0;
+    if (!active || !stream || stream.getAudioTracks().length === 0) return;
     let session: AnalyserSession;
     try { session = createStreamAnalyser(stream); }
     catch { return; } // An unavailable analyser must not interrupt the recording.
-    sessionRef.current = session;
-    ampBufferRef.current = new Uint8Array(session.analyser.fftSize) as Uint8Array<ArrayBuffer>;
-    lastSampleAtRef.current = 0;
+    const buffer = new Uint8Array(session.analyser.fftSize);
     void session.audioContext.resume().catch(() => {});
 
-    const tick = () => {
-      const analyser = sessionRef.current?.analyser;
-      const ampBuffer = ampBufferRef.current;
-      if (analyser && ampBuffer) {
-        const now = performance.now();
-        if (now - lastSampleAtRef.current >= 45) {
-          lastSampleAtRef.current = now;
-          const amplitude = sampleAnalyserAmplitude(analyser, ampBuffer);
-          // Show recent loudness, not ultrasonic frequency bins with no voice energy.
-          historyRef.current = [...historyRef.current.slice(1), amplitude];
-          setLevels(historyRef.current);
-          options?.captureSamplesRef?.current.push(amplitude);
-        }
-      }
-      frameRef.current = requestAnimationFrame(tick);
-    };
-
-    frameRef.current = requestAnimationFrame(tick);
+    // Capture the saved waveform independently of animation frames and React renders.
+    const timer = setInterval(() => {
+      const sample = sampleAnalyserAmplitude(session.analyser, buffer);
+      amplitude.current = sample;
+      captureSamplesRef?.current.push(sample);
+    }, 45);
 
     return () => {
-      if (frameRef.current !== null) {
-        cancelAnimationFrame(frameRef.current);
-        frameRef.current = null;
-      }
-      sessionRef.current?.cleanup();
-      sessionRef.current = null;
-      ampBufferRef.current = null;
-      lastSampleAtRef.current = 0;
+      clearInterval(timer);
+      amplitude.current = 0;
+      session.cleanup();
     };
-  }, [active, options?.captureSamplesRef, stream]);
+  }, [active, captureSamplesRef, stream]);
 
-  return levels;
+  return amplitude;
 }
-
 export function usePlaybackWaveformLevels(
   audio: HTMLAudioElement | null,
   playing: boolean,

@@ -53,10 +53,10 @@ export function CallVoiceWaves({ readLevels = quiet }: { readLevels?: () => Call
 
   return <svg data-call-voice-waves aria-hidden="true" className="pointer-events-none absolute inset-0 h-full w-full" viewBox="0 0 400 36" preserveAspectRatio="none">
     <defs>
-      <linearGradient id={id + "-local"} x1="0" y1="0" x2="0" y2="36" gradientUnits="userSpaceOnUse"><stop stopColor="#fb923c" stopOpacity="0.42" /><stop offset="1" stopColor="#f97316" stopOpacity="0.15" /></linearGradient>
+      <linearGradient id={id + "-local"} x1="0" y1="0" x2="0" y2="36" gradientUnits="userSpaceOnUse"><stop stopColor="#60a5fa" stopOpacity="0.48" /><stop offset="1" stopColor="#2563eb" stopOpacity="0.20" /></linearGradient>
       <linearGradient id={id + "-remote"} x1="0" y1="0" x2="0" y2="36" gradientUnits="userSpaceOnUse"><stop stopColor="#6ee7b7" stopOpacity="0.68" /><stop offset="1" stopColor="#10b981" stopOpacity="0.26" /></linearGradient>
     </defs>
-    <path ref={local} data-call-voice="local" d={sea(0, 0, true)} fill={"url(#" + id + "-local)"} stroke="#fdba74" strokeOpacity="0.20" strokeWidth="0.65" />
+    <path ref={local} data-call-voice="local" d={sea(0, 0, true)} fill={"url(#" + id + "-local)"} stroke="#93c5fd" strokeOpacity="0.28" strokeWidth="0.65" />
     <path ref={remote} data-call-voice="remote" d={sea(0, 0, false)} fill={"url(#" + id + "-remote)"} stroke="#6ee7b7" strokeOpacity="0.36" strokeWidth="0.65" />
   </svg>;
 }

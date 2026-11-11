@@ -8,6 +8,7 @@ import { PointerEvent as ReactPointerEvent } from "react";
 import { type RecordingCameraRequest } from "@/lib/client/recording-camera";
 import { apiRequest } from "@/lib/client/http";
 import { showAppToast } from "@/lib/client/app-toast";
+import { isCallPlaybackActive } from "@/lib/client/call-playback";
 import { cacheMediaBlobUrl } from "@/lib/client/media-cache";
 import { startMessageDissolve, cancelMessageDissolve, finishMessageDissolve } from "@/lib/client/message-dissolve";
 import { mapConcurrentSettled } from "@/lib/client/concurrent-requests";
@@ -245,6 +246,7 @@ export interface SendRecordedMediaActionContext {
 }
 
 export async function sendRecordedMediaAction({ activeChat, selfId, selectedLinkRef, currentUserIdRef, pushOptimisticMessage, t, setSendingMedia, setSendingRealtimeKind, pushSending, uploadChatMediaFile, sendPreparedMessage, removeOptimisticMessage }: SendRecordedMediaActionContext, blob: Blob, kind: "voice" | "video_note", durationMs: number, waveform?: number[]): Promise<void> {
+  if (isCallPlaybackActive()) return;
   const originLink = activeChat?.link;
   const originUserId = selfId;
   const content = (url: string) => kind === "voice"
@@ -256,6 +258,7 @@ export async function sendRecordedMediaAction({ activeChat, selfId, selectedLink
   let uploadedUrl: string | null = null;
   let running = false;
   const submit = async () => {
+    if (isCallPlaybackActive()) { removeOptimisticMessage(optimisticMessageId); return; }
     if (running) return;
     if (selectedLinkRef.current !== originLink || currentUserIdRef.current !== originUserId) {
       showAppToast({
@@ -270,6 +273,7 @@ export async function sendRecordedMediaAction({ activeChat, selfId, selectedLink
     void pushSending(kind, true);
     try {
       uploadedUrl ??= (await uploadChatMediaFile(blob, kind, durationMs)).url;
+      if (isCallPlaybackActive()) { removeOptimisticMessage(optimisticMessageId); return; }
       if (selectedLinkRef.current !== originLink || currentUserIdRef.current !== originUserId) throw new Error(t("Чат изменился. Вернитесь в него и повторите отправку."));
       cacheMediaBlobUrl(uploadedUrl, optimisticUrl);
       // Reuse the same id on retry: a lost response must not create a duplicate message.
@@ -390,7 +394,7 @@ export interface StartVoiceRecordingActionContext {
 }
 
 export async function startVoiceRecordingAction({ voiceRecording, voiceStartInProgressRef, syncing, activeChat, activeConversationRef, setErrorText, t, selectedLinkRef, voiceHoldActiveRef, recordingLocksRef, voiceStreamRef, setVoiceRecordingStream, voiceChunksRef, voiceWaveformSamplesRef, voiceRecordedMimeTypeRef, voiceRecorderRef, voiceRecordingStartedAtRef, setVoiceRecordingMs, setVoiceRecording, pushRecording, voiceTimerRef, stopVoiceStream }: StartVoiceRecordingActionContext): Promise<void> {
-  if (voiceRecording || voiceStartInProgressRef.current || syncing || !activeChat) return;
+  if (isCallPlaybackActive() || voiceRecording || voiceStartInProgressRef.current || syncing || !activeChat) return;
   if (activeConversationRef.current?.chatType === "eclipse") {
     setErrorText(t("Системный бот принимает команды текстом. Для аватара бота выберите изображение в меню создания бота."));
     return;
@@ -414,7 +418,7 @@ export async function startVoiceRecordingAction({ voiceRecording, voiceStartInPr
     } catch {
       stream = await navigator.mediaDevices.getUserMedia({ audio: true });
     }
-    if (selectedLinkRef.current !== recordingLink || (beganFromHold && !voiceHoldActiveRef.current && !recordingLocksRef.current.voice)) {
+    if (isCallPlaybackActive() || selectedLinkRef.current !== recordingLink || (beganFromHold && !voiceHoldActiveRef.current && !recordingLocksRef.current.voice)) {
       stream.getTracks().forEach(track => track.stop());
       return;
     }
@@ -482,6 +486,7 @@ export interface StartVideoRecordingForStreamActionContext {
 }
 
 export async function startVideoRecordingForStreamAction({ videoRecording, videoStartInProgressRef, selectedLinkRef, voiceHoldActiveRef, videoStreamRef, setVideoRecordingStream, videoChunksRef, videoRecordedMimeTypeRef, recordingLocksRef, setVideoRecorderOpen, videoCaptureRef, setErrorText, t, stopVideoStream, videoRecorderRef, videoRecordingStartedAtRef, setVideoRecordingMs, setVideoRecording, pushRecording, videoTimerRef }: StartVideoRecordingForStreamActionContext, stream: MediaStream): Promise<void> {
+  if (isCallPlaybackActive()) { stream.getTracks().forEach(track => track.stop()); return; }
   if (videoRecording || videoStartInProgressRef.current) return;
   videoStartInProgressRef.current = true;
   const recordingLink = selectedLinkRef.current;
@@ -494,7 +499,7 @@ export async function startVideoRecordingForStreamAction({ videoRecording, video
   let recorder: MediaRecorder;
   try {
     const capture = await createVideoNoteCapture(stream);
-    if (selectedLinkRef.current !== recordingLink || videoStreamRef.current !== stream || (beganFromHold && !voiceHoldActiveRef.current && !recordingLocksRef.current.video)) { capture.stop(); videoStartInProgressRef.current = false; setVideoRecorderOpen(false); return; }
+    if (isCallPlaybackActive() || selectedLinkRef.current !== recordingLink || videoStreamRef.current !== stream || (beganFromHold && !voiceHoldActiveRef.current && !recordingLocksRef.current.video)) { capture.stop(); if (isCallPlaybackActive()) stopVideoStream(); videoStartInProgressRef.current = false; setVideoRecorderOpen(false); return; }
     videoCaptureRef.current = capture;
     recorder = createVideoRecorder(capture.stream);
     if (recorder.mimeType) {
@@ -557,7 +562,7 @@ export interface OpenVideoRecorderActionContext {
 }
 
 export async function openVideoRecorderAction({ videoRecorderOpen, videoOpenInProgressRef, syncing, activeChat, activeConversationRef, setErrorText, t, selectedLinkRef, voiceHoldActiveRef, requestVideoRecorderStream, videoFacingMode, recordingLocksRef, videoStreamRef, setVideoRecordingMs, setVideoRecorderOpen, attachVideoPreviewStream, startVideoRecordingForStream, stopVideoStream }: OpenVideoRecorderActionContext, autoStart = false): Promise<void> {
-  if (videoRecorderOpen || videoOpenInProgressRef.current || syncing || !activeChat) return;
+  if (isCallPlaybackActive() || videoRecorderOpen || videoOpenInProgressRef.current || syncing || !activeChat) return;
   if (activeConversationRef.current?.chatType === "eclipse") {
     setErrorText(t("Системный бот принимает команды текстом. Для аватара бота выберите изображение в меню создания бота."));
     return;
@@ -567,7 +572,7 @@ export async function openVideoRecorderAction({ videoRecorderOpen, videoOpenInPr
   const beganFromHold = voiceHoldActiveRef.current;
   try {
     const stream = await requestVideoRecorderStream({ facingMode: videoFacingMode });
-    if (selectedLinkRef.current !== recordingLink || (beganFromHold && !voiceHoldActiveRef.current && !recordingLocksRef.current.video)) {
+    if (isCallPlaybackActive() || selectedLinkRef.current !== recordingLink || (beganFromHold && !voiceHoldActiveRef.current && !recordingLocksRef.current.video)) {
       stream.getTracks().forEach(track => track.stop());
       return;
     }
@@ -682,6 +687,7 @@ export interface HandleMicPointerDownActionContext {
 }
 
 export function handleMicPointerDownAction({ messageText, pendingMediaBatch, pendingImage, pendingVideo, pendingAudio, pendingFile, voicePointerIdRef, voicePointerStartRef, voiceHoldActiveRef, skipMicTapRef, clearVoiceHoldStartTimer, voiceHoldStartTimerRef, voiceRecording, videoRecording, setRecordModeHintUntil, composerRecordMode, setVoiceRecordingLocked, startVoiceRecording, setVideoRecordingLocked, openVideoRecorder }: HandleMicPointerDownActionContext, event: ReactPointerEvent<HTMLButtonElement>): void {
+  if (isCallPlaybackActive()) return;
   if (messageText.trim() || pendingMediaBatch?.length || pendingImage || pendingVideo || pendingAudio || pendingFile) return;
   event.preventDefault();
   event.stopPropagation();

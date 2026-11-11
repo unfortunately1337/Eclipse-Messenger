@@ -5,6 +5,8 @@ import { type TranslationValues, translate as t } from "@/lib/i18n/translate";
 import { type BotManagementState, type BotManagementAction } from "@/lib/bot-management";
 import { bindSecretDeviceKey, loadSecretDeviceIdentity, secretEncryptionContext } from "@/lib/client/secret-device-keys";
 import { apiRequest } from "@/lib/client/http";
+import { isCallPlaybackActive } from "@/lib/client/call-playback";
+import { parseMessageContent } from "./message-content";
 import { appToast as toast } from "@/lib/client/app-toast";
 import { serializeForwardedContent, copyForwardMedia, type ForwardedContent } from "@/lib/client/message-forwarding";
 import { type EmojiComposerHandle } from "@/components/EmojiComposer";
@@ -64,6 +66,17 @@ export async function sendPreparedMessageAction({ activeChat, activeConversation
     return;
   }
   const stillCurrentDialog = () => selectedLinkRef.current === activeChat.link && currentUserIdRef.current === selfId;
+  const recordingBlocked = () => {
+    if (!isCallPlaybackActive()) return false;
+    const content = parseMessageContent(payloadText);
+    return content.kind === "voice" || (content.kind === "video" && content.mode === "note");
+  };
+  const recordingBlockedText = () => t("Запись голосовых и видеокружков недоступна во время звонка");
+  if (recordingBlocked()) {
+    if (options?.throwOnError) throw new Error(recordingBlockedText());
+    setErrorText(recordingBlockedText());
+    return;
+  }
 
   const targetReplyId = options && "replyToMessageId" in options ? options.replyToMessageId ?? null : replyToMessageId ?? null;
   const replyPayload = targetReplyId ? { replyToMessageId: targetReplyId } : {};
@@ -81,6 +94,7 @@ export async function sendPreparedMessageAction({ activeChat, activeConversation
   rememberOutgoingMessage({ ...snapshot, text: payloadText, pending: true, sendFailure: undefined });
   if (stillCurrentDialog()) setMessages(previous => previous.map(message => message.id === clientMessageId ? { ...message, pending: true, sendFailure: undefined } : message));
   const sendRequest = async <T,>(url: string, init: RequestInit): Promise<T> => {
+    if (recordingBlocked()) throw new Error(recordingBlockedText());
     const result = await apiRequest<T>(url, init);
     void removeFailedMessage(clientMessageId);
     forgetOutgoingMessage(clientMessageId);

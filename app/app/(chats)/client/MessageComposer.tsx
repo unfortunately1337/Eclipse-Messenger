@@ -8,7 +8,8 @@ import { type BotChatSettings } from "@/lib/bot-chat-settings";
 import AccountPackPicker from "@/components/AccountPackPicker";
 import { PANEL_TRANSITION } from "@/lib/client/panel-motion";
 import { BotMenuToggle, BotReplyMenu } from "../components/common/BotChatControls";
-import { CSSProperties, ChangeEvent, memo } from "react";
+import { CSSProperties, ChangeEvent, memo, useSyncExternalStore } from "react";
+import { inactiveCallPlaybackSnapshot, isCallPlaybackActive, subscribeCallPlayback } from "@/lib/client/call-playback";
 import { Check, CircleAlert, Copy, Image as ImageIcon, KeySquare, BarChart3, Music, Paperclip, Smile, SquarePlay, X } from "lucide-react";
 import { useMessageSearch } from "../hooks/useMessageSearch";
 import { RiMicFill, RiReplyFill } from "react-icons/ri";
@@ -153,6 +154,7 @@ export interface MessageComposerProps {
 }
 
 export const MessageComposer = memo(function MessageComposer({ footerRef, messageSearch, videoRecording, videoRecorderOpen, stickerPickerOpen, isEclipseConversation, isManagedBotConversation, messages, startActiveBot, startingBot, loadingConversation, t, activeConversation, canPostToChannel, canSubscribeToChannel, subscribeToActiveChannel, activeChat, toggleChatMutedState, composerInputThemeStyle, mutedChatLinkSet, canJoinGroup, joinActiveGroup, joiningGroup, chatActionPanel, chatActionPanelThemeStyle, hasRenderedPicker, isDesktop, mobileEmojiPickerHeight, composerPickerTab, preventPickerCloseOnFocusRef, messageInputRef, sendStickerFromPicker, setComposerPickerTab, attachmentMenuOpen, setAttachmentMenuOpen, imageInputRef, setPollQuestion, setPollOptions, setPollQuizMode, setPollCorrectOptionIndex, setPollExpiresInHours, setPollDialogOpen, syncing, editTarget, onPickMedia, voiceRecording, cancelVoiceRecording, cancelVideoRecording, isSecretChatComposerBlocked, activeTitle, isSecretChatAcceptRequired, acceptSecretChat, acceptingSecretChat, declineSecretChat, setStickerPickerOpen, forwardDraft, replyTargetMessage, storyReplyTarget, pendingMediaBatch, pendingImage, pendingVideo, pendingAudio, pendingFile, selfId, forwardSending, setForwardDraft, activeCustomTheme, replyComposerAuthor, cancelEditMode, setReplyToMessageId, setStoryReplyTarget, setPendingMediaBatch, sendingMedia, setPendingImage, setPendingVideo, setPendingAudio, setPendingFile, voiceRecordingStream, videoRecordingStream, voiceRecordingMs, videoRecordingMs, voiceWaveformSamplesRef, eclipseBots, messageText, setMessageText, messagesAtBottomRef, scrollMessagesToBottom, chatUiSettings, sending, sendingMessageInFlightRef, sendMessage, botChatUi, isSecretChat, sendPreparedMessage, editSaving, flipVideoCamera, videoCameraSwitching, finishVoiceRecording, finishVideoRecording, composerSendButtonToneClassName, composerSendButtonStyle, canSubmitMessage, privateKey, selfPublicKey, composerRecordMode, recordModeHintUntil, transparentVisual, micRecordButtonRef, handleMicPointerDown, handleMicPointerMove, handleMicPointerUp, handleMicPointerCancel, handleMicClick, reducedPanelMotion, openExternalLinkPrompt }: MessageComposerProps) {
+  const recordingBlocked = useSyncExternalStore(subscribeCallPlayback, isCallPlaybackActive, inactiveCallPlaybackSnapshot);
   return (
     <footer
       ref={footerRef}
@@ -733,7 +735,7 @@ export const MessageComposer = memo(function MessageComposer({ footerRef, messag
                       </AnimatePresence>
 
                       {voiceRecording || videoRecording ? (
-                        <div className="flex h-9 w-full items-center gap-2.5 px-3 md:h-10 md:px-3.5">
+                        <div className="flex h-9 w-full items-center md:h-10">
                           <MediaRecordingBar
                             stream={voiceRecording ? voiceRecordingStream : videoRecordingStream}
                             active={voiceRecording || videoRecording}
@@ -903,6 +905,7 @@ export const MessageComposer = memo(function MessageComposer({ footerRef, messag
                               )}
                               style={composerSendButtonStyle}
                               aria-label={t("Отправить запись")}
+                              disabled={recordingBlocked}
                             >
                               <IoSend size={16} />
                             </motion.button>
@@ -944,7 +947,8 @@ export const MessageComposer = memo(function MessageComposer({ footerRef, messag
                               onPointerCancel={handleMicPointerCancel}
                               onClick={handleMicClick}
                               onContextMenu={(event) => event.preventDefault()}
-                              disabled={syncing}
+                              disabled={syncing || recordingBlocked}
+                              title={recordingBlocked ? t("Запись голосовых и видеокружков недоступна во время звонка") : undefined}
                               className={cn(
                                 "relative composer-round-action h-[38px] w-[38px] shrink-0 touch-none select-none overflow-hidden rounded-full border-0 p-0 md:h-[42px] md:w-[42px] flex items-center justify-center active:scale-95 disabled:opacity-55 cursor-pointer",
                                 composerSendButtonToneClassName,

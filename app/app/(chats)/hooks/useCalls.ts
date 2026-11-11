@@ -60,7 +60,7 @@ export function useCalls(userId: string | null, target: Target) {
   const callIdRef = useRef<string | null>(null);
   useEffect(() => { callIdRef.current = call?.id ?? null; }, [call?.id, userId]);
   const onThisSession = Boolean(call?.onThisSession);
-  const blocksPlayback = Boolean(call && (call.onThisSession || call.incoming));
+  const blocksPlayback = Boolean((call && (call.onThisSession || call.incoming)) || (busy && launch?.callerId === userId));
   useEffect(() => {
     setCallPlaybackActive(blocksPlayback);
     return () => setCallPlaybackActive(false);

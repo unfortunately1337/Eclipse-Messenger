@@ -3,6 +3,8 @@ import type { DecryptedMessage } from "../types";
 import type { SendPreparedMessageActionContext } from "./send-message";
 import { ApiRequestError } from "@/lib/client/api-error";
 import { clearMessageCooldowns } from "@/lib/client/message-send-limit";
+import * as callPlayback from "@/lib/client/call-playback";
+import { serializeVideoContent, serializeVoiceContent } from "../chat-message-transport";
 const fake = vi.hoisted(() => ({ api: vi.fn(), save: vi.fn(), remove: vi.fn(), outgoing: new Map<string, DecryptedMessage>() }));
 vi.mock("@/lib/client/http", () => ({ apiRequest: fake.api }));
 vi.mock("@/lib/client/failed-message-store", () => ({
@@ -33,6 +35,25 @@ function setup() {
 }
 beforeEach(() => { vi.restoreAllMocks(); vi.resetAllMocks(); fake.outgoing.clear(); clearMessageCooldowns(); fake.save.mockResolvedValue(undefined); fake.remove.mockResolvedValue(undefined); vi.spyOn(Date, "now").mockReturnValue(60_000); });
 const limited = () => new ApiRequestError("wait", 429, { code: "MESSAGE_RATE_LIMIT", retryAfterSeconds: 5, scope: "chat" });
+it.each([
+  serializeVoiceContent("https://example.com/voice.webm", 1000),
+  serializeVideoContent("https://example.com/video.mp4", 1000, "", "note"),
+])("blocks prepared recordings and manual retries during a call: %s", async content => {
+  vi.spyOn(callPlayback, "isCallPlaybackActive").mockReturnValue(true);
+  const state = setup();
+  await sendPreparedMessageAction(state.context, content, { optimisticMessageId: draft.id });
+  expect(fake.api).not.toHaveBeenCalled();
+  expect(state.context.beginMessageSend).not.toHaveBeenCalled();
+  expect(state.messages()).toHaveLength(1);
+  expect(state.errors).toHaveBeenCalledWith("Запись голосовых и видеокружков недоступна во время звонка");
+});
+it.each(["Hello", payload, serializeVideoContent("https://example.com/video.mp4", 1000, "", "file")])("keeps other message types available during calls: %s", async content => {
+  vi.spyOn(callPlayback, "isCallPlaybackActive").mockReturnValue(true);
+  const state = setup();
+  fake.api.mockResolvedValueOnce({ message: { id: "server-one", senderId: "alice", createdAt: "2026-11-11T09:41:00Z" } });
+  await sendPreparedMessageAction(state.context, content, { optimisticMessageId: draft.id });
+  expect(fake.api).toHaveBeenCalledOnce();
+});
 it("keeps the original bubble and shows a rate failure immediately even when persistence is stalled", async () => {
   const state = setup(); fake.api.mockRejectedValue(limited()); fake.save.mockReturnValue(new Promise(() => {}));
   await expect(sendPreparedMessageAction(state.context, payload, { optimisticMessageId: draft.id, throwOnError: true })).resolves.toBeUndefined();
