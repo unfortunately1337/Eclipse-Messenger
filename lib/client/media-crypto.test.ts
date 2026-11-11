@@ -1,5 +1,4 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { setImmediate as yieldImmediate } from "node:timers/promises";
 import { clearEncryptedMedia, collectLegacyMediaUrls, encryptMediaBlob, getEncryptedMediaPreview, resolveEncryptedMediaUrl, resolveMessageMedia } from "./media-crypto";
 import { clearMediaBlobCache, hasCachedMediaUrl } from "./media-cache";
 const nativeFetch = globalThis.fetch;
@@ -56,9 +55,13 @@ describe("client attachment encryption", () => {
       const src = encrypted.protectUrl("/media/slow-video.bin", "direct:test");
       resolveEncryptedMediaUrl(src);
       await vi.advanceTimersByTimeAsync(30_000);
-      await vi.advanceTimersByTimeAsync(30_000);
-      for (let turn = 0; turn < 10 && !hasCachedMediaUrl(src); turn++) await yieldImmediate();
-      expect(hasCachedMediaUrl(src)).toBe(true); expect(fetcher).toHaveBeenCalledTimes(1);
+      await vi.advanceTimersByTimeAsync(20_000);
+      expect((fetcher.mock.calls[0][1] as RequestInit).signal?.aborted).toBe(false);
+      await vi.advanceTimersByTimeAsync(10_000);
+      // WebCrypto runs on native workers, outside the simulated download clock.
+      vi.useRealTimers();
+      await vi.waitFor(() => expect(hasCachedMediaUrl(src)).toBe(true));
+      expect(fetcher).toHaveBeenCalledTimes(1);
     } finally { vi.useRealTimers(); }
   });
   it("retries a failed attachment without requiring another render", async () => {
