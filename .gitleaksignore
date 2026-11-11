@@ -1,0 +1,7 @@
+# Reviewed false positives in the source-sync commit.
+# Two fixed QR-token UUIDs are unit-test fixtures, never live login tokens.
+# LEGACY_PRIVATE_KEY_STORAGE is a historic localStorage property name, not a credential.
+# Exact commit/file/rule/line fingerprints keep all other findings enabled.
+515ab6e790fb7970557b687d5693bba862274215:lib/client/login-qr-token.test.ts:generic-api-key:3
+515ab6e790fb7970557b687d5693bba862274215:lib/client/e2e-recovery.test.ts:generic-api-key:118
+515ab6e790fb7970557b687d5693bba862274215:lib/client/e2e.ts:generic-api-key:19
