@@ -1,0 +1,21 @@
+services:
+  sfu:
+    image: livekit/livekit-server:v1.13.11@sha256:25cd902de7cacbd5f1f779f6a6ac1eae20ba8f56b0935934ce6b0ab80d1e3d20
+    container_name: eclipse-sfu-dev
+    command: ["--config", "/etc/livekit.yaml"]
+    ports:
+      - "127.0.0.1:7880:7880"
+      - "${ECLIPSE_SFU_DEV_MEDIA_IP:-127.0.0.1}:7881:7881"
+      - "${ECLIPSE_SFU_DEV_MEDIA_IP:-127.0.0.1}:7882:7882/udp"
+    volumes:
+      - ../../.data/livekit-dev/livekit.yaml:/etc/livekit.yaml:ro
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    mem_limit: 512m
+    cpus: 1
+    logging:
+      driver: json-file
+      options:
+        max-size: "5m"
+        max-file: "2"

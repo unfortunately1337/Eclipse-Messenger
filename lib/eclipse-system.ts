@@ -50,6 +50,7 @@ export type EclipseSystemPayload = {
     telegramImportConnect?: boolean;
     importerNotice?: boolean;
     call?: import("./call-history").CallMessageData;
+    groupCallEnded?: { id: string; durationSeconds: number };
     sessionId?: string;
     ip?: string | null;
     userAgent?: string | null;

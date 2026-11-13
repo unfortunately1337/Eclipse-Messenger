@@ -56,9 +56,9 @@ beforeEach(() => {
   mock.conversation.findFirst.mockResolvedValue({ id: "direct-chat" });
   mock.allowed.mockReturnValue(true); mock.privacy.mockResolvedValue({});
   mock.groupMember.findFirst.mockResolvedValue({ groupId: "group-chat", canPostMessages: true, role: "owner", group: { ownerId: "alice", name: "Test group", link: "testgroup" } });
-  mock.groupMember.findUnique.mockResolvedValue({ canPostMessages: true, role: "member" });
+  mock.groupMember.findUnique.mockResolvedValue({ canPostMessages: true, role: "member", group: { ownerId: "alice" } });
   mock.groupMember.findMany.mockResolvedValue([]);
-  mock.group.findUnique.mockResolvedValue({ name: "Test group", link: "testgroup" });
+  mock.group.findUnique.mockResolvedValue({ name: "Test group", link: "testgroup", ownerId: "alice" });
   mock.issue.mockResolvedValue({ token: "synthetic-token", url: "wss://example.invalid", identity: "opaque" });
   mock.contact.findUnique.mockResolvedValue(null);
   mock.notify.mockResolvedValue(undefined);
@@ -66,6 +66,52 @@ beforeEach(() => {
 });
 
 describe("call authorization and lifecycle", () => {
+  it("shows ending controls only to the starter and group owner and enforces it on the server", async () => {
+    mock.groupMember.findFirst.mockResolvedValue({ groupId: "group-chat", role: "admin", canStartVideoChat: true, group: { ownerId: "bob", name: "Group", link: "testgroup" } });
+    mock.group.findUnique.mockResolvedValue({ ownerId: "bob", name: "Group", link: "testgroup" });
+    mock.groupMember.findUnique.mockResolvedValue({ role: "admin", group: { ownerId: "bob" } });
+    const call = await startCall(alice, "group", "video", "testgroup");
+    await joinCall(bob, call.id);
+    const admin = { userId: "admin", sessionId: "admin-session" };
+    await joinCall(admin, call.id);
+    expect((await callView(await ownCall("alice") as typeof call, alice)).canEnd).toBe(true);
+    expect((await callView(await ownCall("bob") as typeof call, bob)).canEnd).toBe(true);
+    expect((await callView(await ownCall("admin") as typeof call, admin)).canEnd).toBe(false);
+    await expect(leaveCall(admin, call.id, true)).rejects.toMatchObject({ status: 403 });
+    await expect(leaveCall(bob, call.id, true)).resolves.toMatchObject({ status: "ended" });
+  });
+
+  it("retries group end history instead of marking a failed terminal write as cleaned up", async () => {
+    const call = await startCall(alice, "group", "video", "testgroup");
+    mock.historyUpdate.mockRejectedValueOnce(new Error("temporary history failure"));
+    await expect(leaveCall(alice, call.id, true)).rejects.toThrow("temporary history failure");
+    expect(mock.store.has(`calls:cleanup:v1:${call.id}`)).toBe(false);
+    await reconcileCall(call.id);
+    expect(mock.store.get(`calls:cleanup:v1:${call.id}`)).toBe("1");
+  });
+
+  it("coalesces concurrent group hangup and polling cleanup while history is being delivered", async () => {
+    const call = await startCall(alice, "group", "video", "testgroup");
+    let finish!: () => void;
+    mock.historyUpdate.mockImplementationOnce(() => new Promise<void>(resolve => { finish = resolve; }));
+    const ending = leaveCall(alice, call.id, true);
+    await vi.waitFor(() => expect(finish).toBeTypeOf("function"));
+    await expect(reconcileCall(call.id)).resolves.toMatchObject({ status: "ended" });
+    expect(mock.historyUpdate).toHaveBeenCalledTimes(1);
+    finish();
+    await expect(ending).resolves.toMatchObject({ status: "ended" });
+    expect(mock.close).toHaveBeenCalledTimes(1);
+  });
+
+  it("records completion when the final participant leaves without choosing end for everyone", async () => {
+    const call = await startCall(alice, "group", "video", "testgroup");
+    await joinCall(bob, call.id);
+    expect((await leaveCall(alice, call.id, false))?.status).toBe("active");
+    mock.historyUpdate.mockClear();
+    const ended = await leaveCall(bob, call.id, false);
+    expect(ended).toMatchObject({ id: call.id, status: "ended", endReason: "completed" });
+    expect(mock.historyUpdate).toHaveBeenCalledWith(expect.objectContaining({ id: call.id, status: "ended", endedAt: expect.any(Number) }));
+  });
   it("rejects SFU reconnection after leaving, losing membership or revoking the app session", async () => {
     const call = await startCall(alice, "group", "video", "testgroup");
     await joinCall(bob, call.id);

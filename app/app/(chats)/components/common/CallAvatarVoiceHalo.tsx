@@ -16,12 +16,13 @@ function halo(level: number, phase: number, layer: number) {
   }
   return path + " Z";
 }
-export function CallAvatarVoiceHalo({ readLevels = quiet }: { readLevels?: () => CallVoiceLevels }) {
+export function CallAvatarVoiceHalo({ readLevels = quiet, color, maxFps = 60 }: { readLevels?: () => CallVoiceLevels; color?: string; maxFps?: number }) {
   const svg = useRef<SVGSVGElement>(null), paths = useRef<(SVGPathElement | null)[]>([]), reader = useRef(readLevels);
   useLayoutEffect(() => { reader.current = readLevels; }, [readLevels]);
   useEffect(() => {
     let frame = 0, previous = performance.now(), level = 0, lastOpacity = 0, phase = Math.random() * Math.PI * 2;
     const tick = (now: number) => {
+      if (now - previous < 1000 / maxFps) { frame = requestAnimationFrame(tick); return; }
       const dt = Math.min(0.1, (now - previous) / 1000); previous = now;
       if (!document.hidden) {
         const sample = reader.current().remote;
@@ -41,10 +42,10 @@ export function CallAvatarVoiceHalo({ readLevels = quiet }: { readLevels?: () =>
     };
     frame = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(frame);
-  }, []);
+  }, [maxFps]);
   return <svg ref={svg} data-call-avatar-voice aria-hidden="true" viewBox="0 0 240 240" className="pointer-events-none absolute -inset-7 h-[calc(100%+56px)] w-[calc(100%+56px)]" style={{ opacity: 0 }}>
-    <path ref={node => { paths.current[2] = node; }} d={halo(0, 0, 2)} fill="#6ee7b7" fillOpacity="0.11" />
-    <path ref={node => { paths.current[1] = node; }} d={halo(0, 0, 1)} fill="#34d399" fillOpacity="0.17" />
-    <path ref={node => { paths.current[0] = node; }} d={halo(0, 0, 0)} fill="#a7f3d0" fillOpacity="0.14" stroke="#a7f3d0" strokeOpacity="0.18" strokeWidth="0.7" />
+    <path ref={node => { paths.current[2] = node; }} d={halo(0, 0, 2)} fill={color ?? "#6ee7b7"} fillOpacity="0.11" />
+    <path ref={node => { paths.current[1] = node; }} d={halo(0, 0, 1)} fill={color ?? "#34d399"} fillOpacity="0.17" />
+    <path ref={node => { paths.current[0] = node; }} d={halo(0, 0, 0)} fill={color ?? "#a7f3d0"} fillOpacity="0.14" stroke={color ?? "#a7f3d0"} strokeOpacity="0.18" strokeWidth="0.7" />
   </svg>;
 }

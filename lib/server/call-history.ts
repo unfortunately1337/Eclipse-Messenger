@@ -3,6 +3,8 @@ import type { CallMessageData } from "@/lib/call-history";
 import { prisma } from "./prisma";
 import { invalidateChatListPayloadCache } from "./chat-list";
 import { triggerRealtimeEvent, userPrivateChannel } from "./realtime";
+import type { EclipseSystemPayload } from "@/lib/eclipse-system";
+import { deliverCallOnce } from "./call-delivery";
 
 const messageId = (id: string) => `call:${id}`;
 
@@ -42,7 +44,28 @@ export async function createCallHistory(call: CallRecord) {
 }
 
 export async function updateCallHistory(call: CallRecord) {
-  if (call.kind !== "direct" || call.status === "ringing") return;
+  if (call.kind === "group") {
+    if (call.status !== "ended") return;
+    const group = await prisma.group.findUnique({ where: { id: call.chatId }, select: { ownerId: true } });
+    if (!group) return;
+    const endedAt = call.endedAt ?? Date.now();
+    const systemPayload: EclipseSystemPayload = { eventType: "service", title: "Видеозвонок завершён", body: "",
+      metadata: { groupCallEnded: { id: call.id, durationSeconds: call.startedAt === null ? 0 : Math.max(0, Math.floor((endedAt - call.startedAt) / 1000)) } } };
+    const id = `group-call:${call.id}`, createdAt = new Date(endedAt);
+    // One persisted service message even when concurrent hangups or cleanup retries race.
+    await prisma.$executeRaw`INSERT INTO "GroupMessage" ("id", "groupId", "senderId", "text", "systemPayload", "createdAt")
+      VALUES (${id}, ${call.chatId}, ${group.ownerId}, ${systemPayload.title}, ${JSON.stringify(systemPayload)}::jsonb, ${createdAt}) ON CONFLICT ("id") DO NOTHING`;
+    const members = await prisma.groupMember.findMany({ where: { groupId: call.chatId }, select: { userId: true } });
+    await invalidateChatListPayloadCache(members.map(member => member.userId));
+    // Re-emitting the same ID is safe and recovers a failed realtime publication.
+    const delivered = await Promise.all(members.map(member => deliverCallOnce(`calls:history:group:${call.id}:${member.userId}`, () => triggerRealtimeEvent({ channel: userPrivateChannel(member.userId), name: "message:new", data: {
+      chatType: "group", groupLink: call.link, id, senderId: group.ownerId, text: systemPayload.title,
+      systemPayload, createdAt: createdAt.toISOString(),
+    } }))));
+    if (delivered.some(result => !result)) throw new Error("Group call history delivery pending");
+    return;
+  }
+  if (call.status === "ringing") return;
   // Update only: an ended call must never resurrect a deleted history message.
   // The state predicate also prevents a delayed acceptance from undoing hangup.
   const result = await prisma.message.updateMany({ where: {

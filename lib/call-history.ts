@@ -1,4 +1,6 @@
 import type { CallMode } from "./calls";
+import type { Locale } from "./i18n/locale";
+import { plural } from "./i18n/translate";
 
 export type CallOutcome = "completed" | "cancelled" | "declined" | "missed";
 export type CallMessageData = {
@@ -36,4 +38,13 @@ export function formatCallDuration(seconds: number) {
   const hours = Math.floor(value / 3600);
   return hours ? `${hours}:${String(Math.floor(value / 60) % 60).padStart(2, "0")}:${String(value % 60).padStart(2, "0")}`
     : `${Math.floor(value / 60)}:${String(value % 60).padStart(2, "0")}`;
+}
+
+export function formatGroupCallDuration(seconds: number, locale: Locale) {
+  const value = Number.isFinite(seconds) ? Math.max(0, Math.floor(seconds)) : 0;
+  const hours = Math.floor(value / 3600), minutes = Math.floor(value / 60) % 60;
+  const parts: string[] = [];
+  if (hours) parts.push(plural(hours, ["час", "часа", "часов"], "hour", locale));
+  if (minutes) parts.push(plural(minutes, ["минута", "минуты", "минут"], "minute", locale));
+  return parts.length ? parts.join(" ") : plural(value, ["секунда", "секунды", "секунд"], "second", locale);
 }

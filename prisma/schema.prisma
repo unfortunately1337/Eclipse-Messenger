@@ -443,6 +443,7 @@ model GroupMessage {
   groupId   String
   senderId  String
   text      String?
+  systemPayload Json?
   pinnedAt DateTime?
   cipherText String?
   iv        String?

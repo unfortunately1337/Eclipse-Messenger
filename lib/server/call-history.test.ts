@@ -1,8 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { CallRecord } from "./calls";
 
-const mock = vi.hoisted(() => ({ create: vi.fn(), update: vi.fn(), users: vi.fn(), invalidate: vi.fn(), notify: vi.fn() }));
-vi.mock("./prisma", () => ({ prisma: { message: { create: mock.create, updateMany: mock.update }, user: { findMany: mock.users } } }));
+const mock = vi.hoisted(() => ({ create: vi.fn(), update: vi.fn(), users: vi.fn(), invalidate: vi.fn(), notify: vi.fn(), group: vi.fn(), members: vi.fn(), insert: vi.fn() }));
+vi.mock("./prisma", () => ({ prisma: { message: { create: mock.create, updateMany: mock.update }, user: { findMany: mock.users }, group: { findUnique: mock.group }, groupMember: { findMany: mock.members }, $executeRaw: mock.insert } }));
+vi.mock("./call-delivery", () => ({ deliverCallOnce: async (_key: string, publish: () => Promise<void>) => { await publish(); return true; } }));
 vi.mock("./chat-list", () => ({ invalidateChatListPayloadCache: mock.invalidate }));
 vi.mock("./realtime", () => ({ triggerRealtimeEvent: mock.notify, userPrivateChannel: (id: string) => `private-${id}` }));
 import { createCallHistory, updateCallHistory } from "./call-history";
@@ -14,6 +15,9 @@ beforeEach(() => {
   mock.update.mockResolvedValue({ count: 1 });
   mock.users.mockResolvedValue([{ id: "alice", link: "alice-link", displayName: "Alice" }, { id: "bob", link: "bob-link", displayName: "Bob" }]);
   mock.notify.mockResolvedValue(undefined); mock.invalidate.mockResolvedValue(undefined);
+  mock.group.mockResolvedValue({ ownerId: "owner" });
+  mock.members.mockResolvedValue([{ userId: "alice" }, { userId: "bob" }]);
+  mock.insert.mockResolvedValue(1);
 });
 
 describe("persistent personal call history", () => {
@@ -36,9 +40,22 @@ describe("persistent personal call history", () => {
     await updateCallHistory({ ...base, status: "ended", endedAt: 20_000, endReason: "declined" });
     expect(mock.create).not.toHaveBeenCalled(); expect(mock.notify).not.toHaveBeenCalled();
   });
-  it("never writes group-call history", async () => {
+  it("writes a persistent group service message only when the call ends", async () => {
     await createCallHistory({ ...base, kind: "group" });
+    await updateCallHistory({ ...base, kind: "group", status: "active" });
+    expect(mock.insert).not.toHaveBeenCalled();
+    await updateCallHistory({ ...base, kind: "group", status: "ended", startedAt: 1000, endedAt: 4_321_000 });
+    const [sql, id, groupId, senderId, title, json, createdAt] = mock.insert.mock.calls[0];
+    expect(sql.join("?")).toContain('ON CONFLICT ("id") DO NOTHING');
+    expect({ id, groupId, senderId, title, createdAt }).toEqual({ id: "group-call:call-id", groupId: "chat", senderId: "owner", title: "Видеозвонок завершён", createdAt: new Date(4_321_000) });
+    expect(JSON.parse(json)).toMatchObject({ eventType: "service", metadata: { groupCallEnded: { durationSeconds: 4320 } } });
+    expect(mock.notify).toHaveBeenCalledTimes(2);
+    expect(mock.create).not.toHaveBeenCalled(); expect(mock.update).not.toHaveBeenCalled();
+    expect(JSON.stringify(mock.notify.mock.calls)).not.toMatch(/sessionId|token|parties/);
+  });
+  it("does not recreate history in a deleted group", async () => {
+    mock.group.mockResolvedValue(null);
     await updateCallHistory({ ...base, kind: "group", status: "ended" });
-    expect(mock.create).not.toHaveBeenCalled(); expect(mock.update).not.toHaveBeenCalled(); expect(mock.notify).not.toHaveBeenCalled();
+    expect(mock.insert).not.toHaveBeenCalled();
   });
 });

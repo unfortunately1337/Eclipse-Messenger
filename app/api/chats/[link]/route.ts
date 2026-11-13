@@ -1152,6 +1152,7 @@ export async function GET(req: NextRequest, { params }: Params) {
                 id: string;
                 senderId: string;
                 text: string | null;
+                systemPayload: Prisma.JsonValue | null;
                 cipherText: string | null;
                 iv: string | null;
                 keyVersion: number | null;
@@ -1163,6 +1164,7 @@ export async function GET(req: NextRequest, { params }: Params) {
                 "id",
                 "senderId",
                 "text",
+                "systemPayload",
                 "cipherText",
                 "iv",
                 "keyVersion",
@@ -1178,6 +1180,7 @@ export async function GET(req: NextRequest, { params }: Params) {
             id: string;
             senderId: string;
             text: string | null;
+            systemPayload: Prisma.JsonValue | null;
             cipherText: string | null;
             iv: string | null;
             keyVersion: number | null;
@@ -1189,6 +1192,7 @@ export async function GET(req: NextRequest, { params }: Params) {
             "id",
             "senderId",
             "text",
+            "systemPayload",
             "cipherText",
             "iv",
             "keyVersion",
@@ -1317,6 +1321,7 @@ export async function GET(req: NextRequest, { params }: Params) {
             id: message.id,
             senderId: message.senderId,
             text: publicEncryptedMessageText(message.text, message.cipherText),
+            systemPayload: message.systemPayload,
             cipherText: message.cipherText,
             iv: message.iv,
             keyVersion: message.keyVersion,

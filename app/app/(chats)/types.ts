@@ -146,6 +146,7 @@ export type GroupMessagePayload = {
   id: string;
   senderId: string;
   text?: string | null;
+  systemPayload?: EclipseSystemPayload | null;
   cipherText?: string | null;
   iv?: string | null;
   keyVersion?: number | null;

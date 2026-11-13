@@ -2200,5 +2200,10 @@
   "Участники видеочата": "Video chat participants",
   "Закрыть список участников": "Close participant list",
   "Завершить видеочат?": "End video chat?",
-  "Разговор завершится для всех участников группы.": "The conversation will end for everyone in the group."
+  "Разговор завершится для всех участников группы.": "The conversation will end for everyone in the group.",
+  "Покинуть звонок?": "Leave the call?",
+  "Покинуть звонок": "Leave call",
+  "Видеозвонок завершён": "Video call ended",
+  "В видеочате:": "In the video chat:",
+  "И ещё {0}…": "And {0} more…"
 }

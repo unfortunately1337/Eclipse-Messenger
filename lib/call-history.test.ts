@@ -1,9 +1,17 @@
 import { describe, expect, it } from "vitest";
-import { callMessageTitle, formatCallDuration, readCallMessage, type CallMessageData } from "./call-history";
+import { callMessageTitle, formatCallDuration, formatGroupCallDuration, readCallMessage, type CallMessageData } from "./call-history";
 
 const call: CallMessageData = { id: "test", callerId: "alice", calleeId: "bob", mode: "audio", status: "ended", outcome: "completed", startedAt: 1000, endedAt: 66_000, durationSeconds: 65 };
 
 describe("call history presentation", () => {
+  it("formats group service durations in the viewer's language", () => {
+    expect(formatGroupCallDuration(4320, "ru")).toBe("1 час 12 минут");
+    expect(formatGroupCallDuration(3600, "ru")).toBe("1 час");
+    expect(formatGroupCallDuration(120, "ru")).toBe("2 минуты");
+    expect(formatGroupCallDuration(8, "ru")).toBe("8 секунд");
+    expect(formatGroupCallDuration(4320, "en")).toBe("1 hour 12 minutes");
+    expect(formatGroupCallDuration(NaN, "ru")).toBe("0 секунд");
+  });
   it("resolves the same persisted call relative to each participant", () => {
     expect(callMessageTitle(call, "alice")).toBe("Исходящий звонок");
     expect(callMessageTitle(call, "bob")).toBe("Входящий вызов");

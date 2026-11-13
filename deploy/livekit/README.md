@@ -4,6 +4,21 @@ Single-node LiveKit for group calls. Personal calls keep `CALLS_DIRECT_TRANSPORT
 The installer reuses Eclipse's Caddy certificate and coturn authentication; it does
 not need another domain, database or Redis instance. Room state is ephemeral.
 
+For `localhost:3000`, with Docker Desktop running:
+
+```sh
+npm run calls:sfu:dev
+```
+
+This starts a separate `eclipse-sfu-dev` container with API port 7880 on loopback
+and media ports 7881–7882 bound to the computer's LAN adapter for Docker Desktop,
+generates local credentials under ignored `.data/livekit-dev/`, and writes only
+the three `LIVEKIT_*` settings in `.env.local`. Reload the messenger tab after
+Next dev reloads the environment. Camera starts disabled. This setup is for
+the local browser; production continues to require WSS and its authorization proxy.
+Stop it with `npm run calls:sfu:dev -- --stop`. If adapter detection needs an
+override, set `ECLIPSE_SFU_DEV_MEDIA_IP` to this computer's private IPv4 address.
+
 On the existing Ubuntu deployment, with Docker Compose, UFW and coturn configured:
 
 ```sh

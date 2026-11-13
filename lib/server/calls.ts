@@ -50,19 +50,28 @@ export async function notifyCall(call: CallRecord) {
 }
 
 async function release(call: CallRecord, extraIds: string[] = []) {
-  await recordCallOutcome(call);
-  await updateCallHistory(call).catch(() => { console.warn("Call history update failed"); });
-  const ids = [...new Set([...call.invitedIds, ...Object.keys(call.parties), ...extraIds])];
-  await Promise.all([
-    redis.compareAndDelete(threadKey(call.kind, call.chatId), call.id),
-    ...ids.map(id => redis.compareAndDelete(userKey(id), call.id)),
-  ]);
-  if (call.transport === "p2p") await releaseP2PCall(call);
-  else {
-    await Promise.all(ids.map(userId => removeCallParticipant(call.id, userId)));
-    await deleteCallRoom(call.id);
+  // Polling and hangup can reconcile the same ended room concurrently. One
+  // cleanup owns the history delivery lease; the others must not report failure.
+  const lock = `calls:cleanup:group:${call.id}:lock`, token = randomUUID();
+  if (call.kind === "group" && !await redis.setIfAbsent(lock, token, 30)) return;
+  try {
+    await recordCallOutcome(call);
+    if (call.kind === "group") await updateCallHistory(call);
+    else await updateCallHistory(call).catch(() => { console.warn("Call history update failed"); });
+    const ids = [...new Set([...call.invitedIds, ...Object.keys(call.parties), ...extraIds])];
+    await Promise.all([
+      redis.compareAndDelete(threadKey(call.kind, call.chatId), call.id),
+      ...ids.map(id => redis.compareAndDelete(userKey(id), call.id)),
+    ]);
+    if (call.transport === "p2p") await releaseP2PCall(call);
+    else {
+      await Promise.all(ids.map(userId => removeCallParticipant(call.id, userId)));
+      await deleteCallRoom(call.id);
+    }
+    await redis.set(`calls:cleanup:v1:${call.id}`, "1", "EX", 3600);
+  } finally {
+    if (call.kind === "group") await redis.compareAndDelete(lock, token);
   }
-  await redis.set(`calls:cleanup:v1:${call.id}`, "1", "EX", 3600);
 }
 
 async function mutate(id: string, update: (call: CallRecord) => void) {
@@ -307,8 +316,8 @@ export async function leaveCall(actor: Actor, id: string, endForAll: boolean) {
   if (!initial.invitedIds.includes(actor.userId) && !initial.parties[actor.userId]) throw new HttpError(403, "Вам недоступен этот звонок");
   if (initial.parties[actor.userId] && initial.parties[actor.userId].sessionId !== actor.sessionId) throw new HttpError(403, "Звонок открыт на другом устройстве");
   if (endForAll && initial.kind === "group") {
-    const member = await prisma.groupMember.findUnique({ where: { groupId_userId: { groupId: initial.chatId, userId: actor.userId } } });
-    if (!member || (initial.callerId !== actor.userId && !["owner", "admin"].includes(member.role))) throw new HttpError(403, "Недостаточно прав для завершения звонка");
+    const member = await prisma.groupMember.findUnique({ where: { groupId_userId: { groupId: initial.chatId, userId: actor.userId } }, select: { group: { select: { ownerId: true } } } });
+    if (!member || (initial.callerId !== actor.userId && member.group.ownerId !== actor.userId)) throw new HttpError(403, "Недостаточно прав для завершения звонка");
   }
   const call = await mutate(id, state => {
     if (state.status === "ended") return;
@@ -348,7 +357,7 @@ export async function callView(call: CallRecord, actor: Actor): Promise<CallView
   await assertCallAccess(call, actor.userId);
   const people = await prisma.user.findMany({ where: { id: { in: [...new Set([...call.invitedIds, ...Object.keys(call.parties)])] } },
     select: { id: true, displayName: true, avatarUrl: true, backgroundUrl: true } });
-  const group = call.kind === "group" ? await prisma.group.findUnique({ where: { id: call.chatId }, select: { name: true, link: true } }) : null;
+  const group = call.kind === "group" ? await prisma.group.findUnique({ where: { id: call.chatId }, select: { name: true, link: true, ownerId: true } }) : null;
   const peer = people.find(p => p.id !== actor.userId);
   const contact = call.kind === "direct" && peer ? await prisma.contact.findUnique({ where: { ownerId_peerId: { ownerId: actor.userId, peerId: peer.id } }, select: { alias: true } }) : null;
   const peerName = contact?.alias?.trim() || peer?.displayName || "Eclipse";
@@ -361,7 +370,7 @@ export async function callView(call: CallRecord, actor: Actor): Promise<CallView
     participants: people.filter(p => Boolean(call.parties[p.id])).map(p => ({ id: p.id, identity: callIdentity(call.id, p.id), name: p.displayName, avatarUrl: p.avatarUrl })),
     incoming: call.kind === "direct" && call.status === "ringing" && call.callerId !== actor.userId,
     onThisSession: call.parties[actor.userId]?.sessionId === actor.sessionId,
-    canEnd: call.kind === "direct" || call.callerId === actor.userId };
+    canEnd: call.kind === "direct" || call.callerId === actor.userId || group?.ownerId === actor.userId };
 }
 
 async function deliverCallRealtime(call: CallRecord, ids: string[]) {

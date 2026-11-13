@@ -613,7 +613,7 @@ export const ChatSidebar = memo(function ChatSidebar(props: ChatSidebarProps) {
       </div>
 
       <div id="global-voice-list-slot" className="sticky top-0 z-10 px-3 pb-0.5 pt-0.5 empty:hidden" />
-      <div id="global-music-list-slot" className="sticky top-0 z-10 px-3 pb-3 pt-0.5 empty:hidden" />
+      <div id="global-music-list-slot" className="sticky top-0 z-10 px-3 pb-3 pt-0.5 empty:hidden has-[[data-group-call-tray]]:py-0" />
 
       <div
         ref={chatListViewportRef}

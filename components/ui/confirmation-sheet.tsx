@@ -3,7 +3,7 @@ import { translate as t } from "@/lib/i18n/translate";
 import { useTranslation } from "@/components/LocaleProvider";
 
 
-import { ReactNode, useId, useRef, useEffect } from "react";
+import { type CSSProperties, ReactNode, useId, useRef, useEffect, useSyncExternalStore } from "react";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import type { LucideIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -26,7 +26,19 @@ type ConfirmationSheetProps = {
   iconClassName?: string;
   backdropClassName?: string;
   zIndex?: number;
+  mobileSheet?: boolean;
+  dialogStyle?: CSSProperties;
+  hideCancel?: boolean;
 };
+
+const desktopSnapshot = () => false;
+const noSubscription = () => () => {};
+const mobileSnapshot = () => window.matchMedia("(max-width: 767px)").matches;
+function subscribeMobile(change: () => void) {
+  const query = window.matchMedia("(max-width: 767px)");
+  query.addEventListener("change", change);
+  return () => query.removeEventListener("change", change);
+}
 
 export function ConfirmationSheet({
   open,
@@ -45,9 +57,13 @@ export function ConfirmationSheet({
   iconClassName,
   backdropClassName,
   zIndex = 120,
+  mobileSheet = false,
+  dialogStyle,
+  hideCancel = false,
 }: ConfirmationSheetProps) {
   const t = useTranslation();
   const reducedMotion = useReducedMotion();
+  const fromBottom = useSyncExternalStore(mobileSheet ? subscribeMobile : noSubscription, mobileSheet ? mobileSnapshot : desktopSnapshot, desktopSnapshot);
   const hasIcon = Boolean(iconClassName);
   const titleId = useId();
   const descriptionId = useId();
@@ -63,7 +79,7 @@ export function ConfirmationSheet({
     <AnimatePresence propagate>
       {open ? (
         <motion.div
-          className="fixed inset-0 flex items-center justify-center p-4"
+          className={mobileSheet ? "fixed inset-0 flex items-end justify-center md:items-center md:p-4" : "fixed inset-0 flex items-center justify-center p-4"}
           style={{ zIndex }}
         >
           <motion.button
@@ -84,10 +100,12 @@ export function ConfirmationSheet({
             ref={dialogRef}
             tabIndex={-1}
             data-confirmation-dialog
-            className="app-panel-surface relative w-full max-w-[384px] rounded-[26px] bg-[#212121] p-6 text-left text-white outline-none"
-            initial={{ opacity: 0, scale: reducedMotion ? 1 : 0.97 }}
-            animate={{ opacity: 1, scale: 1, transition: { duration: reducedMotion ? 0 : 0.18, ease: PANEL_EASE } }}
-            exit={{ opacity: 0, scale: reducedMotion ? 1 : 0.98, transition: { duration: reducedMotion ? 0 : 0.13, ease: PANEL_EASE } }}
+            data-mobile-sheet={fromBottom || undefined}
+            style={dialogStyle}
+            className={cn("app-panel-surface relative w-full bg-[#212121] p-6 text-left text-white outline-none", mobileSheet ? "max-w-none rounded-t-[28px] pb-[calc(24px+env(safe-area-inset-bottom))] md:max-w-[384px] md:rounded-[26px] md:pb-6" : "max-w-[384px] rounded-[26px]")}
+            initial={{ opacity: fromBottom ? 1 : 0, y: fromBottom && !reducedMotion ? "100%" : 0, scale: fromBottom || reducedMotion ? 1 : 0.97 }}
+            animate={{ opacity: 1, y: 0, scale: 1, transition: { duration: reducedMotion ? 0 : fromBottom ? 0.24 : 0.18, ease: PANEL_EASE } }}
+            exit={{ opacity: fromBottom ? 1 : 0, y: fromBottom && !reducedMotion ? "100%" : 0, scale: fromBottom || reducedMotion ? 1 : 0.98, transition: { duration: reducedMotion ? 0 : fromBottom ? 0.2 : 0.13, ease: PANEL_EASE } }}
             onKeyDown={(event) => {
               if (event.key === "Escape") { event.stopPropagation(); onOpenChange(false); }
               if (event.key !== "Tab") return;
@@ -116,13 +134,13 @@ export function ConfirmationSheet({
             {details ? <div className="mt-4">{details}</div> : null}
 
             <div className={cn("mt-5 -mr-2 -mb-2 flex flex-wrap items-center justify-end gap-2", footerClassName)}>
-              <button
+              {!hideCancel && <button
                 type="button"
                 onClick={() => onOpenChange(false)}
                 className={cn("min-h-10 rounded-xl px-3 text-[14px] font-semibold uppercase tracking-[0.01em] text-[var(--ui-accent-solid,#c4b5fd)] transition-colors hover:bg-white/[0.05] focus-visible:outline-2 focus-visible:outline-offset-2", cancelClassName)}
               >
                 {cancelLabel}
-              </button>
+              </button>}
               <button
                 type="button"
                 onClick={onAction}

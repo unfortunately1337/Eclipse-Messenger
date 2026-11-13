@@ -570,7 +570,7 @@ export function subscribeChatRealtime({ selfId, pusherRef, realtimeSelfIdRef, ch
         if (payload.chatType === "group" || payload.chatType === "channel") {
           const groupLink = payload.groupLink?.trim().toLowerCase();
           if (!groupLink) return;
-          if (!payload.text && (!payload.cipherText || !payload.iv || !payload.keyVersion)) {
+          if (!payload.systemPayload && !payload.text && (!payload.cipherText || !payload.iv || !payload.keyVersion)) {
             await hydrateGroupMessageFromServer(payload);
             return;
           }
@@ -610,8 +610,9 @@ export function subscribeChatRealtime({ selfId, pusherRef, realtimeSelfIdRef, ch
           setChats((prev) => {
             const previewBase = retainChatPreviewContent(resolvedText ?? "");
             const senderProfile = payload.chatType === "group" ? readProfileFromCacheRef.current(payload.senderId) : null;
-            const senderName = payload.fromDisplayName || senderProfile?.displayName || "";
+            const senderName = payload.systemPayload ? "" : payload.fromDisplayName || senderProfile?.displayName || "";
             return applyIncomingSharedChatPreview(prev, {
+              isService: Boolean(payload.systemPayload),
               link: groupLink,
               createdAt: payload.createdAt,
               previewText: payload.chatType === "group" && senderName ? `${senderName}: ${previewBase}` : previewBase,

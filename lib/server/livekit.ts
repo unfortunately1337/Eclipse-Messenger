@@ -9,7 +9,9 @@ export function livekitConfigured() {
 function config() {
   if (!livekitConfigured()) throw new HttpError(503, "Звонки пока не настроены");
   const url = new URL(process.env.LIVEKIT_URL!.trim());
-  if (url.protocol !== "wss:" || url.username || url.password || url.pathname !== "/" || url.search || url.hash) {
+  const localDev = process.env.NODE_ENV === "development" && url.protocol === "ws:"
+    && ["localhost", "127.0.0.1", "[::1]"].includes(url.hostname);
+  if ((!localDev && url.protocol !== "wss:") || url.username || url.password || url.pathname !== "/" || url.search || url.hash) {
     throw new HttpError(503, "Проверьте настройки сервиса звонков");
   }
   return { url: url.origin, key: process.env.LIVEKIT_API_KEY!.trim(), secret: process.env.LIVEKIT_API_SECRET!.trim() };
@@ -28,7 +30,7 @@ export async function verifyCallJoinToken(token: string) {
 
 function service() {
   const cfg = config();
-  return new RoomServiceClient(cfg.url.replace("wss:", "https:"), cfg.key, cfg.secret, { requestTimeout: 8 });
+  return new RoomServiceClient(cfg.url.replace(/^ws/, "http"), cfg.key, cfg.secret, { requestTimeout: 8 });
 }
 
 export async function createCallRoom(id: string, maxParticipants: number) {

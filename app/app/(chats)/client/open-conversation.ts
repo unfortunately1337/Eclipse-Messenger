@@ -611,6 +611,7 @@ export async function openConversationAction({ chats, selectedSearchTargetRef, o
           id: message.id,
           senderId: message.senderId,
           text: message.text ?? "",
+          systemPayload: message.systemPayload ?? undefined,
           replyToMessageId: message.replyToMessageId ?? null,
           createdAt: message.createdAt,
           senderDisplayName: message.senderDisplayName,

@@ -40,4 +40,18 @@ describe("LiveKit media credentials", () => {
       await expect(issueCallConnection("id", "user")).rejects.toMatchObject({ status: 503 });
     }
   });
+  it("allows loopback ws only in development, keeping production TLS mandatory", async () => {
+    vi.stubEnv("NODE_ENV", "development");
+    for (const host of ["127.0.0.1", "localhost", "[::1]"]) {
+      vi.stubEnv("LIVEKIT_URL", `ws://${host}:7880`);
+      await expect(issueCallConnection("id", "user")).resolves.toMatchObject({ url: `ws://${host}:7880` });
+    }
+    for (const url of ["ws://192.168.1.2:7880", "ws://localhost.evil.test:7880", "ws://localhost:7880/path"]) {
+      vi.stubEnv("LIVEKIT_URL", url);
+      await expect(issueCallConnection("id", "user")).rejects.toMatchObject({ status: 503 });
+    }
+    vi.stubEnv("NODE_ENV", "production");
+    vi.stubEnv("LIVEKIT_URL", "ws://127.0.0.1:7880");
+    await expect(issueCallConnection("id", "user")).rejects.toMatchObject({ status: 503 });
+  });
 });

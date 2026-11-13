@@ -292,6 +292,7 @@ export async function getChatListPayload(userId: string, limit: number, cursor: 
         updatedAt: Date;
         lastMessageAt: Date | null;
         lastMessageText: string | null;
+        lastMessageIsService: boolean;
         lastMessageCipherText: string | null;
         lastMessageIv: string | null;
         lastMessageKeyVersion: number | null;
@@ -310,6 +311,7 @@ export async function getChatListPayload(userId: string, limit: number, cursor: 
         (g."ownerId" = ${userId} OR my."canPostMessages") AS "canSendMessages",
         lm."createdAt" AS "lastMessageAt",
         lm."text" AS "lastMessageText",
+        (lm."systemPayload" IS NOT NULL) AS "lastMessageIsService",
         lm."cipherText" AS "lastMessageCipherText",
         lm."iv" AS "lastMessageIv",
         lm."keyVersion" AS "lastMessageKeyVersion",
@@ -322,7 +324,7 @@ export async function getChatListPayload(userId: string, limit: number, cursor: 
       FROM "GroupMember" my
       JOIN "Group" g ON g."id" = my."groupId"
       LEFT JOIN LATERAL (
-        SELECT gm."createdAt", gm."text", gm."cipherText", gm."iv", gm."keyVersion", gm."senderId"
+        SELECT gm."systemPayload", gm."createdAt", gm."text", gm."cipherText", gm."iv", gm."keyVersion", gm."senderId"
         FROM "GroupMessage" gm
         WHERE gm."groupId" = g."id"
         ORDER BY gm."createdAt" DESC
@@ -641,7 +643,7 @@ export async function getChatListPayload(userId: string, limit: number, cursor: 
       lastMessage: group.lastMessageCipherText
         ? ""
         : (group.lastMessageText ?? (group.ownerId === userId ? "Вы создали группу" : "Вы были добавлены.")),
-      lastMessageIsService: !group.lastMessageCipherText && group.lastMessageText == null,
+      lastMessageIsService: group.lastMessageIsService || (!group.lastMessageCipherText && group.lastMessageText == null),
       lastMessageText: group.lastMessageCipherText
         ? undefined
         : (group.lastMessageText ?? (group.ownerId === userId ? "Вы создали группу" : "Вы были добавлены.")),

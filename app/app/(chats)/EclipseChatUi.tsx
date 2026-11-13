@@ -13,6 +13,7 @@ import { apiRequest } from "@/lib/client/http";
 import type { EclipseMessageAction, EclipseSystemPayload } from "@/lib/eclipse-system";
 import { ECLIPSE_LIST_STATUS } from "@/lib/eclipse-system";
 import { cn } from "@/lib/utils";
+import { formatGroupCallDuration } from "@/lib/call-history";
 import { Popover } from "radix-ui";
 import ImportPackCard from "@/components/ImportPackCard";
 import TelegramImportConnect from "@/components/TelegramImportConnect";
@@ -150,6 +151,7 @@ export function EclipseSystemMessageBubble({
   serviceStyle?: CSSProperties;
 }) {
   const t = useTranslation();
+  const { locale } = useLanguage();
   const [isExpired, setIsExpired] = useState(false);
   const [copied, setCopied] = useState(false);
   const [copyError, setCopyError] = useState(false);
@@ -187,6 +189,7 @@ export function EclipseSystemMessageBubble({
         style={serviceStyle}
       >
         {t(payload.title)}
+        {payload.metadata?.groupCallEnded && <> · {formatGroupCallDuration(payload.metadata.groupCallEnded.durationSeconds, locale)}</>}
       </span>
     );
   }

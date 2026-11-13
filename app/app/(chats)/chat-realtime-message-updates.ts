@@ -26,6 +26,7 @@ type ChatSummaryLike = {
 };
 
 type SharedIncomingPreviewParams = {
+  isService?: boolean;
   link: string;
   createdAt: string;
   previewText: string;
@@ -81,14 +82,15 @@ export function applyIncomingSharedChatPreview<T extends ChatSummaryLike>(
     return {
       ...chat,
       lastMessage: params.previewText,
+      lastMessageIsService: Boolean(params.isService),
       lastMessageAt: params.createdAt,
       lastMessageMine: params.isOwnMessage,
       lastMessageCipherText: params.cipherText ?? null,
       lastMessageIv: params.iv ?? null,
       lastMessageKeyVersion: params.keyVersion ?? null,
-      lastMessageSenderId: params.chatType === "group" ? params.senderId : chat.lastMessageSenderId ?? null,
+      lastMessageSenderId: params.isService ? null : params.chatType === "group" ? params.senderId : chat.lastMessageSenderId ?? null,
       lastMessageSenderAlias:
-        params.chatType === "group" ? (params.senderAlias ? params.senderAlias : chat.lastMessageSenderAlias ?? null) : null,
+        !params.isService && params.chatType === "group" ? (params.senderAlias ? params.senderAlias : chat.lastMessageSenderAlias ?? null) : null,
     };
   });
 

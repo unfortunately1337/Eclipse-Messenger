@@ -1,54 +1,73 @@
 "use client";
 
 import { createContext, useContext, useMemo, useState, type CSSProperties, type ReactNode } from "react";
+import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { PiWaveformBold } from "react-icons/pi";
 import { MediaAvatar } from "@/components/ui/media";
 import { ConfirmationSheet } from "@/components/ui/confirmation-sheet";
 import { useLanguage, useTranslation } from "@/components/LocaleProvider";
 import { plural } from "@/lib/i18n/translate";
-import type { GroupCallActivity } from "@/lib/calls";
+import type { GroupCallActivity, CallView } from "@/lib/calls";
 import type { useCalls } from "../../hooks/useCalls";
+import { PANEL_EASE } from "@/lib/client/panel-motion";
 
 export type GroupVideoChatTarget = { link: string; title: string; avatarUrl?: string | null; canStart: boolean };
 type Controller = Pick<ReturnType<typeof useCalls>, "groupCall" | "current" | "groupEnabled" | "busy" | "start" | "join">;
 const EMPTY = new Map<string, GroupCallActivity>();
 const Activity = createContext<ReadonlyMap<string, GroupCallActivity>>(EMPTY);
 const OpenLobby = createContext<(target: GroupVideoChatTarget) => void>(() => {});
+const JoinedGroup = createContext<string | null>(null);
+const GroupDetails = createContext<CallView | null>(null);
+function sampledPeople(call: CallView | null | undefined, limit: number) {
+  const rank = (id: string) => { let value = 2166136261; for (const char of `${call?.id}:${id}`) value = Math.imul(value ^ char.charCodeAt(0), 16777619); return value >>> 0; };
+  return [...(call?.participants ?? [])].sort((a, b) => rank(a.id) - rank(b.id) || a.id.localeCompare(b.id)).slice(0, limit);
+}
 export function GroupCallActivityProvider({ activities, controller, children }: { activities?: GroupCallActivity[]; controller?: Controller; children: ReactNode }) {
   const value = useMemo(() => activities?.length ? new Map(activities.map(call => [call.link, call])) : EMPTY, [activities]);
   const [target, setTarget] = useState<GroupVideoChatTarget | null>(null);
-  return <Activity.Provider value={value}><OpenLobby.Provider value={setTarget}>{children}
-    {target && controller && <GroupVideoChatLobby key={target.link} target={target} controller={controller} onClose={() => setTarget(null)} />}
-  </OpenLobby.Provider></Activity.Provider>;
+  const own = controller?.current?.kind === "group" ? controller.current : controller?.groupCall;
+  const joined = own?.onThisSession && own.status !== "ended" ? own.link : null;
+  const details = controller?.groupCall ?? (controller?.current?.kind === "group" ? controller.current : null);
+  return <Activity.Provider value={value}><JoinedGroup.Provider value={joined}><GroupDetails.Provider value={details}><OpenLobby.Provider value={setTarget}>{children}
+    <AnimatePresence>{target && controller && <GroupVideoChatLobby key={target.link} target={target} controller={controller} onClose={() => setTarget(null)} />}</AnimatePresence>
+  </OpenLobby.Provider></GroupDetails.Provider></JoinedGroup.Provider></Activity.Provider>;
 }
 export function useGroupCallActivity(link: string) { return useContext(Activity).get(link); }
 export function useOpenGroupVideoChat() { return useContext(OpenLobby); }
 
 export function GroupCallListMarker({ link }: { link: string }) {
   const t = useTranslation();
+  const reduced = useReducedMotion();
   const call = useGroupCallActivity(link);
-  if (!call) return null;
-  const label = t("Видеочат: {0} участников", { 0: call.participantCount });
-  return <span data-group-call-marker title={label} aria-label={label} className="inline-flex shrink-0 items-center gap-1 rounded-full bg-white/[0.08] px-1.5 py-0.5 text-[10px] font-semibold tabular-nums text-zinc-200"><PiWaveformBold size={13} aria-hidden />{call.participantCount}</span>;
+  const label = call ? t("Видеочат: {0} участников", { 0: call.participantCount }) : undefined;
+  return <AnimatePresence initial={false}>{call && <motion.span key={call.id} className="inline-flex shrink-0 overflow-hidden align-middle"
+    initial={{ width: 0, opacity: 0 }} animate={{ width: "auto", opacity: 1 }} exit={{ width: 0, opacity: 0 }} transition={{ duration: reduced ? 0 : .2, ease: PANEL_EASE }}>
+    <span data-group-call-marker title={label} aria-label={label} className="inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded-full bg-white/[0.08] px-1.5 py-0.5 text-[10px] font-semibold tabular-nums text-zinc-200"><PiWaveformBold size={13} aria-hidden />{call.participantCount}</span>
+  </motion.span>}</AnimatePresence>;
 }
 
 export function GroupVideoChatBanner({ link, title, avatarUrl, style }: { link: string; title: string; avatarUrl?: string | null; style?: CSSProperties }) {
   const t = useTranslation();
+  const reduced = useReducedMotion();
   const { locale } = useLanguage();
   const call = useGroupCallActivity(link);
   const open = useOpenGroupVideoChat();
-  if (!call) return null;
-  return <button type="button" data-group-video-chat onClick={() => open({ link, title, avatarUrl, canStart: false })} style={style}
+  const joined = useContext(JoinedGroup);
+  const details = useContext(GroupDetails);
+  const people = useMemo(() => sampledPeople(details?.link === link ? details : null, 5), [details, link]);
+  return <AnimatePresence>{call && joined !== link && <motion.div key={call.id} className="overflow-hidden"
+    initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0 }} transition={{ duration: reduced ? 0 : .24, ease: PANEL_EASE }}>
+    <motion.button type="button" data-group-video-chat onClick={() => open({ link, title, avatarUrl, canStart: false })} style={style}
+    initial={{ y: reduced ? 0 : -6 }} animate={{ y: 0 }} exit={{ y: reduced ? 0 : -4 }} transition={{ duration: reduced ? 0 : .24, ease: PANEL_EASE }}
     className="pointer-events-auto mx-auto flex min-h-10 w-full items-center gap-2.5 rounded-full px-3.5 py-1.5 text-left text-zinc-100 transition-colors hover:brightness-110 active:scale-[0.995]">
     <PiWaveformBold size={21} className="shrink-0 text-zinc-200" />
     <span className="min-w-0 flex-1"><span className="block text-[13px] font-semibold leading-4">{t("Видеочат")}</span><span data-group-call-count className="mt-0.5 block text-[11px] leading-4 tabular-nums text-zinc-400">{plural(call.participantCount, ["участник", "участника", "участников"], "participant", locale)}</span></span>
-    <span className="rounded-full bg-white/[0.08] px-3 py-1.5 text-[12px] font-semibold text-zinc-100">{t("Присоединиться")}</span>
-  </button>;
+    {people.length > 0 && <span data-group-call-avatars className="flex shrink-0 -space-x-2.5 pl-2" aria-hidden>{people.map(person => <span key={person.id} className="relative rounded-full ring-2 ring-[#202023]"><MediaAvatar src={person.avatarUrl ?? undefined} alt={person.name} fallbackText={person.name.slice(0, 1)} className="size-7 rounded-full" /></span>)}</span>}
+  </motion.button></motion.div>}</AnimatePresence>;
 }
 
 function GroupVideoChatLobby({ target, controller, onClose }: { target: GroupVideoChatTarget; controller: Controller; onClose: () => void }) {
   const t = useTranslation();
-  const { locale } = useLanguage();
   const { link, title, avatarUrl, canStart } = target;
   const activity = useGroupCallActivity(link);
   const call = controller.groupCall?.link === link ? controller.groupCall : controller.current?.kind === "group" && controller.current.link === link ? controller.current : null;
@@ -56,8 +75,8 @@ function GroupVideoChatLobby({ target, controller, onClose }: { target: GroupVid
   const count = active?.participantCount ?? activity?.participantCount ?? 0;
   const callId = active?.id ?? activity?.id;
   const joined = Boolean(active?.onThisSession);
-  const people = active?.participants ?? [];
-  const countLabel = plural(count, ["участник", "участника", "участников"], "participant", locale);
+  const people = useMemo(() => sampledPeople(active, 8), [active]);
+  const remaining = Math.max(0, count - people.length);
   const inAnotherCall = Boolean(controller.current && (controller.current.kind !== "group" || controller.current.link !== link));
   const unavailable = !controller.groupEnabled || inAnotherCall;
   const busy = controller.busy;
@@ -67,8 +86,9 @@ function GroupVideoChatLobby({ target, controller, onClose }: { target: GroupVid
       description={callId ? <span className="block text-center text-[13px] leading-5 text-zinc-400">{t("Присоединитесь к разговору в группе")}</span> : undefined}
       details={<div className="flex flex-col items-center gap-4 py-2">
         <MediaAvatar src={avatarUrl ?? undefined} alt={title} fallbackText={title.slice(0, 1)} className="size-20 rounded-full" />
-        <div className="text-center"><p className="text-[19px] font-semibold text-zinc-100">{title}</p><p className="mt-1 text-[13px] text-zinc-400">{callId ? countLabel : t("Участники смогут присоединиться из группы")}</p></div>
-        {people.length > 0 && <div className="flex max-w-full flex-wrap justify-center gap-3">{people.slice(0, 6).map(person => <div key={person.id} className="flex w-14 flex-col items-center gap-1.5"><MediaAvatar src={person.avatarUrl ?? undefined} alt={person.name} fallbackText={person.name.slice(0, 1)} className="size-11 rounded-full" /><span className="w-full truncate text-center text-[11px] text-zinc-400">{person.name}</span></div>)}</div>}
+        <div className="text-center"><p className="text-[19px] font-semibold text-zinc-100">{title}</p><p className="mt-1 text-[13px] text-zinc-400">{callId ? t("В видеочате:") : t("Участники смогут присоединиться из группы")}</p></div>
+        {people.length > 0 && <div data-group-call-lobby-people className="grid w-full grid-cols-4 justify-items-center gap-x-2 gap-y-3">{people.map(person => <div key={person.id} className="flex w-14 flex-col items-center gap-1.5"><MediaAvatar src={person.avatarUrl ?? undefined} alt={person.name} fallbackText={person.name.slice(0, 1)} className="size-11 rounded-full" /><span className="w-full truncate text-center text-[11px] text-zinc-400">{person.name}</span></div>)}</div>}
+        {remaining > 0 && <p className="text-[12px] text-zinc-400">{t("И ещё {0}…", { 0: remaining })}</p>}
         {status && <p role="status" className="text-center text-[12px] leading-5 text-zinc-400">{t(status)}</p>}
       </div>}
       actionLabel={t(joined ? "Вы участвуете" : callId ? "Присоединиться" : "Начать видеочат")} actionIcon={PiWaveformBold}
