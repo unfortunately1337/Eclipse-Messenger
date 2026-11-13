@@ -289,7 +289,7 @@ export const CallRoomPanel = memo(function CallRoomPanel({ call, selfId, glass, 
   const groupPeople: GroupCallPerson[] = [];
   if (call.kind === "group") {
     const profiles = new Map(call.participants.map(person => [person.identity, person]));
-    const mediaPeople = new Map(participants.map(person => [person.identity, person]));
+    const mediaPeople = new Map(participants.filter(person => person.identity).map(person => [person.identity, person]));
     const identities = new Set([...profiles.keys(), ...mediaPeople.keys()]);
     for (const identity of identities) {
       const profile = profiles.get(identity), person = mediaPeople.get(identity);

@@ -84,6 +84,8 @@ def main():
         "    handle @sfuRtc {\n"
         "        forward_auth app:3000 {\n"
         "            uri /api/calls/sfu-authorize\n"
+        "            header_up -Connection\n"
+        "            header_up -Upgrade\n"
         "        }\n"
         f"        reverse_proxy {gateway}:7880\n"
         "    }\n"
@@ -94,6 +96,10 @@ def main():
         "    handle {\n"
         "        reverse_proxy app:3000\n"
         "    }\n}", original_caddy, count=1)
+    if not caddy.lstrip().startswith("{"):
+        caddy = "{\n    log {\n        format filter {\n            wrap json\n            fields {\n" \
+                "                request>uri delete\n                request>headers>Authorization delete\n" \
+                "                request>headers>Cookie delete\n            }\n        }\n    }\n}\n\n" + caddy
     run("docker", "exec", "-i", "messenger-caddy-1", "caddy", "adapt", "--config", "/dev/stdin",
         "--adapter", "caddyfile", "--validate", input=caddy, stdout=subprocess.DEVNULL)
     directory = root / "livekit"
@@ -117,7 +123,11 @@ def main():
         "keys": {credentials["key"]: credentials["secret"]},
     }
     # JSON is valid YAML; quoting all values keeps generated secrets literal.
-    private_write(directory / "livekit.yaml", json.dumps(config, indent=2) + "\n")
+    config_path = directory / "livekit.yaml"
+    rendered = json.dumps(config, indent=2) + "\n"
+    changed = not config_path.exists() or config_path.read_text() != rendered
+    if changed:
+        private_write(config_path, rendered)
     shutil.copyfile(Path(__file__).with_name("compose.yaml"), directory / "compose.yaml")
     run("ufw", "allow", "7881/tcp", "comment", "Eclipse SFU ICE TCP")
     run("ufw", "allow", "7882/udp", "comment", "Eclipse SFU media UDP")
@@ -127,7 +137,7 @@ def main():
     private_write(sysctl, "# Allow WebRTC socket buffers without reserving this memory up front.\n"
                   "net.core.rmem_max=7500000\nnet.core.wmem_max=7500000\n")
     run("sysctl", "-p", str(sysctl))
-    run("docker", "compose", "-p", "eclipse-sfu", "-f", str(directory / "compose.yaml"), "up", "-d")
+    run("docker", "compose", "-p", "eclipse-sfu", "-f", str(directory / "compose.yaml"), "up", "-d", *(["--force-recreate"] if changed else []))
     token = jwt(credentials["key"], credentials["secret"])
     for attempt in range(30):
         try:
