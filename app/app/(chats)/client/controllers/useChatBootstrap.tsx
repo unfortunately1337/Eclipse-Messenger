@@ -136,6 +136,7 @@ export function useChatBootstrap(sources: ChatBootstrapSources, deferred: ChatBo
         myRole: activeGroup?.myRole ?? (activeChat.isGroupOwner ? "owner" : undefined),
         myCanChangeReactions: Boolean(activeChat.isGroupOwner || activeGroup?.myCanChangeReactions),
         myCanPinMessages: Boolean(activeChat.isGroupOwner || activeGroup?.myCanPinMessages),
+        myCanStartVideoChat: Boolean(activeChat.isGroupOwner || activeGroup?.myCanStartVideoChat),
         myCanAddMembers:
           activeGroup?.myRole === "owner" || activeGroup?.myRole === "admin" || activeChat.isGroupOwner || undefined,
         isPublic: isLikelyPublicLink(activeGroup?.link ?? activeChat.link),

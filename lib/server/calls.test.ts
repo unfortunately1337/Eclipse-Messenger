@@ -7,6 +7,7 @@ const mock = vi.hoisted(() => {
     redis: {
       sadd: vi.fn(async () => 1),
       get: vi.fn(async (key: string) => store.get(key) ?? null),
+      mget: vi.fn(async (...keys: string[]) => keys.map(key => store.get(key) ?? null)),
       set: vi.fn(async (key: string, value: string) => { store.set(key, value); return "OK"; }),
       del: vi.fn(async (key: string) => Number(store.delete(key))),
       compareAndSet: vi.fn(async (key: string, expected: string, value: string) => {
@@ -25,7 +26,7 @@ const mock = vi.hoisted(() => {
     contact: { findUnique: vi.fn() },
     user: { findFirst: vi.fn(), findMany: vi.fn() },
     conversation: { findFirst: vi.fn() },
-    groupMember: { findFirst: vi.fn(), findUnique: vi.fn() },
+    groupMember: { findFirst: vi.fn(), findUnique: vi.fn(), findMany: vi.fn() },
     group: { findUnique: vi.fn() },
     privacy: vi.fn(), allowed: vi.fn(),
     historyCreate: vi.fn(), historyUpdate: vi.fn(),
@@ -42,7 +43,7 @@ vi.mock("./livekit", () => ({ createCallRoom: mock.create, removeCallParticipant
   callIdentity: (id: string, user: string) => `${id}:${user}` }));
 vi.mock("./realtime", () => ({ triggerRealtimeChannels: mock.notify, userPrivateChannel: (id: string) => `private-${id}` }));
 
-import { callView, connectionForCall, groupCall, heartbeatCall, joinCall, leaveCall, ownCall, reconcileCall, startCall, saveCallParticipantAudio } from "./calls";
+import { callView, connectionForCall, groupCall, groupCallActivities, heartbeatCall, joinCall, leaveCall, ownCall, reconcileCall, startCall, saveCallParticipantAudio, authorizeSfuIdentity } from "./calls";
 
 const alice = { userId: "alice", sessionId: "alice-session" };
 const bob = { userId: "bob", sessionId: "bob-session" };
@@ -54,8 +55,9 @@ beforeEach(() => {
   mock.user.findMany.mockResolvedValue([{ id: "alice", displayName: "Alice", avatarUrl: null }, { id: "bob", displayName: "Bob", avatarUrl: null }]);
   mock.conversation.findFirst.mockResolvedValue({ id: "direct-chat" });
   mock.allowed.mockReturnValue(true); mock.privacy.mockResolvedValue({});
-  mock.groupMember.findFirst.mockResolvedValue({ groupId: "group-chat", canPostMessages: true, role: "member", group: { name: "Test group", link: "testgroup" } });
+  mock.groupMember.findFirst.mockResolvedValue({ groupId: "group-chat", canPostMessages: true, role: "owner", group: { ownerId: "alice", name: "Test group", link: "testgroup" } });
   mock.groupMember.findUnique.mockResolvedValue({ canPostMessages: true, role: "member" });
+  mock.groupMember.findMany.mockResolvedValue([]);
   mock.group.findUnique.mockResolvedValue({ name: "Test group", link: "testgroup" });
   mock.issue.mockResolvedValue({ token: "synthetic-token", url: "wss://example.invalid", identity: "opaque" });
   mock.contact.findUnique.mockResolvedValue(null);
@@ -64,6 +66,54 @@ beforeEach(() => {
 });
 
 describe("call authorization and lifecycle", () => {
+  it("rejects SFU reconnection after leaving, losing membership or revoking the app session", async () => {
+    const call = await startCall(alice, "group", "video", "testgroup");
+    await joinCall(bob, call.id);
+    mock.store.set("session:bob-session", JSON.stringify({ userId: "bob" }));
+    await expect(authorizeSfuIdentity(call.id, `${call.id}:bob`)).resolves.toBeUndefined();
+    await expect(authorizeSfuIdentity(call.id, `${call.id}:stranger`)).rejects.toMatchObject({ status: 403 });
+    mock.groupMember.findUnique.mockResolvedValueOnce(null);
+    await expect(authorizeSfuIdentity(call.id, `${call.id}:bob`)).rejects.toMatchObject({ status: 403 });
+    mock.store.delete("session:bob-session");
+    await expect(authorizeSfuIdentity(call.id, `${call.id}:bob`)).rejects.toMatchObject({ status: 403 });
+    mock.store.set("session:bob-session", JSON.stringify({ userId: "bob" }));
+    await leaveCall(bob, call.id, false);
+    await expect(authorizeSfuIdentity(call.id, `${call.id}:bob`)).rejects.toMatchObject({ status: 403 });
+  });
+  it("requires an owner or an explicit administrator grant to start a group call", async () => {
+    const group = { ownerId: "owner", name: "Group", link: "testgroup" };
+    mock.groupMember.findFirst.mockResolvedValue({ groupId: "group-chat", role: "member", canStartVideoChat: true, group });
+    await expect(startCall(alice, "group", "video", "testgroup")).rejects.toMatchObject({ status: 403 });
+    mock.groupMember.findFirst.mockResolvedValue({ groupId: "group-chat", role: "admin", canStartVideoChat: false, group });
+    await expect(startCall(alice, "group", "video", "testgroup")).rejects.toMatchObject({ status: 403 });
+    expect(mock.create).not.toHaveBeenCalled();
+    mock.groupMember.findFirst.mockResolvedValue({ groupId: "group-chat", role: "admin", canStartVideoChat: true, group });
+    const call = await startCall(alice, "group", "video", "testgroup");
+    expect(mock.create).toHaveBeenCalledWith(call.id, 0);
+    mock.groupMember.findUnique.mockResolvedValue({ role: "member", canPostMessages: false, canStartVideoChat: false });
+    await expect(joinCall(bob, call.id)).resolves.toMatchObject({ id: call.id });
+  });
+
+  it("announces group-call activity to members who have not joined", async () => {
+    mock.groupMember.findMany.mockResolvedValue([{ userId: "alice" }, { userId: "bob" }, { userId: "viewer" }]);
+    await startCall(alice, "group", "video", "testgroup");
+    expect(mock.notify).toHaveBeenCalledWith(expect.objectContaining({ channels: expect.arrayContaining(["private-alice", "private-bob", "private-viewer"]), name: "call:changed" }));
+  });
+
+  it("batches activity reads and excludes inaccessible, ended and expired rooms", async () => {
+    const call = await startCall(alice, "group", "video", "testgroup");
+    const other = { ...call, id: "other-call", chatId: "another-group", link: "other" };
+    mock.store.set("calls:v1:record:other-call", JSON.stringify(other));
+    mock.store.set("calls:v1:thread:group:another-group", other.id);
+    mock.groupMember.findMany.mockResolvedValue([{ groupId: "group-chat", group: { link: "testgroup" } }]);
+    mock.redis.mget.mockClear();
+    expect(await groupCallActivities("viewer")).toEqual([{ id: call.id, link: "testgroup", mode: "video", participantCount: 1 }]);
+    expect(mock.redis.mget).toHaveBeenCalledTimes(2);
+    mock.store.set(`calls:v1:record:${call.id}`, JSON.stringify({ ...call, parties: { alice: { sessionId: "session", lastSeen: Date.now() - 91_000 } } }));
+    expect(await groupCallActivities("viewer")).toEqual([]);
+    mock.groupMember.findMany.mockResolvedValue([]);
+    expect(await groupCallActivities("outsider")).toEqual([]);
+  });
   it("rejects legacy clients explicitly without LiveKit and keeps a P2P invitation usable", async () => {
     vi.stubEnv("CALLS_DIRECT_TRANSPORT", "p2p"); vi.stubEnv("WEBRTC_TURN_URLS", "turn:turn.example.com:3478"); vi.stubEnv("WEBRTC_TURN_SECRET", "s".repeat(48));
     mock.configured.mockReturnValue(false);

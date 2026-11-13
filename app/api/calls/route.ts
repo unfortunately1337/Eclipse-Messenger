@@ -7,7 +7,7 @@ import { readJsonBody } from "@/lib/server/request-body";
 import { enforceRateLimit } from "@/lib/server/rate-limit";
 import { livekitConfigured } from "@/lib/server/livekit";
 import { p2pCallsConfigured } from "@/lib/server/call-ice";
-import { callView, connectionForCall, groupCall, heartbeatCall, joinCall, leaveCall, ownCall, startCall, saveCallParticipantAudio, endedCallOutcome } from "@/lib/server/calls";
+import { callView, connectionForCall, groupCall, groupCallActivities, heartbeatCall, joinCall, leaveCall, ownCall, startCall, saveCallParticipantAudio, endedCallOutcome } from "@/lib/server/calls";
 
 export const runtime = "nodejs";
 const command = z.union([
@@ -39,7 +39,9 @@ export async function GET(req: NextRequest) {
       if (error instanceof HttpError && error.status === 403) return null;
       throw error;
     }) : null;
-    const response = jsonOk({ enabled: true, directTransport: p2pCallsConfigured() ? "p2p" : "livekit", current: current ? await callView(current, actor) : null, ended,
+    const groupEnabled = livekitConfigured();
+    const groupCalls = groupEnabled ? await groupCallActivities(user.id) : [];
+    const response = jsonOk({ enabled: true, groupEnabled, groupCalls, directTransport: p2pCallsConfigured() ? "p2p" : "livekit", current: current ? await callView(current, actor) : null, ended,
       groupCall: group ? await callView(group, actor) : null });
     ensureCsrfCookie(req, response);
     return response;

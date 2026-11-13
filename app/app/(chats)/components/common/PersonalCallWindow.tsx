@@ -16,7 +16,8 @@ import type { CallView } from "@/lib/calls";
 import { CALL_CONNECT_SECONDS, CALL_END_FEEDBACK_MS, CALL_END_EFFECT_MS, CALL_RETURN_SECONDS, CALL_EXIT_SECONDS } from "@/lib/client/call-window-motion";
 import { menuPopoverMotion } from "@/lib/client/panel-motion";
 import { getChatHeaderVisualStyle, getPanelVisualStyle } from "@/lib/client/panel-visual";
-import { watchMediaPortalTargets } from "@/lib/client/media-portal-targets";
+import { callControlSurface, callControlStyle, callWindowMaterial } from "@/lib/client/call-window-style";
+import { useCallTrayTarget } from "../../hooks/useCallTrayTarget";
 import { CallVoiceWaves, type CallVoiceLevels } from "./CallVoiceWaves";
 import { CallAvatarVoiceHalo } from "./CallAvatarVoiceHalo";
 import CallVideoStage from "./CallVideoStage";
@@ -87,7 +88,9 @@ export default function PersonalCallWindow(props: Props) {
   const connected = props.startedAt !== null;
   const [connectionEmojisAt, setConnectionEmojisAt] = useState<number | null>(null);
   useEffect(() => {
-    if ((connecting || connected) && connectionEmojisAt === null) setConnectionEmojisAt(Date.now());
+    if (!(connecting || connected) || connectionEmojisAt !== null) return;
+    const timer = window.setTimeout(() => setConnectionEmojisAt(Date.now()), 0);
+    return () => clearTimeout(timer);
   }, [connecting, connected, connectionEmojisAt]);
   const [wasConnected, setWasConnected] = useState(connected);
   if (connected && !wasConnected) setWasConnected(true);
@@ -142,33 +145,8 @@ export default function PersonalCallWindow(props: Props) {
   }, [volumeOpen]);
   const { name, avatarUrl, backgroundUrl, minimized, incoming, owned, busy, controlsDisabled, onMinimize } = props;
   const material = { ...getChatHeaderVisualStyle(props.glass), border: 0 };
-  const windowMaterial = {
-    ...material,
-    backgroundColor: props.glass ? "rgba(28, 28, 30, 0.86)" : "#1c1c1e",
-    backdropFilter: props.glass ? "blur(24px) saturate(1.1)" : "none",
-    WebkitBackdropFilter: props.glass ? "blur(24px) saturate(1.1)" : "none",
-  };
-  const [miniTarget, setMiniTarget] = useState<HTMLElement | null>(null);
-  useEffect(() => {
-    const mobile = window.matchMedia("(max-width: 767px)");
-    let mobileChatOpen = Boolean(document.getElementById("global-music-chat-slot")?.getClientRects().length);
-    const sync = () => {
-      const id = mobile.matches && mobileChatOpen ? "global-music-chat-slot" : "global-music-list-slot";
-      setMiniTarget(document.getElementById(id));
-    };
-    const onChatVisibility = (event: Event) => {
-      mobileChatOpen = Boolean((event as CustomEvent<{ mobileChatOpen?: boolean }>).detail?.mobileChatOpen);
-      sync();
-    };
-    const stopWatching = watchMediaPortalTargets(["global-music-list-slot", "global-music-chat-slot"], sync);
-    mobile.addEventListener("change", sync);
-    window.addEventListener("eclipse:mobile-chat-visibility", onChatVisibility);
-    return () => {
-      stopWatching();
-      mobile.removeEventListener("change", sync);
-      window.removeEventListener("eclipse:mobile-chat-visibility", onChatVisibility);
-    };
-  }, []);
+  const windowMaterial = callWindowMaterial(props.glass);
+  const miniTarget = useCallTrayTarget();
   useEffect(() => {
     if (minimized) return;
     const previous = document.activeElement;
@@ -189,8 +167,8 @@ export default function PersonalCallWindow(props: Props) {
     return () => { clearTimeout(focusTimer); document.removeEventListener("keydown", keydown); if (previous instanceof HTMLElement && previous.isConnected) previous.focus({ preventScroll: true }); };
   }, [minimized, onMinimize]);
 
-  const controlSurface = `grid shrink-0 place-items-center rounded-full border ${props.glass ? "border-white/[0.07] bg-[rgba(40,40,44,0.28)] shadow-[inset_0_1px_0_rgba(255,255,255,0.06)] backdrop-blur-[8px] backdrop-saturate-[1.05]" : "border-transparent bg-[#252527] shadow-none backdrop-blur-none"}`;
-  const control = `${controlSurface} transition-[background-color,color,transform] duration-200 hover:bg-white/20 active:scale-95 active:bg-[var(--ui-accent-solid,#d4d6da)] active:text-[color:var(--ui-accent-contrast,#18181b)] aria-pressed:border-transparent aria-pressed:bg-[var(--ui-accent-solid,#d4d6da)] aria-pressed:text-[color:var(--ui-accent-contrast,#18181b)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--ui-accent-solid,#d4d6da)] disabled:opacity-35`;
+  const controlSurface = callControlSurface(props.glass);
+  const control = callControlStyle(props.glass);
   const background = getEffectiveProfileGradient(backgroundUrl, name, name) || "linear-gradient(155deg,#24242b 0%,#17171d 65%,#131318 100%)";
 
   const signal = props.signal ?? { bars: 0, state: "unknown" };

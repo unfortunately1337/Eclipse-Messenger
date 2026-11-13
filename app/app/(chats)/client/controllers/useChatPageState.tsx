@@ -650,7 +650,7 @@ export function useChatPageState(deferred: ChatPageStateDeferred): ChatPageState
   const {
     roleEditorKind, setRoleEditorKind, roleModalMember, setRoleModalMember, roleNameDraft,
     setRoleNameDraft, permChangeAvatar, setPermChangeAvatar, permChangeName, setPermChangeName,
-    permChangeReactions, setPermChangeReactions, permPinMessages, setPermPinMessages, permDeleteForeign,
+    permChangeReactions, setPermChangeReactions, permPinMessages, permStartVideoChat, setPermPinMessages, setPermStartVideoChat, permDeleteForeign,
     setPermDeleteForeign, permAddMembers, setPermAddMembers, permPostMessages, setPermPostMessages,
     permEditForeignMessages, setPermEditForeignMessages, permDeleteForeignMessages, setPermDeleteForeignMessages, permGenerateInviteLink,
     setPermGenerateInviteLink, permManageAdmins, setPermManageAdmins, roleEditorInitial, setRoleEditorInitial
@@ -663,6 +663,7 @@ export function useChatPageState(deferred: ChatPageStateDeferred): ChatPageState
       permChangeName !== roleEditorInitial.canChangeName ||
       permChangeReactions !== roleEditorInitial.canChangeReactions ||
       permPinMessages !== roleEditorInitial.canPinMessages ||
+      permStartVideoChat !== roleEditorInitial.canStartVideoChat ||
       permDeleteForeign !== roleEditorInitial.canDeleteForeignMessages ||
       permAddMembers !== roleEditorInitial.canAddMembers ||
       permPostMessages !== roleEditorInitial.canPostMessages ||

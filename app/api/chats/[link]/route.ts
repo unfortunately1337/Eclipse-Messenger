@@ -450,6 +450,7 @@ async function resolveMemberGroup(currentUserId: string, link: string) {
       myCanChangeName: boolean;
       myCanChangeReactions: boolean;
       myCanPinMessages: boolean;
+      myCanStartVideoChat: boolean;
       myCanDeleteForeignMessages: boolean;
       myCanAddMembers: boolean;
       myCanPostMessages: boolean;
@@ -473,6 +474,7 @@ async function resolveMemberGroup(currentUserId: string, link: string) {
       gm."canChangeName" AS "myCanChangeName",
       gm."canChangeReactions" AS "myCanChangeReactions",
       gm."canPinMessages" AS "myCanPinMessages",
+      gm."canStartVideoChat" AS "myCanStartVideoChat",
       gm."canDeleteForeignMessages" AS "myCanDeleteForeignMessages",
       gm."canAddMembers" AS "myCanAddMembers",
       gm."canPostMessages" AS "myCanPostMessages",
@@ -1288,6 +1290,7 @@ export async function GET(req: NextRequest, { params }: Params) {
           myCanChangeName: memberGroup.myCanChangeName,
           myCanChangeReactions: memberGroup.myCanChangeReactions,
           myCanPinMessages: memberGroup.myCanPinMessages,
+          myCanStartVideoChat: memberGroup.myCanStartVideoChat,
           myCanDeleteForeignMessages: memberGroup.myCanDeleteForeignMessages,
           myCanAddMembers: memberGroup.myCanAddMembers,
           createdAt: memberGroup.createdAt.toISOString(),

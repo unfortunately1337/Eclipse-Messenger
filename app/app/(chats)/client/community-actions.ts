@@ -656,6 +656,7 @@ export interface OpenRoleEditorActionContext {
   setPermChangeName: React.Dispatch<React.SetStateAction<boolean>>;
   setPermChangeReactions: React.Dispatch<React.SetStateAction<boolean>>;
   setPermPinMessages: React.Dispatch<React.SetStateAction<boolean>>;
+  setPermStartVideoChat: React.Dispatch<React.SetStateAction<boolean>>;
   setPermDeleteForeign: React.Dispatch<React.SetStateAction<boolean>>;
   setPermAddMembers: React.Dispatch<React.SetStateAction<boolean>>;
   setPermPostMessages: React.Dispatch<React.SetStateAction<boolean>>;
@@ -663,10 +664,10 @@ export interface OpenRoleEditorActionContext {
   setPermDeleteForeignMessages: React.Dispatch<React.SetStateAction<boolean>>;
   setPermGenerateInviteLink: React.Dispatch<React.SetStateAction<boolean>>;
   setPermManageAdmins: React.Dispatch<React.SetStateAction<boolean>>;
-  setRoleEditorInitial: React.Dispatch<React.SetStateAction<{ roleName: string; canChangeAvatar: boolean; canChangeName: boolean; canChangeReactions: boolean; canPinMessages: boolean; canDeleteForeignMessages: boolean; canAddMembers: boolean; canPostMessages: boolean; canGenerateInviteLink: boolean; canManageAdmins: boolean; canEditForeignMessages?: boolean | undefined; canDeleteForeignMessages_channel?: boolean | undefined; } | null>>;
+  setRoleEditorInitial: React.Dispatch<React.SetStateAction<{ roleName: string; canChangeAvatar: boolean; canChangeName: boolean; canChangeReactions: boolean; canPinMessages: boolean; canStartVideoChat: boolean; canDeleteForeignMessages: boolean; canAddMembers: boolean; canPostMessages: boolean; canGenerateInviteLink: boolean; canManageAdmins: boolean; canEditForeignMessages?: boolean | undefined; canDeleteForeignMessages_channel?: boolean | undefined; } | null>>;
 }
 
-export function openRoleEditorAction({ effectiveDetailsChatType, channelModalOpen, setRoleEditorKind, setRoleModalMember, setRoleNameDraft, setPermChangeAvatar, setPermChangeName, setPermChangeReactions, setPermPinMessages, setPermDeleteForeign, setPermAddMembers, setPermPostMessages, setPermEditForeignMessages, setPermDeleteForeignMessages, setPermGenerateInviteLink, setPermManageAdmins, setRoleEditorInitial }: OpenRoleEditorActionContext, member: any, kind: "group" | "channel" = effectiveDetailsChatType === "channel" || channelModalOpen ? "channel" : "group"): void {
+export function openRoleEditorAction({ effectiveDetailsChatType, channelModalOpen, setRoleEditorKind, setRoleModalMember, setRoleNameDraft, setPermChangeAvatar, setPermChangeName, setPermChangeReactions, setPermPinMessages, setPermStartVideoChat, setPermDeleteForeign, setPermAddMembers, setPermPostMessages, setPermEditForeignMessages, setPermDeleteForeignMessages, setPermGenerateInviteLink, setPermManageAdmins, setRoleEditorInitial }: OpenRoleEditorActionContext, member: any, kind: "group" | "channel" = effectiveDetailsChatType === "channel" || channelModalOpen ? "channel" : "group"): void {
   setRoleEditorKind(kind);
   setRoleModalMember(member);
   const nextRoleName = member.roleLabel?.trim() || "";
@@ -674,6 +675,7 @@ export function openRoleEditorAction({ effectiveDetailsChatType, channelModalOpe
   const nextCanChangeName = Boolean(member.canChangeName);
   const nextCanChangeReactions = Boolean(member.canChangeReactions);
   const nextCanPinMessages = Boolean(member.canPinMessages);
+  const nextCanStartVideoChat = Boolean(member.canStartVideoChat);
   const nextCanDeleteForeignMessages = Boolean(member.canDeleteForeignMessages);
   const nextCanAddMembers = Boolean(member.canAddMembers);
   const nextCanPostMessages = member.canPostMessages !== undefined ? Boolean(member.canPostMessages) : true;
@@ -686,6 +688,7 @@ export function openRoleEditorAction({ effectiveDetailsChatType, channelModalOpe
   setPermChangeName(nextCanChangeName);
   setPermChangeReactions(nextCanChangeReactions);
   setPermPinMessages(nextCanPinMessages);
+  setPermStartVideoChat(nextCanStartVideoChat);
   setPermDeleteForeign(nextCanDeleteForeignMessages);
   setPermAddMembers(nextCanAddMembers);
   setPermPostMessages(nextCanPostMessages);
@@ -700,6 +703,7 @@ export function openRoleEditorAction({ effectiveDetailsChatType, channelModalOpe
     canChangeName: nextCanChangeName,
     canChangeReactions: nextCanChangeReactions,
     canPinMessages: nextCanPinMessages,
+    canStartVideoChat: nextCanStartVideoChat,
     canDeleteForeignMessages: nextCanDeleteForeignMessages,
     canAddMembers: nextCanAddMembers,
     canPostMessages: nextCanPostMessages,
@@ -720,6 +724,7 @@ export interface SaveMemberRoleActionContext {
   permChangeName: boolean;
   permChangeReactions: boolean;
   permPinMessages: boolean;
+  permStartVideoChat: boolean;
   permPostMessages: boolean;
   permEditForeignMessages: boolean;
   permDeleteForeignMessages: boolean;
@@ -738,7 +743,7 @@ export interface SaveMemberRoleActionContext {
   setRoleModalMember: React.Dispatch<React.SetStateAction<GroupMember | null>>;
 }
 
-export async function saveMemberRoleAction({ roleModalMember, savingRole, roleEditorKind, roleNameDraft, t, permChangeAvatar, permChangeName, permChangeReactions, permPinMessages, permPostMessages, permEditForeignMessages, permDeleteForeignMessages, permDeleteForeign, permAddMembers, permGenerateInviteLink, permManageAdmins, setChannelModalData, channelModalCacheRef, setGroupModalData, groupModalCacheRef, setSavingRole, setErrorText, channelModalData, groupModalData, setRoleModalMember }: SaveMemberRoleActionContext): Promise<void> {
+export async function saveMemberRoleAction({ roleModalMember, savingRole, roleEditorKind, roleNameDraft, t, permChangeAvatar, permChangeName, permChangeReactions, permPinMessages, permStartVideoChat, permPostMessages, permEditForeignMessages, permDeleteForeignMessages, permDeleteForeign, permAddMembers, permGenerateInviteLink, permManageAdmins, setChannelModalData, channelModalCacheRef, setGroupModalData, groupModalCacheRef, setSavingRole, setErrorText, channelModalData, groupModalData, setRoleModalMember }: SaveMemberRoleActionContext): Promise<void> {
   if (!roleModalMember || savingRole) return;
   const isChannel = roleEditorKind === "channel";
   const targetMemberId = roleModalMember.id;
@@ -750,6 +755,7 @@ export async function saveMemberRoleAction({ roleModalMember, savingRole, roleEd
     canChangeName: permChangeName,
     canChangeReactions: permChangeReactions,
     canPinMessages: permPinMessages,
+    ...(roleEditorKind === "group" ? { canStartVideoChat: permStartVideoChat } : {}),
     canPostMessages: permPostMessages,
     canEditForeignMessages: permEditForeignMessages,
     canDeleteForeignMessages: isChannel ? permDeleteForeignMessages : permDeleteForeign,
@@ -819,6 +825,7 @@ export async function saveMemberRoleAction({ roleModalMember, savingRole, roleEd
           canChangeName: permChangeName,
           canChangeReactions: permChangeReactions,
           canPinMessages: permPinMessages,
+          canStartVideoChat: permStartVideoChat,
           canDeleteForeignMessages: permDeleteForeign,
           canAddMembers: permAddMembers,
           canPostMessages: permPostMessages,

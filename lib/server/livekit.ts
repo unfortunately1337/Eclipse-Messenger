@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { AccessToken, RoomServiceClient, TrackSource } from "livekit-server-sdk";
+import { AccessToken, RoomServiceClient, TokenVerifier, TrackSource } from "livekit-server-sdk";
 import { HttpError } from "./http";
 
 export function livekitConfigured() {
@@ -17,6 +17,14 @@ function config() {
 
 export const callRoomName = (id: string) => `eclipse-${id}`;
 export const callIdentity = (id: string, userId: string) => createHash("sha256").update(`${id}:${userId}`).digest("hex");
+
+export async function verifyCallJoinToken(token: string) {
+  const cfg = config();
+  const claims = await new TokenVerifier(cfg.key, cfg.secret).verify(token);
+  const match = /^eclipse-([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/i.exec(claims.video?.room ?? "");
+  if (!match || !claims.video?.roomJoin || !claims.sub) throw new HttpError(403, "Вам недоступен этот звонок");
+  return { id: match[1], identity: claims.sub };
+}
 
 function service() {
   const cfg = config();
@@ -41,7 +49,8 @@ export async function issueCallConnection(id: string, userId: string) {
   return { url: cfg.url, token: await token.toJwt(), identity };
 }
 
-// A strict cutoff also revokes refreshed Cloud tokens issued during the call.
+// Cloud honors the cutoff. Self-hosted RTC joins are also checked by Eclipse's
+// forward-auth endpoint, because OSS RemoveParticipant alone does not revoke JWTs.
 export async function removeCallParticipant(id: string, userId: string) {
   try { await service().removeParticipant(callRoomName(id), callIdentity(id, userId), { revokeTokenTs: BigInt(Math.floor(Date.now() / 1000) + 2) }); }
   catch { console.warn("Call participant removal failed"); }

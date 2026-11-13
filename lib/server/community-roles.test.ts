@@ -27,3 +27,10 @@ it("only delegates pin permission when the requesting administrator also has it"
   expect(() => assertRoleDelegation("owner", { ...admin, canPinMessages: true }, member, "admin", { memberId: "member", canPinMessages: true })).not.toThrow();
   expect(() => assertRoleDelegation("owner", null, member, "owner", { memberId: "member", canPinMessages: true })).not.toThrow();
 });
+
+it("delegates video-chat launch independently and protects administrators who hold that permission", () => {
+  expect(() => assertRoleDelegation("owner", admin, member, "admin", { memberId: "member", canStartVideoChat: true })).toThrow("которых у вас нет");
+  expect(() => assertRoleDelegation("owner", admin, { ...member, role: "admin", canStartVideoChat: true }, "admin", { memberId: "member", role: "member" })).toThrow("которых у вас нет");
+  expect(() => assertRoleDelegation("owner", { ...admin, canStartVideoChat: true }, member, "admin", { memberId: "member", canStartVideoChat: true })).not.toThrow();
+  expect(() => assertRoleDelegation("owner", null, member, "owner", { memberId: "member", canStartVideoChat: true })).not.toThrow();
+});

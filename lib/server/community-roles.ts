@@ -2,7 +2,7 @@ import { prisma } from "./prisma";
 import { HttpError } from "./http";
 import { normalizeLink } from "./validation";
 
-export const communityPermissions = ["canChangeAvatar", "canChangeName", "canChangeReactions", "canPinMessages", "canDeleteForeignMessages", "canAddMembers", "canPostMessages", "canGenerateInviteLink", "canManageAdmins", "canEditForeignMessages"] as const;
+export const communityPermissions = ["canChangeAvatar", "canChangeName", "canChangeReactions", "canPinMessages", "canStartVideoChat", "canDeleteForeignMessages", "canAddMembers", "canPostMessages", "canGenerateInviteLink", "canManageAdmins", "canEditForeignMessages"] as const;
 type Permissions = Partial<Record<typeof communityPermissions[number], boolean>>;
 type Member = Permissions & { userId: string; role: string };
 export type RolePatch = Permissions & { memberId: string; role?: "member" | "admin"; roleLabel?: string };
@@ -31,9 +31,9 @@ export async function updateCommunityRole(kind: "group" | "channel", userId: str
     assertRoleDelegation(entity.ownerId, rows.find(row => row.userId === userId) ?? null, rows.find(row => row.userId === payload.memberId) ?? null, userId, payload);
     const role = payload.role ?? "admin";
     const roleLabel = payload.roleLabel?.trim() || (role === "admin" ? "админ" : null);
-    const data = { role, roleLabel, ...Object.fromEntries(communityPermissions.filter(key => kind === "channel" || key !== "canEditForeignMessages").map(key => [key, Boolean(payload[key])])) };
+    const data = { role, roleLabel, ...Object.fromEntries(communityPermissions.filter(key => kind === "channel" ? key !== "canStartVideoChat" : key !== "canEditForeignMessages").map(key => [key, key === "canStartVideoChat" ? role === "admin" && Boolean(payload[key]) : Boolean(payload[key])])) };
     if (kind === "group") await tx.groupMember.update({ where: { groupId_userId: { groupId: entity.id, userId: payload.memberId } }, data });
     else await tx.channelSubscriber.update({ where: { channelId_userId: { channelId: entity.id, userId: payload.memberId } }, data });
-    return { ...entity, role, roleLabel, canChangeReactions: Boolean(payload.canChangeReactions), canPinMessages: Boolean(payload.canPinMessages) };
+    return { ...entity, role, roleLabel, canChangeReactions: Boolean(payload.canChangeReactions), canPinMessages: Boolean(payload.canPinMessages), ...(kind === "group" ? { canStartVideoChat: role === "admin" && Boolean(payload.canStartVideoChat) } : {}) };
   });
 }

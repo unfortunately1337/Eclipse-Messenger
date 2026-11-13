@@ -1,0 +1,1 @@
+ALTER TABLE "GroupMember" ADD COLUMN "canStartVideoChat" BOOLEAN NOT NULL DEFAULT false;

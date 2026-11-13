@@ -1,12 +1,12 @@
 import { NextRequest } from "next/server";
 import { beforeEach, expect, it, vi } from "vitest";
 
-const mock = vi.hoisted(() => ({ auth: vi.fn(), csrf: vi.fn(), limit: vi.fn(), enabled: vi.fn(), own: vi.fn(), group: vi.fn(), view: vi.fn(), start: vi.fn(), join: vi.fn(), token: vi.fn(), heartbeat: vi.fn(), leave: vi.fn(), audio: vi.fn(), ended: vi.fn() }));
+const mock = vi.hoisted(() => ({ auth: vi.fn(), csrf: vi.fn(), limit: vi.fn(), enabled: vi.fn(), own: vi.fn(), group: vi.fn(), activities: vi.fn(), view: vi.fn(), start: vi.fn(), join: vi.fn(), token: vi.fn(), heartbeat: vi.fn(), leave: vi.fn(), audio: vi.fn(), ended: vi.fn() }));
 vi.mock("@/lib/server/auth", () => ({ requireUserFromRequest: mock.auth }));
 vi.mock("@/lib/server/csrf", () => ({ verifyCsrf: mock.csrf, ensureCsrfCookie: vi.fn() }));
 vi.mock("@/lib/server/rate-limit", () => ({ enforceRateLimit: mock.limit }));
 vi.mock("@/lib/server/livekit", () => ({ livekitConfigured: mock.enabled }));
-vi.mock("@/lib/server/calls", () => ({ ownCall: mock.own, groupCall: mock.group, callView: mock.view, startCall: mock.start, joinCall: mock.join, connectionForCall: mock.token, heartbeatCall: mock.heartbeat, leaveCall: mock.leave, saveCallParticipantAudio: mock.audio, endedCallOutcome: mock.ended }));
+vi.mock("@/lib/server/calls", () => ({ ownCall: mock.own, groupCall: mock.group, groupCallActivities: mock.activities, callView: mock.view, startCall: mock.start, joinCall: mock.join, connectionForCall: mock.token, heartbeatCall: mock.heartbeat, leaveCall: mock.leave, saveCallParticipantAudio: mock.audio, endedCallOutcome: mock.ended }));
 import { GET, POST } from "./route";
 import { HttpError } from "@/lib/server/http";
 
@@ -19,6 +19,7 @@ beforeEach(() => {
   mock.enabled.mockReturnValue(true);
   mock.own.mockResolvedValue(null);
   mock.group.mockResolvedValue(null);
+  mock.activities.mockResolvedValue([]);
   mock.start.mockResolvedValue({ id });
   mock.view.mockResolvedValue({ id, status: "ringing" });
 });

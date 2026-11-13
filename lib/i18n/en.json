@@ -2183,5 +2183,22 @@
   "Выполнено": "Met",
   "Не выполнено": "Not met",
   "Голос засчитан": "Vote counted",
-  "Отменить голос": "Retract vote"
+  "Отменить голос": "Retract vote",
+  "Начинать видеочат": "Start video chats",
+  "Видеочат: {0} участников": "Video chat: {0} participants",
+  "Вы участвуете": "You have joined",
+  "Присоединитесь к разговору в группе": "Join the conversation in the group",
+  "Участники смогут присоединиться из группы": "Members can join from the group",
+  "Начать видеочат": "Start video chat",
+  "Дождитесь, пока администратор начнёт видеочат": "Wait for an administrator to start the video chat",
+  "Закрепить видео: {0}": "Pin video: {0}",
+  "Открепить видео": "Unpin video",
+  "Открыть видеочат": "Open video chat",
+  "Покинуть видеочат": "Leave video chat",
+  "Свернуть видеочат": "Minimize video chat",
+  "Видеочат завершён": "Video chat ended",
+  "Участники видеочата": "Video chat participants",
+  "Закрыть список участников": "Close participant list",
+  "Завершить видеочат?": "End video chat?",
+  "Разговор завершится для всех участников группы.": "The conversation will end for everyone in the group."
 }

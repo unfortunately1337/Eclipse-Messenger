@@ -423,6 +423,7 @@ model GroupMember {
   canChangeName            Boolean @default(false)
   canChangeReactions       Boolean @default(false)
   canPinMessages       Boolean @default(false)
+  canStartVideoChat    Boolean @default(false)
   canDeleteForeignMessages Boolean @default(false)
   canAddMembers            Boolean @default(false)
   canPostMessages          Boolean @default(true)
@@ -773,3 +774,4 @@ model SecretChatMessage {
   @@index([secretChatId, pinnedAt])
   @@index([createdAt])
 }
+

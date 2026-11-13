@@ -79,8 +79,9 @@ export function useActiveConversation(sources: ActiveConversationSources): Activ
   const contactChat = activeChat;
 
   const callTarget = useMemo(() => {
-    if (!activeChat || activeChat.isBot || activeChat.isSystem || activeChat.link.startsWith("secret-") || activeChat.canSendMessages === false) return null;
+    if (!activeChat || activeChat.isBot || activeChat.isSystem || activeChat.link.startsWith("secret-")) return null;
     if (activeChat.chatType === "group") return { kind: "group" as const, link: activeChat.link };
+    if (activeChat.canSendMessages === false) return null;
     if ((!activeChat.chatType || activeChat.chatType === "direct") && activeChat.peerId !== selfId) return {
       kind: "direct" as const, link: activeChat.link, title: activeChat.displayName,
       peer: { id: activeChat.peerId, name: activeChat.displayName, avatarUrl: activeChat.avatarUrl ?? null, backgroundUrl: null }

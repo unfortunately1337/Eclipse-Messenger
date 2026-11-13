@@ -1,0 +1,24 @@
+services:
+  sfu:
+    image: livekit/livekit-server:v1.13.11@sha256:25cd902de7cacbd5f1f779f6a6ac1eae20ba8f56b0935934ce6b0ab80d1e3d20
+    container_name: eclipse-sfu
+    command: ["--config", "/etc/livekit.yaml"]
+    network_mode: host
+    restart: unless-stopped
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    volumes:
+      - ./livekit.yaml:/etc/livekit.yaml:ro
+    environment:
+      GOMAXPROCS: "1"
+      GOMEMLIMIT: "640MiB"
+    mem_limit: 768m
+    cpus: 0.65
+    oom_score_adj: 500
+    stop_grace_period: 30s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"

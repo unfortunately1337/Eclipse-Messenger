@@ -24,6 +24,7 @@ import { RecordingPanels } from "../RecordingPanels";
 import { MessageContextMenu } from "../MessageContextMenu";
 import { MessageComposer } from "../MessageComposer";
 import { MessageSelectionToolbar } from "../MessageSelectionToolbar";
+import { GroupVideoChatBanner } from "../../components/common/GroupVideoChat";
 
 import type { ActiveConversationModel } from "../controllers/useActiveConversation";
 import type { ChatPageStateModel } from "../controllers/useChatPageState";
@@ -43,7 +44,7 @@ import { bindMessageContextMenu, type MessageContextMenuSources } from "../bindi
 import { bindMessageComposer, type MessageComposerSources } from "../bindings/MessageComposer";
 
 export interface ConversationSceneOwnSources {
-  readonly active: Pick<ActiveConversationModel, "activeChat" | "expiringChatId" | "handleSecretChatExpired">;
+  readonly active: Pick<ActiveConversationModel, "activeChat" | "expiringChatId" | "handleSecretChatExpired" | "calls">;
   readonly page: Pick<ChatPageStateModel, "t" | "transparentVisual"> & {
     panels: Pick<ChatPageStateModel["panels"], "isDesktop">;
     wallpaperUpload: Pick<ChatPageStateModel["wallpaperUpload"], "dragActive">;
@@ -168,7 +169,11 @@ export function ConversationScene({ sources }: { sources: ConversationSceneSourc
                 preview={renderEmojiText(pinnedPreviewText, { size: 14 })} style={chatHeaderThemeStyle}
                 onClick={() => void jumpToPinnedMessage()} />}
             </AnimatePresence>
-            <div id="global-voice-chat-slot" className={cn("pointer-events-auto empty:hidden pb-1", messagePins.active && !selectionMode && "mt-2")} />
+            <div id="global-voice-chat-slot" className={cn("pointer-events-auto empty:hidden pb-1", messagePins.active && !selectionMode && "mt-2")}>
+              {activeConversation?.chatType === "group" && activeChat && !selectionMode && <GroupVideoChatBanner key={activeChat.link}
+                link={activeChat.link} title={activeChat.displayName} avatarUrl={activeChat.avatarUrl}
+                style={chatHeaderThemeStyle} />}
+            </div>
             <div id="global-music-chat-slot" className={cn("pointer-events-auto empty:hidden pb-1", messagePins.active && !selectionMode && "mt-2")} />
             {isSecretChat && activeChat && (
               <div className="pointer-events-auto mx-auto mt-1 flex flex-col items-center gap-1">

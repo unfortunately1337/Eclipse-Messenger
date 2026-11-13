@@ -88,6 +88,7 @@ export function useMemberRoleState() {
   const [permChangeName, setPermChangeName] = useState(false);
   const [permChangeReactions, setPermChangeReactions] = useState(false);
   const [permPinMessages, setPermPinMessages] = useState(false);
+  const [permStartVideoChat, setPermStartVideoChat] = useState(false);
   const [permDeleteForeign, setPermDeleteForeign] = useState(false);
   const [permAddMembers, setPermAddMembers] = useState(false);
   const [permPostMessages, setPermPostMessages] = useState(true);
@@ -101,6 +102,7 @@ export function useMemberRoleState() {
     canChangeName: boolean;
     canChangeReactions: boolean;
     canPinMessages: boolean;
+    canStartVideoChat: boolean;
     canDeleteForeignMessages: boolean;
     canAddMembers: boolean;
     canPostMessages: boolean;
@@ -122,8 +124,8 @@ export function useMemberRoleState() {
     setPermChangeName,
     permChangeReactions,
     setPermChangeReactions,
-    permPinMessages,
-    setPermPinMessages,
+    permPinMessages, permStartVideoChat,
+    setPermPinMessages, setPermStartVideoChat,
     permDeleteForeign,
     setPermDeleteForeign,
     permAddMembers,

@@ -58,7 +58,7 @@ export interface CommunityCallbackSources {
     userDetails: Pick<ChatPageStateModel["userDetails"], "setProfileActiveTab">;
     directorySearch: Pick<ChatPageStateModel["directorySearch"], "setChatSearchChannels">;
     selection: Pick<ChatPageStateModel["selection"], "selectedLinkRef" | "selectedLink" | "setSelectedLink">;
-    memberRole: Pick<ChatPageStateModel["memberRole"], "setRoleEditorKind" | "setRoleModalMember" | "setRoleNameDraft" | "setPermChangeAvatar" | "setPermChangeName" | "setPermChangeReactions" | "setPermPinMessages" | "setPermDeleteForeign" | "setPermAddMembers" | "setPermPostMessages" | "setPermEditForeignMessages" | "setPermDeleteForeignMessages" | "setPermGenerateInviteLink" | "setPermManageAdmins" | "setRoleEditorInitial" | "roleModalMember" | "roleEditorKind" | "roleNameDraft" | "permChangeAvatar" | "permChangeName" | "permChangeReactions" | "permPinMessages" | "permPostMessages" | "permEditForeignMessages" | "permDeleteForeignMessages" | "permDeleteForeign" | "permAddMembers" | "permGenerateInviteLink" | "permManageAdmins">;
+    memberRole: Pick<ChatPageStateModel["memberRole"], "setRoleEditorKind" | "setRoleModalMember" | "setRoleNameDraft" | "setPermChangeAvatar" | "setPermChangeName" | "setPermChangeReactions" | "setPermPinMessages" | "setPermStartVideoChat" | "setPermDeleteForeign" | "setPermAddMembers" | "setPermPostMessages" | "setPermEditForeignMessages" | "setPermDeleteForeignMessages" | "setPermGenerateInviteLink" | "setPermManageAdmins" | "setRoleEditorInitial" | "roleModalMember" | "roleEditorKind" | "roleNameDraft" | "permChangeAvatar" | "permChangeName" | "permChangeReactions" | "permPinMessages" | "permStartVideoChat" | "permPostMessages" | "permEditForeignMessages" | "permDeleteForeignMessages" | "permDeleteForeign" | "permAddMembers" | "permGenerateInviteLink" | "permManageAdmins">;
     account: Pick<ChatPageStateModel["account"], "selfId">;
     profileNavigation: Pick<ChatPageStateModel["profileNavigation"], "setProfileOpenedExternally">;
     panels: Pick<ChatPageStateModel["panels"], "isDesktop" | "desktopDetailsPanelOpen" | "setDesktopDetailsPanelOpen" | "setInspectedDetailsEntity">;
@@ -347,19 +347,19 @@ export function createCommunityCallbacks(sources: CommunityCallbackSources): Pic
   function openRoleEditor(member: any, kind: "group" | "channel" = sources.presentation.effectiveDetailsChatType === "channel" || sources.page.mediaAndChannel.channelModalOpen ? "channel" : "group"): ReturnType<ChatPageCallbacks["openRoleEditor"]> {
     const { effectiveDetailsChatType } = sources.presentation;
     const { channelModalOpen } = sources.page.mediaAndChannel;
-    const { setRoleEditorKind, setRoleModalMember, setRoleNameDraft, setPermChangeAvatar, setPermChangeName, setPermChangeReactions, setPermPinMessages, setPermDeleteForeign, setPermAddMembers, setPermPostMessages, setPermEditForeignMessages, setPermDeleteForeignMessages, setPermGenerateInviteLink, setPermManageAdmins, setRoleEditorInitial } = sources.page.memberRole;
+    const { setRoleEditorKind, setRoleModalMember, setRoleNameDraft, setPermChangeAvatar, setPermChangeName, setPermChangeReactions, setPermPinMessages, setPermStartVideoChat, setPermDeleteForeign, setPermAddMembers, setPermPostMessages, setPermEditForeignMessages, setPermDeleteForeignMessages, setPermGenerateInviteLink, setPermManageAdmins, setRoleEditorInitial } = sources.page.memberRole;
 
-    return openRoleEditorAction({ effectiveDetailsChatType, channelModalOpen, setRoleEditorKind, setRoleModalMember, setRoleNameDraft, setPermChangeAvatar, setPermChangeName, setPermChangeReactions, setPermPinMessages, setPermDeleteForeign, setPermAddMembers, setPermPostMessages, setPermEditForeignMessages, setPermDeleteForeignMessages, setPermGenerateInviteLink, setPermManageAdmins, setRoleEditorInitial }, member, kind);
+    return openRoleEditorAction({ effectiveDetailsChatType, channelModalOpen, setRoleEditorKind, setRoleModalMember, setRoleNameDraft, setPermChangeAvatar, setPermChangeName, setPermChangeReactions, setPermPinMessages, setPermStartVideoChat, setPermDeleteForeign, setPermAddMembers, setPermPostMessages, setPermEditForeignMessages, setPermDeleteForeignMessages, setPermGenerateInviteLink, setPermManageAdmins, setRoleEditorInitial }, member, kind);
   }
 
   async function saveMemberRole(): ReturnType<ChatPageCallbacks["saveMemberRole"]> {
     const { t, setErrorText } = sources.page;
-    const { roleModalMember, roleEditorKind, roleNameDraft, permChangeAvatar, permChangeName, permChangeReactions, permPinMessages, permPostMessages, permEditForeignMessages, permDeleteForeignMessages, permDeleteForeign, permAddMembers, permGenerateInviteLink, permManageAdmins, setRoleModalMember } = sources.page.memberRole;
+    const { roleModalMember, roleEditorKind, roleNameDraft, permChangeAvatar, permChangeName, permChangeReactions, permPinMessages, permStartVideoChat, permPostMessages, permEditForeignMessages, permDeleteForeignMessages, permDeleteForeign, permAddMembers, permGenerateInviteLink, permManageAdmins, setRoleModalMember } = sources.page.memberRole;
     const { savingRole, setChannelModalData, setSavingRole, channelModalData } = sources.page.mediaAndChannel;
     const { setGroupModalData, groupModalData } = sources.page.groupDetails;
     const { channelModalCacheRef, groupModalCacheRef } = sources.elements.conversationElement;
 
-    return saveMemberRoleAction({ roleModalMember, savingRole, roleEditorKind, roleNameDraft, t, permChangeAvatar, permChangeName, permChangeReactions, permPinMessages, permPostMessages, permEditForeignMessages, permDeleteForeignMessages, permDeleteForeign, permAddMembers, permGenerateInviteLink, permManageAdmins, setChannelModalData, channelModalCacheRef, setGroupModalData, groupModalCacheRef, setSavingRole, setErrorText, channelModalData, groupModalData, setRoleModalMember });
+    return saveMemberRoleAction({ roleModalMember, savingRole, roleEditorKind, roleNameDraft, t, permChangeAvatar, permChangeName, permChangeReactions, permPinMessages, permStartVideoChat, permPostMessages, permEditForeignMessages, permDeleteForeignMessages, permDeleteForeign, permAddMembers, permGenerateInviteLink, permManageAdmins, setChannelModalData, channelModalCacheRef, setGroupModalData, groupModalCacheRef, setSavingRole, setErrorText, channelModalData, groupModalData, setRoleModalMember });
   }
 
   async function leaveGroup(): ReturnType<ChatPageCallbacks["leaveGroup"]> {

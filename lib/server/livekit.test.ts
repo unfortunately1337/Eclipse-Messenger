@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { TokenVerifier } from "livekit-server-sdk";
-import { callIdentity, issueCallConnection, livekitConfigured } from "./livekit";
+import { callIdentity, issueCallConnection, livekitConfigured, verifyCallJoinToken } from "./livekit";
 
 beforeEach(() => {
   vi.stubEnv("LIVEKIT_URL", "wss://synthetic.livekit.cloud");
@@ -10,6 +10,13 @@ beforeEach(() => {
 afterEach(() => vi.unstubAllEnvs());
 
 describe("LiveKit media credentials", () => {
+  it("verifies only signed, room-join tokens for Eclipse call rooms", async () => {
+    const id = "00000000-0000-4000-8000-000000000001";
+    const connection = await issueCallConnection(id, "user");
+    await expect(verifyCallJoinToken(connection.token)).resolves.toEqual({ id, identity: callIdentity(id, "user") });
+    await expect(verifyCallJoinToken(connection.token + "tampered")).rejects.toThrow();
+    await expect(verifyCallJoinToken((await issueCallConnection("foreign-room", "user")).token)).rejects.toMatchObject({ status: 403 });
+  });
   it("issues short-lived room-scoped tokens without admin, data, recording, identity or profile disclosures", async () => {
     const result = await issueCallConnection("synthetic-call", "private-user-id");
     const payload = await new TokenVerifier(process.env.LIVEKIT_API_KEY!, process.env.LIVEKIT_API_SECRET!).verify(result.token);

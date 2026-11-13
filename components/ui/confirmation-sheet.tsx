@@ -21,6 +21,8 @@ type ConfirmationSheetProps = {
   cancelLabel?: ReactNode;
   actionDisabled?: boolean;
   actionClassName?: string;
+  cancelClassName?: string;
+  footerClassName?: string;
   iconClassName?: string;
   backdropClassName?: string;
   zIndex?: number;
@@ -38,6 +40,8 @@ export function ConfirmationSheet({
   cancelLabel = t("Отмена"),
   actionDisabled,
   actionClassName,
+  cancelClassName,
+  footerClassName,
   iconClassName,
   backdropClassName,
   zIndex = 120,
@@ -111,11 +115,11 @@ export function ConfirmationSheet({
 
             {details ? <div className="mt-4">{details}</div> : null}
 
-            <div className="mt-5 -mr-2 -mb-2 flex flex-wrap items-center justify-end gap-2">
+            <div className={cn("mt-5 -mr-2 -mb-2 flex flex-wrap items-center justify-end gap-2", footerClassName)}>
               <button
                 type="button"
                 onClick={() => onOpenChange(false)}
-                className="min-h-10 rounded-xl px-3 text-[14px] font-semibold uppercase tracking-[0.01em] text-[var(--ui-accent-solid,#c4b5fd)] transition-colors hover:bg-white/[0.05] focus-visible:outline-2 focus-visible:outline-offset-2"
+                className={cn("min-h-10 rounded-xl px-3 text-[14px] font-semibold uppercase tracking-[0.01em] text-[var(--ui-accent-solid,#c4b5fd)] transition-colors hover:bg-white/[0.05] focus-visible:outline-2 focus-visible:outline-offset-2", cancelClassName)}
               >
                 {cancelLabel}
               </button>

@@ -7,16 +7,20 @@ import { IoEllipsisHorizontal, IoNotifications, IoNotificationsOff, IoSearch } f
 import { SlidersHorizontal, LogOut, Trash2 } from "lucide-react";
 import { useTranslation } from "@/components/LocaleProvider";
 import { getProfileMenuVisualStyle } from "@/lib/client/panel-visual";
+import { PiWaveformBold } from "react-icons/pi";
+import { useOpenGroupVideoChat, type GroupVideoChatTarget } from "./GroupVideoChat";
 
 type Props = {
   kind: "group" | "channel"; muted: boolean; glass: boolean; canManage: boolean;
   danger: "delete" | "leave" | null;
   onToggleSound: () => void; onManage: () => void; onSearch?: () => void;
   onDanger: () => void;
+  videoChatTarget?: GroupVideoChatTarget;
 };
 
 export default function CommunityProfileActions(props: Props) {
   const t = useTranslation(), reduced = useReducedMotion();
+  const openVideoChat = useOpenGroupVideoChat();
   const [moreOpen, setMoreOpen] = useState(false);
   const root = useRef<HTMLDivElement>(null), menuId = useId();
   useEffect(() => {
@@ -26,11 +30,12 @@ export default function CommunityProfileActions(props: Props) {
     document.addEventListener("pointerdown", dismiss); document.addEventListener("keydown", escape);
     return () => { document.removeEventListener("pointerdown", dismiss); document.removeEventListener("keydown", escape); };
   }, [moreOpen]);
-  const count = 2 + Number(props.kind === "channel") + Number(props.canManage);
+  const count = 2 + Number(props.kind === "channel") + Number(props.canManage) + Number(Boolean(props.videoChatTarget));
   const tile = "grid h-[60px] min-w-0 content-center justify-items-center gap-1 rounded-[18px] border-0 bg-white/[0.04] px-0 py-2 text-zinc-300 transition-[background-color,color,transform] hover:bg-white/[0.09] hover:text-white active:scale-[0.96] focus-visible:outline-2 focus-visible:outline-white/50";
   const label = "max-w-full truncate text-[10.5px] leading-[13px]";
   const item = "flex min-h-11 w-full items-center gap-3 rounded-[16px] px-3 text-left text-[14px] font-medium transition-colors hover:bg-white/[0.08]";
   return <div ref={root} aria-label={t("Действия профиля")} className="relative z-20 mt-3 grid gap-2" style={{ gridTemplateColumns: `repeat(${count}, minmax(0, 1fr))` }}>
+    {props.videoChatTarget && <button type="button" className={tile} onClick={() => openVideoChat(props.videoChatTarget!)}><PiWaveformBold size={22} aria-hidden /><span className={label}>{t("Видеочат")}</span></button>}
     <button type="button" className={tile} onClick={props.onToggleSound} aria-pressed={!props.muted} aria-label={t(props.muted ? "Включить звук уведомлений" : "Выключить звук уведомлений")}>
       <span className="relative block h-[22px] w-[22px]" aria-hidden><AnimatePresence initial={false}><motion.span key={props.muted ? "muted" : "sound"} className="absolute inset-0 grid place-items-center" initial={{ opacity: 0, scale: 0.75 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.75 }} transition={{ duration: reduced ? 0 : 0.18 }}>{props.muted ? <IoNotificationsOff size={22} /> : <IoNotifications size={22} />}</motion.span></AnimatePresence></span>
       <span className={label}>{t("Звук")}</span>

@@ -166,7 +166,7 @@ export function useCalls(userId: string | null, target: Target) {
     if (destination.kind === "direct" && snapshot.directTransport === "p2p") void import("@/lib/client/call-p2p-session").catch(() => {});
     else void import("livekit-client").catch(() => {});
     try {
-      await microphonePermission(mode === "video");
+      await microphonePermission(destination.kind === "direct" && mode === "video");
       if (owner.current !== userId) return;
       const result = await apiRequest<{ call: CallView }>("/api/calls", { method: "POST", body: JSON.stringify({ action: "start", protocol: "p2p-v1", kind: destination.kind, link: destination.link, mode }) });
       if (owner.current === userId) {

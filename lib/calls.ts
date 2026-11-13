@@ -26,7 +26,8 @@ export type CallView = {
   audioPreferences?: Record<string, { volume: number; muted: boolean }>;
 };
 
-export type CallsSnapshot = { enabled: boolean; directTransport?: CallTransport; current: CallView | null; groupCall: CallView | null; ended?: { id: string; outcome: NonNullable<CallView["endOutcome"]> } | null };
+export type GroupCallActivity = { id: string; link: string; participantCount: number; mode: CallMode };
+export type CallsSnapshot = { enabled: boolean; groupEnabled?: boolean; groupCalls?: GroupCallActivity[]; directTransport?: CallTransport; current: CallView | null; groupCall: CallView | null; ended?: { id: string; outcome: NonNullable<CallView["endOutcome"]> } | null };
 export type LiveKitCallConnection = { transport?: "livekit"; url: string; token: string; identity: string };
 export type P2PCallConnection = {
   transport: "p2p"; callId: string; clientId: string; selfId: string; peerId: string;
@@ -35,4 +36,3 @@ export type P2PCallConnection = {
   turnExpiresAt: number; relayConfigured: boolean;
 };
 export type CallConnection = LiveKitCallConnection | P2PCallConnection;
-export const CALL_GROUP_LIMIT = 24;

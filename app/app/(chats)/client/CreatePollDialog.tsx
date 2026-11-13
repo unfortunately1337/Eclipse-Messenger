@@ -6,6 +6,7 @@ import { memo } from "react";
 import { Link as LinkIcon, X } from "lucide-react";
 import { AnimatePresence, motion } from "framer-motion";
 import { ConfirmationSheet } from "@/components/ui/confirmation-sheet";
+import { Button } from "@/components/ui/button";
 import { appToast as toast } from "@/lib/client/app-toast";
 import { sanitizeExternalUrl } from "@/lib/client/safe-content";
 
@@ -123,7 +124,7 @@ export const CreatePollDialog = memo(function CreatePollDialog({ pollDialogOpen,
             </div>
 
             {/* Submit Button */}
-            <button
+            <Button
               type="button"
               disabled={
                 !pollQuestion.trim() ||
@@ -140,9 +141,9 @@ export const CreatePollDialog = memo(function CreatePollDialog({ pollDialogOpen,
                   pollExpiresInHours,
                 );
               }}
-              className="w-full mt-3 rounded-2xl bg-[var(--ui-accent-solid,#38bdf8)] py-3.5 text-[14px] font-bold text-black hover:brightness-110 active:scale-[0.995] disabled:opacity-20 disabled:hover:brightness-100 disabled:active:scale-100 transition-all"
+              className="mt-2 h-11 w-full rounded-full bg-white px-5 py-2 text-sm font-semibold text-zinc-950 hover:bg-zinc-200 active:scale-[0.995] disabled:opacity-20 disabled:hover:bg-white disabled:active:scale-100"
             >
-              {t("Отправить опрос")}</button>
+              {t("Отправить опрос")}</Button>
           </motion.div>
         </motion.div>
       ) : null}

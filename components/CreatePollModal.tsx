@@ -33,7 +33,7 @@ export default function CreatePollModal({ isOpen, onClose, onSubmit }: CreatePol
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     const filteredOptions = options.map((opt: string) => opt.trim()).filter(Boolean);
-
+    
     // Validations
     if (!question.trim()) return;
     if (filteredOptions.length < 2) return;
@@ -165,7 +165,7 @@ export default function CreatePollModal({ isOpen, onClose, onSubmit }: CreatePol
             <button
               type="submit"
               disabled={!isValid}
-              className="flex-1 h-10 bg-white hover:bg-zinc-200 active:bg-zinc-300 disabled:opacity-30 disabled:hover:bg-white disabled:hover:text-zinc-950 rounded-xl text-xs font-bold text-zinc-950 transition-all"
+              className="flex-1 h-10 bg-white hover:bg-zinc-200 active:bg-zinc-300 disabled:opacity-30 disabled:hover:bg-white disabled:hover:text-zinc-950 rounded-full text-xs font-bold text-zinc-950 transition-all"
             >
               {t("Создать")}</button>
           </div>

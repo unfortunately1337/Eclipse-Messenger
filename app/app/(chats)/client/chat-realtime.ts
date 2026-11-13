@@ -1312,17 +1312,19 @@ export function subscribeChatRealtime({ selfId, pusherRef, realtimeSelfIdRef, ch
       });
 
       userChannel.bind("group:role-updated", (rawPayload: unknown) => {
-        const payload = rawPayload as { groupLink?: string; groupId?: string; memberId?: string; role?: string; roleLabel?: string; canChangeReactions?: boolean; canPinMessages?: boolean };
+        const payload = rawPayload as { groupLink?: string; groupId?: string; memberId?: string; role?: string; roleLabel?: string; canChangeReactions?: boolean; canPinMessages?: boolean; canStartVideoChat?: boolean };
         if (!payload?.groupLink || !payload?.memberId) return;
         clearConversationCaches(selfId, payload.groupLink, "group");
         if (payload.memberId === selfId && payload.groupId) window.dispatchEvent(new CustomEvent(PINS_UPDATED_EVENT, { detail: { chatType: "group", chatId: payload.groupId } }));
         const permissionPatch = {
           ...(typeof payload.canChangeReactions === "boolean" ? { canChangeReactions: payload.canChangeReactions } : {}),
           ...(typeof payload.canPinMessages === "boolean" ? { canPinMessages: payload.canPinMessages } : {}),
+          ...(typeof payload.canStartVideoChat === "boolean" ? { canStartVideoChat: payload.canStartVideoChat } : {}),
         };
         const ownPermission = payload.memberId === selfId ? {
           ...(typeof payload.canChangeReactions === "boolean" ? { myCanChangeReactions: payload.canChangeReactions } : {}),
           ...(typeof payload.canPinMessages === "boolean" ? { myCanPinMessages: payload.canPinMessages } : {}),
+          ...(typeof payload.canStartVideoChat === "boolean" ? { myCanStartVideoChat: payload.canStartVideoChat } : {}),
           ...(payload.role ? { myRole: payload.role } : {}),
         } : {};
         setActiveConversation(previous => previous?.chatType === "group" && previous.group && previous.group.link === payload.groupLink

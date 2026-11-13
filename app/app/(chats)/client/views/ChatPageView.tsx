@@ -8,6 +8,7 @@ import { MdDelete } from "react-icons/md";
 import { AnimatePresence, MotionConfig, motion } from "framer-motion";
 
 import { CallRoomPanel } from "../lazy-panels";
+import { GroupCallActivityProvider } from "../../components/common/GroupVideoChat";
 
 import type { ChatPagePresentationModel } from "../controllers/useChatPagePresentation";
 import type { ConversationPresentationModel } from "../controllers/useConversationPresentation";
@@ -68,6 +69,7 @@ export function ChatPageView({ sources }: { sources: ChatPageViewSources }) {
           }}
         />
         {calls.presentation && selfId && <CallRoomPanel key={`${selfId}:${calls.presentationKey}`} call={calls.presentation} selfId={selfId} glass={transparentVisual} busy={calls.busy} onJoin={calls.join} onLeave={calls.leave} />}
+        <GroupCallActivityProvider key={selfId ?? "anonymous"} activities={calls.groupCalls} controller={calls}>
         <ChatWorkspace sources={sources} />
 
         <MediaOverlays sources={sources} />
@@ -139,6 +141,7 @@ export function ChatPageView({ sources }: { sources: ChatPageViewSources }) {
           }
         }
       `}</style>
+        </GroupCallActivityProvider>
       </div>
     </MotionConfig>
   );

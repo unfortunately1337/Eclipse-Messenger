@@ -31,6 +31,7 @@ const rolePatchSchema = z.object({
   canChangeName: z.boolean().optional(),
   canChangeReactions: z.boolean().optional(),
   canPinMessages: z.boolean().optional(),
+  canStartVideoChat: z.boolean().optional(),
   canDeleteForeignMessages: z.boolean().optional(),
   canAddMembers: z.boolean().optional(),
   canPostMessages: z.boolean().optional(),
@@ -62,6 +63,7 @@ async function resolveGroupIdForMember(userId: string, rawLink: string) {
       myCanChangeName: boolean;
       myCanChangeReactions: boolean;
       myCanPinMessages: boolean;
+      myCanStartVideoChat: boolean;
       myCanDeleteForeignMessages: boolean;
       myCanAddMembers: boolean;
       myCanPostMessages: boolean;
@@ -87,6 +89,7 @@ async function resolveGroupIdForMember(userId: string, rawLink: string) {
       gm."canChangeName" AS "myCanChangeName",
       gm."canChangeReactions" AS "myCanChangeReactions",
       gm."canPinMessages" AS "myCanPinMessages",
+      gm."canStartVideoChat" AS "myCanStartVideoChat",
       gm."canDeleteForeignMessages" AS "myCanDeleteForeignMessages",
       gm."canAddMembers" AS "myCanAddMembers",
       gm."canPostMessages" AS "myCanPostMessages",
@@ -123,6 +126,7 @@ export async function GET(req: NextRequest, { params }: Params) {
         canChangeName: boolean;
         canChangeReactions: boolean;
         canPinMessages: boolean;
+        canStartVideoChat: boolean;
         canDeleteForeignMessages: boolean;
         canAddMembers: boolean;
         canPostMessages: boolean;
@@ -141,6 +145,7 @@ export async function GET(req: NextRequest, { params }: Params) {
         gm."canChangeName",
         gm."canChangeReactions",
         gm."canPinMessages",
+        gm."canStartVideoChat",
         gm."canDeleteForeignMessages",
         gm."canAddMembers",
         gm."canPostMessages",
@@ -170,6 +175,7 @@ export async function GET(req: NextRequest, { params }: Params) {
         myCanChangeName: group.myCanChangeName,
         myCanChangeReactions: group.myCanChangeReactions,
         myCanPinMessages: group.myCanPinMessages,
+        myCanStartVideoChat: group.myCanStartVideoChat,
         myCanDeleteForeignMessages: group.myCanDeleteForeignMessages,
         myCanAddMembers: group.myCanAddMembers,
         myCanPostMessages: group.myCanPostMessages,
@@ -191,6 +197,7 @@ export async function GET(req: NextRequest, { params }: Params) {
           canChangeName: member.canChangeName,
           canChangeReactions: member.canChangeReactions,
           canPinMessages: member.canPinMessages,
+          canStartVideoChat: member.canStartVideoChat,
           canDeleteForeignMessages: member.canDeleteForeignMessages,
           canAddMembers: member.canAddMembers,
           canPostMessages: member.canPostMessages,
@@ -416,6 +423,7 @@ export async function PATCH(req: NextRequest, { params }: Params) {
             roleLabel,
             canChangeReactions: group.canChangeReactions,
             canPinMessages: group.canPinMessages,
+            canStartVideoChat: group.canStartVideoChat,
           },
         }),
       ),

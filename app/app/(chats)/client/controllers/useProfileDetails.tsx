@@ -173,6 +173,7 @@ export function useProfileDetails(sources: ProfileDetailsSources): ProfileDetail
     const canManage = isOwner || entity.myRole === "admin";
     const danger = isOwner ? "delete" : kind === "group" || channelModalData?.channel.isSubscribed ? "leave" : null;
     return <CommunityProfileActions key={kind + ":" + entity.link} kind={kind} muted={mutedChatLinkSet.has(entity.link)} glass={transparentVisual} canManage={canManage} danger={danger}
+      videoChatTarget={kind === "group" ? { link: entity.link, title: entity.name, avatarUrl: entity.avatarUrl, canStart: isOwner || entity.myRole === "admin" && Boolean(groupModalData?.group.myCanStartVideoChat) } : undefined}
       onToggleSound={() => toggleChatMutedState(entity.link)}
       onManage={() => { if (canManage) { if (kind === "group") setGroupSubView("settings"); else setChannelSubView("settings"); } }}
       onSearch={kind === "channel" ? () => openMessageSearchFor(entity.link, "channel") : undefined}

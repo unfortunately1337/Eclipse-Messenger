@@ -4,6 +4,7 @@ import { OnlineStatusDot } from "@/components/ui/online-status-dot";
 import { cn } from "@/lib/utils";
 import { AnimatePresence, motion } from "framer-motion";
 import { Image as ImageIcon, ListCollapse, Mic, Music2, Paperclip, SquarePlay } from "lucide-react";
+import { GroupCallListMarker } from "../components/common/GroupVideoChat";
 import { memo } from "react";
 import { FaLock, FaVolumeMute } from "react-icons/fa";
 import { FiPhone, FiVideo } from "react-icons/fi";
@@ -117,6 +118,7 @@ export const ChatSidebarRow = memo(function ChatSidebarRow({ row, shared, select
                 </>) : (<VerifiedTitle emojiStatusInteractive={false} kind={chat.chatType === "group" ? "group" : chat.chatType === "channel" ? "channel" : "user"} link={chat.link} isBot={chat.isBot}>{renderTextWithEmojis(chat.chatType === "saved" ? t("Избранное") : chat.displayName)}</VerifiedTitle>)}
                 {isChatMuted ? <FaVolumeMute size={12} className="shrink-0 text-zinc-500" /> : null}
               </span>
+              <GroupCallListMarker link={chat.chatType === "group" ? chat.link : ""} />
             </div>
             {!isEmptyChat ? (<span className={cn("shrink-0 inline-flex items-center gap-1 pt-0.5 text-[12px] font-medium leading-none text-zinc-500 dark:text-zinc-400", isPinned ? "text-zinc-400 dark:text-zinc-300" : "")}>
               {chat.chatType === "direct" && chat.lastMessageMine ? (<MessageStatusTicks read={isLastDirectMessageRead} />) : null}

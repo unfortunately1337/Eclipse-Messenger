@@ -2,16 +2,13 @@
 
 import { memo, useCallback, useEffect, useRef, useState } from "react";
 import type { CallMediaSession, CallParticipant, CallMediaTrack } from "@/lib/client/call-media-session";
-import { AnimatePresence, motion } from "framer-motion";
-import { ChevronDown, Maximize2, Mic, MicOff, MonitorUp, Phone, PhoneOff, Video, VideoOff, Volume2, X } from "lucide-react";
+import { MonitorUp } from "lucide-react";
 import { useTranslation } from "@/components/LocaleProvider";
-import { MediaAvatar } from "@/components/ui/media";
 import { apiRequest } from "@/lib/client/http";
 import { showAppToast } from "@/lib/client/app-toast";
 import type { CallConnection, CallView, CallsSnapshot } from "@/lib/calls";
-import { getChatHeaderVisualStyle } from "@/lib/client/panel-visual";
 import PersonalCallWindow from "./PersonalCallWindow";
-import { CallElapsed } from "./CallElapsed";
+import GroupCallWindow, { type GroupCallPerson } from "./GroupCallWindow";
 import { useCallAudioLevels } from "../../hooks/useCallAudioLevels";
 import { useParticipantAudio } from "../../hooks/useParticipantAudio";
 import { selectCallVideo, visibleCallTrack, screenShareError } from "@/lib/client/call-screen-share";
@@ -20,6 +17,7 @@ import { callConnectionSignal } from "@/lib/client/call-connection-quality";
 import { switchCallCamera, type CallCameraFacing } from "@/lib/client/call-camera";
 import { callClientId } from "@/lib/client/call-p2p-signaling";
 import { personalCallStatus } from "@/lib/client/call-status";
+import type { GroupVoiceSample } from "@/lib/client/group-call-voice";
 
 const noiseSuppressionPreferenceKey = "eclipse:call:noise-suppression";
 
@@ -77,8 +75,7 @@ export const CallRoomPanel = memo(function CallRoomPanel({ call, selfId, glass, 
   const minimize = useCallback(() => setMinimized(true), []);
   const expand = useCallback(() => setMinimized(false), []);
   const [, redraw] = useState(0);
-  const [initialVideo] = useState(call.mode === "video" && call.callerId === selfId);
-  const material = getChatHeaderVisualStyle(glass);
+  const [initialVideo] = useState(call.kind === "direct" && call.mode === "video" && call.callerId === selfId);
   const callEnded = call.status === "ended";
 
   useEffect(() => {
@@ -234,7 +231,6 @@ export const CallRoomPanel = memo(function CallRoomPanel({ call, selfId, glass, 
   const microphone = room?.localParticipant.isMicrophoneEnabled ?? false;
   const camera = room?.localParticipant.isCameraEnabled ?? false;
   const screen = room?.localParticipant.isScreenShareEnabled ?? false;
-  const status = call.incoming ? t("Входящий звонок") : call.status === "ringing" ? t("Ожидаем ответа…") : !call.onThisSession ? t("Звонок открыт на другом устройстве") : <>{t(state)}{call.startedAt ? <> · <CallElapsed startedAt={call.startedAt} /></> : null}</>;
   const finished = call.status === "ended" || Boolean(localEndOutcome) || state === "Звонок завершён";
   const endOutcome = call.endOutcome ?? localEndOutcome;
   const controlsDisabled = !room?.ready || mediaBusy || busy || finished;
@@ -271,7 +267,7 @@ export const CallRoomPanel = memo(function CallRoomPanel({ call, selfId, glass, 
   const localVideo = camera ? visibleCallTrack(room?.localParticipant, "camera") : undefined;
   const peer = call.peer ?? call.participants.find(person => person.id !== selfId);
   const peerAudio = participantAudio.get(peer?.id ?? "");
-  const readImmediateLevels = useCallAudioLevels(microphoneTrack, remote?.getTrackPublication("microphone")?.track?.mediaStreamTrack, call.kind === "direct" && connected && !finished);
+  const readImmediateLevels = useCallAudioLevels(microphoneTrack, remote?.getTrackPublication("microphone")?.track?.mediaStreamTrack, connected && !finished);
   const readVoiceLevels = useCallback(() => {
     if (!room || room.state !== "connected" || finished) return { local: 0, remote: 0 };
     const immediate = readImmediateLevels();
@@ -281,6 +277,33 @@ export const CallRoomPanel = memo(function CallRoomPanel({ call, selfId, glass, 
     };
   }, [room, remote, finished, peerAudio.muted, peerAudio.volume, readImmediateLevels]);
   const personalStatus = personalCallStatus(call, state, finished, endOutcome);
+  const readGroupVoiceLevels = (): GroupVoiceSample[] => {
+    if (!room || room.state !== "connected" || finished) return [];
+    return [{ id: selfId, local: true, level: room.localParticipant.isMicrophoneEnabled ? readImmediateLevels()?.local ?? room.localParticipant.audioLevel : 0 },
+      ...[...room.remoteParticipants.values()].map(person => {
+        const id = call.participants.find(profile => profile.identity === person.identity)?.id ?? person.identity;
+        const audio = participantAudio.get(id);
+        return { id, local: false, level: person.isMicrophoneEnabled && !audio.muted && audio.volume > 0 ? person.audioLevel : 0 };
+      })];
+  };
+  const groupPeople: GroupCallPerson[] = [];
+  if (call.kind === "group") {
+    const profiles = new Map(call.participants.map(person => [person.identity, person]));
+    const mediaPeople = new Map(participants.map(person => [person.identity, person]));
+    const identities = new Set([...profiles.keys(), ...mediaPeople.keys()]);
+    for (const identity of identities) {
+      const profile = profiles.get(identity), person = mediaPeople.get(identity);
+      const local = Boolean(person && person === room?.localParticipant) || profile?.id === selfId;
+      const video = !finished && person?.isCameraEnabled ? visibleCallTrack(person, "camera") : undefined;
+      const shared = !finished && person?.isScreenShareEnabled ? visibleCallTrack(person, "screen_share") : undefined;
+      groupPeople.push({
+        id: profile?.id ?? identity, name: profile?.name ?? t(local ? "Вы" : "Участник"), avatarUrl: profile?.avatarUrl,
+        local, muted: !person?.isMicrophoneEnabled, speaking: person?.isSpeaking ?? false,
+        video: video ? <TrackElement track={video} local={local} audio={false} mirror={cameraFacing !== "environment"} /> : undefined,
+        screen: shared ? <TrackElement track={shared} local={local} audio={false} /> : undefined,
+      });
+    }
+  }
 
   return (
     <>
@@ -304,41 +327,17 @@ export const CallRoomPanel = memo(function CallRoomPanel({ call, selfId, glass, 
       onMicrophone={() => void toggle("mic")} onCamera={() => void toggle("camera")} onSound={() => { if (peer) participantAudio.update(peer.id, { ...peerAudio, muted: !peerAudio.muted }); }} onShare={() => void toggle("screen")}
       onEnableAudio={enableAudio}
       onFlipCamera={() => void flipCamera()} cameraSwitching={cameraSwitching}
-    /> : <AnimatePresence mode="wait">
-      {minimized ? (
-        <motion.div key="mini" initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="fixed bottom-24 left-1/2 z-[450] flex w-[min(360px,calc(100vw-24px))] -translate-x-1/2 items-center gap-3 rounded-full p-2 pl-4 text-white shadow-xl" style={material}>
-          <button type="button" onClick={() => setMinimized(false)} className="flex min-w-0 flex-1 items-center gap-3 text-left" aria-label={t("Развернуть звонок")}><Phone size={18} className="text-emerald-400"/><span className="min-w-0"><span className="block truncate text-sm font-semibold">{call.title}</span><span className="block truncate text-xs text-zinc-300">{status}</span></span><Maximize2 size={16} className="ml-auto shrink-0"/></button>
-          <button type="button" disabled={busy} onClick={() => hangup() } aria-label={t("Завершить звонок")} className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-red-500"><PhoneOff size={19}/></button>
-        </motion.div>
-      ) : (
-        <motion.section key="full" role="dialog" aria-modal="true" aria-label={t("Звонок")} initial={{ opacity: 0, y: 24, scale: .98 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: 16 }} transition={{ duration: .22 }} className="fixed inset-x-3 top-1/2 z-[450] mx-auto flex max-h-[calc(100dvh-32px)] w-auto max-w-[760px] -translate-y-1/2 flex-col overflow-hidden rounded-[32px] p-4 text-white shadow-2xl sm:p-6" style={material}>
-          <div className="flex items-center gap-3"><div className="min-w-0 flex-1"><h2 className="truncate text-lg font-semibold">{call.title}</h2><p role="status" className="mt-1 text-sm text-zinc-300">{status}</p></div><button type="button" onClick={() => setMinimized(true)} aria-label={t("Свернуть звонок")} className="grid h-11 w-11 place-items-center rounded-full bg-white/8"><ChevronDown size={22}/></button></div>
-          <div className="mt-5 min-h-0 flex-1 overflow-y-auto overscroll-contain">
-            {participants.length ? <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">{participants.map(person => {
-              const profile = call.participants.find(p => p.identity === person.identity);
-              const local = person === room?.localParticipant;
-              const videoTrack = person.getTrackPublication(screen && local ? "screen_share" : "camera")?.track;
-              const screenTrack = !local ? person.getTrackPublication("screen_share")?.track : undefined;
-              const visibleTrack = screenTrack ?? (person.isCameraEnabled || (screen && local) ? videoTrack : undefined);
-              return <div key={person.identity} className={`relative flex min-h-[160px] items-center justify-center overflow-hidden rounded-3xl bg-black/20 ${person.isSpeaking ? "ring-2 ring-emerald-400/80 ring-inset" : ""}`}>
-                {visibleTrack ? <div className="aspect-video w-full"><TrackElement track={visibleTrack} local={local} audio={false}/></div> : <MediaAvatar src={profile?.avatarUrl ?? undefined} alt={profile?.name ?? t("Участник")} className="h-20 w-20 rounded-full" fallbackText={profile?.name?.slice(0, 1) ?? "E"} />}
-                <div className="absolute inset-x-3 bottom-3 flex items-center gap-2 rounded-full bg-black/55 px-3 py-1.5 text-xs"><span className="min-w-0 flex-1 truncate">{local ? t("Вы") : profile?.name ?? t("Участник")}</span>{!person.isMicrophoneEnabled && <MicOff size={13}/>}</div>
-              </div>;
-            })}</div> : <div className="flex min-h-48 flex-col items-center justify-center gap-4"><div className="grid h-24 w-24 place-items-center rounded-full bg-white/8"><Phone size={34}/></div><p className="text-center text-sm text-zinc-300">{status}</p></div>}
-          </div>
-          {audioBlocked && <button type="button" className="mt-3 flex items-center justify-center gap-2 rounded-full bg-white/10 px-4 py-3 text-sm" onClick={enableAudio}><Volume2 size={18}/>{t("Включить звук звонка")}</button>}
-          <div className="mt-5 flex flex-wrap items-center justify-center gap-3">
-            {call.incoming ? <><button type="button" disabled={busy} onClick={() => onJoin(call.id)} className="flex h-12 items-center gap-2 rounded-full bg-emerald-500 px-5 font-medium disabled:opacity-50"><Phone size={20}/>{t("Принять")}</button><button type="button" disabled={busy} onClick={() => hangup() } className="flex h-12 items-center gap-2 rounded-full bg-red-500 px-5 font-medium disabled:opacity-50"><PhoneOff size={20}/>{t("Отклонить")}</button></> : call.onThisSession ? <>
-              <button type="button" disabled={controlsDisabled} onClick={() => void toggle("mic")} aria-label={t(microphone ? "Выключить микрофон" : "Включить микрофон")} aria-pressed={microphone} className="grid h-12 w-12 place-items-center rounded-full bg-white/10 disabled:opacity-40">{microphone ? <Mic size={21}/> : <MicOff size={21}/>}</button>
-              <button type="button" disabled={controlsDisabled} onClick={() => void toggle("camera")} aria-label={t(camera ? "Выключить камеру" : "Включить камеру")} aria-pressed={camera} className="grid h-12 w-12 place-items-center rounded-full bg-white/10 disabled:opacity-40">{camera ? <Video size={21}/> : <VideoOff size={21}/>}</button>
-              {typeof navigator !== "undefined" && Boolean(navigator.mediaDevices?.getDisplayMedia) && <button type="button" disabled={controlsDisabled} onClick={() => void toggle("screen")} aria-label={t(screen ? "Остановить показ экрана" : "Показать экран")} aria-pressed={screen} className={`grid h-12 w-12 place-items-center rounded-full ${screen ? "bg-white/25" : "bg-white/10"} disabled:opacity-40`}><MonitorUp size={21}/></button>}
-              <button type="button" disabled={busy} onClick={() => hangup() } aria-label={t("Завершить звонок")} className="grid h-12 w-16 place-items-center rounded-full bg-red-500 disabled:opacity-50"><PhoneOff size={22}/></button>
-              {call.kind === "group" && call.canEnd && <button type="button" disabled={busy} onClick={() => hangup(true)} className="rounded-full px-3 py-2 text-xs text-zinc-300">{t("Завершить для всех")}</button>}
-            </> : <button type="button" disabled={busy} onClick={() => hangup() } className="flex h-12 items-center gap-2 rounded-full bg-white/10 px-5"><X size={18}/>{t("Отменить звонок")}</button>}
-          </div>
-        </motion.section>
-      )}
-    </AnimatePresence>}
+    /> : <GroupCallWindow
+      callId={call.id} readVoiceLevels={readGroupVoiceLevels}
+      title={call.title} status={!call.onThisSession ? "Звонок открыт на другом устройстве" : state}
+      startedAt={connected && !finished ? call.startedAt : null} people={groupPeople}
+      minimized={minimized} glass={glass} busy={busy} controlsDisabled={controlsDisabled} finished={finished}
+      microphone={microphone} camera={camera} sharing={screen}
+      canShare={typeof navigator !== "undefined" && Boolean(navigator.mediaDevices?.getDisplayMedia)}
+      canEnd={call.canEnd && call.onThisSession} audioBlocked={audioBlocked} onEnableAudio={enableAudio}
+      onMinimize={minimize} onExpand={expand} onLeave={() => hangup()} onEnd={() => hangup(true)}
+      onMicrophone={() => void toggle("mic")} onCamera={() => void toggle("camera")} onShare={() => void toggle("screen")}
+    />}
     </>
   );
 });

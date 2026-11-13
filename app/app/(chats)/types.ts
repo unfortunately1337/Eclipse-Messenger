@@ -409,6 +409,7 @@ export type ConversationResponse = {
     myRole?: string;
     myCanChangeReactions?: boolean;
     myCanPinMessages?: boolean;
+    myCanStartVideoChat?: boolean;
     createdAt?: string;
     myJoinedAt?: string;
   };
@@ -451,6 +452,7 @@ export type GroupMember = {
   canChangeName?: boolean;
   canChangeReactions?: boolean;
   canPinMessages?: boolean;
+  canStartVideoChat?: boolean;
   canDeleteForeignMessages?: boolean;
   canAddMembers?: boolean;
   isContact?: boolean;
@@ -473,6 +475,7 @@ export type GroupModalGroup = ReactionPolicy & {
   myCanChangeName?: boolean;
   myCanChangeReactions?: boolean;
   myCanPinMessages?: boolean;
+    myCanStartVideoChat?: boolean;
   myCanChangeAvatar?: boolean;
   myCanManageAdmins?: boolean;
   myCanGenerateInviteLink?: boolean;

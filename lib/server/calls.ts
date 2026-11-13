@@ -1,6 +1,5 @@
 import { createHash, randomUUID } from "node:crypto";
-import type { CallKind, CallMode, CallStatus, CallView, CallTransport } from "@/lib/calls";
-import { CALL_GROUP_LIMIT } from "@/lib/calls";
+import type { CallKind, CallMode, CallStatus, CallView, CallTransport, GroupCallActivity } from "@/lib/calls";
 import { redis } from "./redis";
 import { prisma } from "./prisma";
 import { HttpError } from "./http";
@@ -40,6 +39,10 @@ async function read(id: string): Promise<CallRecord | null> {
 
 export async function notifyCall(call: CallRecord) {
   const ids = new Set([...call.invitedIds, ...Object.keys(call.parties)]);
+  if (call.kind === "group") {
+    const members = await prisma.groupMember.findMany({ where: { groupId: call.chatId }, select: { userId: true } });
+    members.forEach(member => ids.add(member.userId));
+  }
   const results = await Promise.allSettled([deliverCallRealtime(call, [...ids]), deliverCallNotification(call)]);
   const failures = results.filter((result): result is PromiseRejectedResult => result.status === "rejected");
   if (failures.length) throw new AggregateError(failures.map(result => result.reason), "Call delivery deferred");
@@ -121,13 +124,26 @@ async function pointer(key: string) {
 
 export async function ownCall(userId: string) { return pointer(userKey(userId)); }
 
+/** Rechecked on every SFU WebSocket join/reconnect, including refreshed tokens. */
+export async function authorizeSfuIdentity(id: string, identity: string) {
+  const call = await read(id);
+  const now = Date.now();
+  if (!call || call.status === "ended" || call.expiresAt <= now || call.transport === "p2p") throw new HttpError(403, "Вам недоступен этот звонок");
+  const userId = Object.keys(call.parties).find(user => callIdentity(id, user) === identity);
+  const party = userId ? call.parties[userId] : null;
+  if (!userId || !party || party.lastSeen + LEASE_MS <= now) throw new HttpError(403, "Вам недоступен этот звонок");
+  const rawSession = await redis.get(`session:${party.sessionId}`);
+  if (!rawSession || JSON.parse(rawSession).userId !== userId) throw new HttpError(403, "Вам недоступен этот звонок");
+  await assertCallAccess(call, userId);
+}
+
 export async function resolveCallTarget(kind: CallKind, rawLink: string, userId: string) {
   const link = normalizeLink(rawLink);
   if (kind === "group") {
     const member = await prisma.groupMember.findFirst({ where: { userId, group: { link } }, include: { group: true } });
     if (!member) throw new HttpError(403, "Вы не состоите в этой группе");
-    if (!member.canPostMessages && member.role !== "owner") throw new HttpError(403, "Вам недоступны звонки в этой группе");
-    return { chatId: member.groupId, link, title: member.group.name, invitedIds: [userId] };
+    return { chatId: member.groupId, link, title: member.group.name, invitedIds: [userId],
+      canStartVideoChat: member.group.ownerId === userId || (member.role === "admin" && member.canStartVideoChat) };
   }
   const peer = await prisma.user.findFirst({ where: { OR: ["link", "link2", "link3", "link4", "link5"].map(key => ({ [key]: link })) },
     select: { id: true, link: true, displayName: true, isBot: true, isSystemAccount: true } });
@@ -143,7 +159,7 @@ export async function resolveCallTarget(kind: CallKind, rawLink: string, userId:
 export async function assertCallAccess(call: CallRecord, userId: string) {
   if (call.kind === "group") {
     const member = await prisma.groupMember.findUnique({ where: { groupId_userId: { groupId: call.chatId, userId } } });
-    if (!member || (!member.canPostMessages && member.role !== "owner")) throw new HttpError(403, "Вам недоступен этот звонок");
+    if (!member) throw new HttpError(403, "Вам недоступен этот звонок");
     return;
   }
   if (!call.invitedIds.includes(userId)) throw new HttpError(403, "Вам недоступен этот звонок");
@@ -157,6 +173,25 @@ export async function groupCall(link: string, userId: string) {
   return pointer(threadKey("group", target.chatId));
 }
 
+/** One membership query and two batched Redis reads, regardless of group count. */
+export async function groupCallActivities(userId: string): Promise<GroupCallActivity[]> {
+  const groups = await prisma.groupMember.findMany({ where: { userId }, select: { groupId: true, group: { select: { link: true } } } });
+  if (!groups.length) return [];
+  const pointers = await redis.mget(...groups.map(member => threadKey("group", member.groupId)));
+  const ids = [...new Set(pointers.filter((id): id is string => Boolean(id)))];
+  if (!ids.length) return [];
+  const records = await redis.mget(...ids.map(recordKey));
+  const byId = new Map<string, CallRecord>();
+  records.forEach(raw => { if (raw) { const call = JSON.parse(raw) as CallRecord; byId.set(call.id, call); } });
+  const now = Date.now();
+  return groups.flatMap((member, index) => {
+    const call = byId.get(pointers[index] ?? "");
+    if (!call || call.kind !== "group" || call.chatId !== member.groupId || call.status !== "active" || call.expiresAt <= now) return [];
+    const participantCount = Object.values(call.parties).filter(party => party.lastSeen + LEASE_MS > now).length;
+    return participantCount ? [{ id: call.id, link: member.group.link, participantCount, mode: call.mode }] : [];
+  });
+}
+
 export async function startCall(actor: Actor, kind: CallKind, mode: CallMode, link: string, supportsP2P = false) {
   const target = await resolveCallTarget(kind, link, actor.userId);
   const existing = await pointer(threadKey(kind, target.chatId));
@@ -164,6 +199,7 @@ export async function startCall(actor: Actor, kind: CallKind, mode: CallMode, li
     if (kind === "group") return joinCall(actor, existing.id);
     throw new HttpError(409, "В этом чате уже идёт звонок");
   }
+  if (kind === "group" && !("canStartVideoChat" in target && target.canStartVideoChat)) throw new HttpError(403, "Нет права начинать видеочат");
   if (await ownCall(actor.userId)) throw new HttpError(409, "Сначала завершите текущий звонок");
   for (const id of target.invitedIds) if (await ownCall(id)) throw new HttpError(409, "Участник уже в другом звонке");
   if (kind === "direct") await assertCallCooldown(actor.userId, target.invitedIds.find(id => id !== actor.userId)!);
@@ -177,7 +213,7 @@ export async function startCall(actor: Actor, kind: CallKind, mode: CallMode, li
     link: target.link, callerId: actor.userId, invitedIds: target.invitedIds,
     parties: { [actor.userId]: { sessionId: actor.sessionId, lastSeen: now } }, createdAt: now,
     startedAt: kind === "group" ? now : null, expiresAt: now + TTL * 1000, revision: 1 };
-  if (transport === "livekit") await createCallRoom(id, kind === "direct" ? 2 : CALL_GROUP_LIMIT);
+  if (transport === "livekit") await createCallRoom(id, kind === "direct" ? 2 : 0);
   const acquired: string[] = [];
   try {
     await redis.set(recordKey(id), JSON.stringify(call), "EX", TTL + 120);
@@ -216,7 +252,6 @@ export async function joinCall(actor: Actor, id: string, supportsP2P = false) {
       if (state.status === "ended" || state.expiresAt <= Date.now() || (state.status === "ringing" && state.createdAt + RING_MS <= Date.now())) throw new HttpError(410, "Звонок завершён");
       const party = state.parties[actor.userId];
       if (party && party.sessionId !== actor.sessionId) throw new HttpError(409, "Звонок открыт на другом устройстве");
-      if (!party && Object.keys(state.parties).length >= CALL_GROUP_LIMIT) throw new HttpError(409, "В звонке уже максимальное число участников");
       if (state.kind === "direct" && actor.userId === state.callerId && state.status === "ringing") throw new HttpError(409, "Ожидаем ответа собеседника");
       state.parties[actor.userId] = { sessionId: actor.sessionId, lastSeen: Date.now() };
       state.status = "active";
