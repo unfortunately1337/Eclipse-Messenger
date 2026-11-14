@@ -65,6 +65,14 @@ export default function GroupCallWindow(props: Props) {
     return voiceCache.current.levels.get(id) ?? 0;
   }, [readVoiceLevels]);
   const overlay = useRef<HTMLElement>(null), headingId = useId();
+  const mainScroll = useRef<HTMLDivElement>(null);
+  useLayoutEffect(() => {
+    let width = window.innerWidth;
+    if (mainScroll.current) mainScroll.current.scrollTop = 0;
+    const resize = () => { if (window.innerWidth !== width) { width = window.innerWidth; if (mainScroll.current) mainScroll.current.scrollTop = 0; } };
+    window.addEventListener("resize", resize);
+    return () => window.removeEventListener("resize", resize);
+  }, []);
   const { minimized, finished, onMinimize } = props;
   const people = useMemo(() => [...props.people].sort((a, b) => Number(b.local) - Number(a.local)), [props.people]);
   const endLabel = t(props.endReason === "left" ? "Вы покинули видеочат" : "Видеочат завершён");
@@ -128,20 +136,19 @@ export default function GroupCallWindow(props: Props) {
           {!showWave && !finished && <CallAmbientGradient glass={props.glass} connecting={!props.startedAt} reducedMotion={Boolean(reduced)} />}
           {showWave && <motion.div ref={connectionWave} data-group-call-returning={returning || undefined} className="absolute rounded-full" style={{ willChange: "transform", backfaceVisibility: "hidden", background: "radial-gradient(circle,rgba(72,72,77,.55),rgba(40,40,44,.7) 55%,rgba(28,28,31,.8))" }} initial={waveComplete || reduced ? false : { scale: 0, opacity: 1 }} animate={{ scale: returning ? 0 : 1, opacity: 1 }} transition={{ duration: reduced ? 0 : returning ? CALL_RETURN_SECONDS : CALL_CONNECT_SECONDS, ease: returning ? [.4,0,.6,1] : [.4,0,.2,1] }} onAnimationComplete={onWaveComplete} />}
         </div>
-        <header className={`relative z-10 flex shrink-0 items-center justify-center px-4 pt-[env(safe-area-inset-top)] sm:px-5 ${stage ? "h-16" : "h-[76px]"}`}>
+        <header className={`relative z-10 flex shrink-0 items-center justify-center px-4 pt-[env(safe-area-inset-top)] sm:px-5 ${stage ? "h-16" : "h-16 md:h-[76px]"}`}>
           <button type="button" onClick={minimize} aria-label={t("Свернуть видеочат")} className={control + " absolute left-4 size-10 text-zinc-200 md:left-5"}><ChevronDown size={23} /></button>
           {!finished && <CallConnectionEmojis callId={props.callId} startedAt={emojisAt} glass={props.glass} />}
           <div className="absolute right-4 sm:right-5"><CallConnectionIndicator signal={props.signal} glass={props.glass} /></div>
         </header>
-        <div className={`relative z-10 flex min-h-0 flex-1 flex-col no-scrollbar overscroll-contain px-4 py-3 sm:px-8 ${stage ? "overflow-hidden" : "overflow-y-auto"}`} style={{ justifyContent: stage ? undefined : "safe center" }}>
-          <div className={stage || finished ? "sr-only" : "mb-5 shrink-0 text-center"}><h2 id={headingId} className="truncate text-[23px] font-semibold leading-8 tracking-tight">{props.title}</h2><p className="mt-1 flex items-center justify-center gap-2 text-[13px] leading-5 text-zinc-400"><span>{count}</span>{props.startedAt !== null && !finished && <><span aria-hidden>·</span><CallElapsed startedAt={props.startedAt} /></>}</p></div>
+        <div className={`relative z-10 flex min-h-0 flex-1 flex-col overflow-hidden overscroll-contain px-4 py-2 sm:px-8 md:py-3`} style={{ justifyContent: stage ? undefined : "safe center" }}>
+          <div className={stage || finished ? "sr-only" : "mb-3 shrink-0 text-center md:mb-5"}><h2 id={headingId} className="truncate text-[18px] font-semibold leading-6 tracking-tight min-[380px]:text-[20px] md:text-[23px] md:leading-8">{props.title}</h2><p className="mt-1 flex items-center justify-center gap-2 text-[11px] leading-5 md:text-[13px] text-zinc-400"><span>{count}</span>{props.startedAt !== null && !finished && <><span aria-hidden>·</span><CallElapsed startedAt={props.startedAt} /></>}</p></div>
           <AnimatePresence initial={false} mode="wait">{finished ? <motion.div key="result" data-group-call-result role="status" className="flex min-h-60 flex-1 flex-col items-center justify-center gap-5 pb-4 text-center" initial={{ opacity: 0, scale: reduced ? 1 : .95 }} animate={{ opacity: 1, scale: 1 }} transition={{ duration: reduced ? 0 : .24, ease: PANEL_EASE }}>
             <div ref={setAvatarRef} data-group-call-result-avatar className="relative size-36 rounded-full md:size-40"><MediaAvatar src={props.avatarUrl ?? undefined} alt={props.title} fallbackText={props.title.slice(0, 2)} className="size-full rounded-full shadow-xl" /></div>
             <div><p className="text-[23px] font-semibold leading-8">{props.title}</p><p className="mt-1 text-[14px] text-zinc-400">{endLabel}</p></div>
           </motion.div> : <motion.div key="conversation" className="flex min-h-0 flex-1 flex-col" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0, scale: reduced ? 1 : .98 }} transition={{ duration: reduced ? 0 : .16, ease: PANEL_EASE }}>
-            {props.status !== "На связи" && <p role="status" className="mb-3 text-center text-[12px] text-zinc-400">{t(props.status)}</p>}
-            <div className="flex min-h-0 flex-1 items-center gap-2 sm:gap-4" style={{ containerType: "inline-size" }}>
-            <div className={`flex h-full min-h-0 min-w-0 flex-1 flex-col no-scrollbar ${stage ? "overflow-hidden" : "overflow-y-auto"}`} style={{ justifyContent: stage ? undefined : "safe center" }}>
+            <div className="flex min-h-0 flex-1 flex-col items-stretch gap-3 md:gap-4">
+            <div ref={mainScroll} className={`flex min-h-0 min-w-0 flex-1 flex-col no-scrollbar ${stage ? "overflow-hidden" : "overflow-y-auto"}`} data-group-call-main-scroll style={{ justifyContent: stage ? undefined : "safe center", overflowAnchor: "none" }}>
             {stage ? <motion.div key="stage" data-group-call-stage className="flex min-h-0 flex-1 flex-col" initial={{ opacity: 0, y: reduced ? 0 : 6 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: reduced ? 0 : .18, ease: PANEL_EASE }}>
               <div data-group-call-stage-media className="relative flex min-h-0 flex-1 items-center justify-center overflow-hidden rounded-[24px] bg-black/80 [&>video]:!object-contain">
                 {stageVideo ?? <div className="relative size-24">
@@ -159,23 +166,24 @@ export default function GroupCallWindow(props: Props) {
                   </GroupCallParticipantStrip>}</AnimatePresence>
                 </div>
               </div>
-            </motion.div> : <motion.div data-group-call-grid initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: reduced ? 0 : .18, ease: PANEL_EASE }} className={`mx-auto grid w-full gap-3 ${tiles.length === 1 ? "max-w-[240px] grid-cols-1 sm:max-w-[320px]" : tiles.length === 2 ? "max-w-[860px] grid-cols-1 sm:grid-cols-2" : tiles.length <= 4 ? "max-w-[860px] grid-cols-2" : tiles.length > 6 ? "max-w-[960px] grid-cols-2 xl:grid-cols-4" : "max-w-[860px] grid-cols-2 xl:grid-cols-3"}`}>
+            </motion.div> : <motion.div data-group-call-grid initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: reduced ? 0 : .18, ease: PANEL_EASE }} className={`mx-auto grid w-full shrink-0 gap-3 ${tiles.length === 1 ? "max-w-[240px] grid-cols-1 sm:max-w-[320px]" : tiles.length === 2 ? "max-w-[860px] grid-cols-1 sm:grid-cols-2" : tiles.length <= 4 ? "max-w-[860px] grid-cols-2" : tiles.length > 6 ? "max-w-[960px] grid-cols-2 xl:grid-cols-4" : "max-w-[860px] grid-cols-2 xl:grid-cols-3"}`}>
               <AnimatePresence initial={false} mode="popLayout">{tiles.map(person => <motion.div key={person.id} data-group-call-tile-layout layout="position" layoutDependency={layoutKey} className="min-w-0" initial={{ opacity: 0, scale: reduced ? 1 : .94, y: reduced ? 0 : 8 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: reduced ? 1 : .96, transition: { duration: reduced ? 0 : .14 } }} transition={{ duration: reduced ? 0 : .24, ease: PANEL_EASE }}><Tile person={person} glass={props.glass} readLevel={readLevel} onMenu={props.onParticipantAudio ? openPersonMenu : undefined} onSelect={() => choose(person.id)} /></motion.div>)}</AnimatePresence>
             </motion.div>}
             </div>
-            <AnimatePresence initial={false}>{!stage && overflow.length > 0 && <motion.div key="overflow" className="flex min-h-0 shrink-0 items-center self-stretch overflow-hidden" initial={{ width: 0, opacity: 0 }} animate={{ width: "auto", opacity: 1 }} exit={{ width: 0, opacity: 0 }} transition={{ duration: reduced ? 0 : .24, ease: PANEL_EASE }}>
+            <AnimatePresence initial={false}>{!stage && overflow.length > 0 && <motion.div key="overflow" data-group-call-overflow-slot className="order-last flex min-h-0 shrink-0 overflow-hidden md:order-first" initial={{ opacity: 0, scale: reduced ? 1 : .98 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: reduced ? 1 : .98 }} transition={{ duration: reduced ? 0 : .24, ease: PANEL_EASE }}>
               <GroupCallOverflow people={overflow} glass={props.glass} readLevel={readLevel} onSelect={choose} onMenu={props.onParticipantAudio ? openPersonMenu : undefined} />
             </motion.div>}</AnimatePresence>
             </div>
           </motion.div>}</AnimatePresence>
         </div>
         {props.audioBlocked && <button type="button" onClick={props.onEnableAudio} className="mx-auto mb-2 flex min-h-10 items-center gap-2 rounded-full bg-white/10 px-4 text-[12px]"><Volume2 size={16} />{t("Включить звук звонка")}</button>}
-        <footer className="relative z-10 shrink-0 px-5 pb-[calc(env(safe-area-inset-bottom)+28px)] pt-3 md:px-8 md:pb-10 md:pt-5">
+        <footer className="relative z-10 shrink-0 px-5 pb-[calc(env(safe-area-inset-bottom)+16px)] pt-3 md:px-8 md:pb-10 md:pt-5">
+          <AnimatePresence initial={false} mode="wait">{!finished && props.status !== "На связи" && <motion.p key={props.status} data-group-call-connection-status role="status" className="overflow-hidden text-center text-[12px] leading-5 text-zinc-400" initial={{ height: 0, opacity: 0, marginBottom: 0 }} animate={{ height: "auto", opacity: 1, marginBottom: 12 }} exit={{ height: 0, opacity: 0, marginBottom: 0 }} transition={{ duration: reduced ? 0 : .18, ease: PANEL_EASE }}>{t(props.status)}</motion.p>}</AnimatePresence>
           <div className="flex items-start justify-center gap-3 md:gap-6">
-            <div><button type="button" disabled={props.controlsDisabled} onClick={props.onMicrophone} aria-label={t(props.microphone ? "Выключить микрофон" : "Включить микрофон")} aria-pressed={props.microphone} className={control + " size-12 " + (props.microphone ? "text-zinc-200" : "text-white")}><span className={props.controlsDisabled ? "opacity-35" : ""}>{props.microphone ? <FaMicrophone size={21} /> : <FaMicrophoneSlash size={21} />}</span></button><span className={label}>{t("Микрофон")}</span></div>
-            <div><button type="button" disabled={props.controlsDisabled} onClick={props.onCamera} aria-label={t(props.camera ? "Выключить камеру" : "Включить камеру")} aria-pressed={props.camera} className={control + " size-12 " + (props.camera ? "text-white" : "text-zinc-200")}><span className={props.controlsDisabled ? "opacity-35" : ""}>{props.camera ? <BsCameraVideoFill size={21} /> : <BsCameraVideoOffFill size={21} />}</span></button><span className={label}>{t("Камера")}</span></div>
-            {props.canShare && <div><button type="button" disabled={props.controlsDisabled} onClick={props.onShare} aria-label={t(props.sharing ? "Остановить показ экрана" : "Показать экран")} aria-pressed={props.sharing} className={control + " size-12 " + (props.sharing ? "text-emerald-400" : "text-zinc-200")}><MonitorUp size={21} className={props.controlsDisabled ? "opacity-35" : ""} /></button><span className={label}>{t("Экран")}</span></div>}
-            <div><button type="button" disabled={props.busy} onClick={leave} aria-label={t("Покинуть видеочат")} className={control + " size-12 text-red-400 hover:text-red-300"}><IoIosCall size={23} /></button><span className={label}>{t("Покинуть")}</span></div>
+            <div><button type="button" disabled={props.controlsDisabled} onClick={props.onMicrophone} aria-label={t(props.microphone ? "Выключить микрофон" : "Включить микрофон")} aria-pressed={props.microphone} className={control + " size-11 md:size-12 " + (props.microphone ? "text-zinc-200" : "text-white")}><span className={props.controlsDisabled ? "opacity-35" : ""}>{props.microphone ? <FaMicrophone size={21} /> : <FaMicrophoneSlash size={21} />}</span></button><span className={label}>{t("Микрофон")}</span></div>
+            <div><button type="button" disabled={props.controlsDisabled} onClick={props.onCamera} aria-label={t(props.camera ? "Выключить камеру" : "Включить камеру")} aria-pressed={props.camera} className={control + " size-11 md:size-12 " + (props.camera ? "text-white" : "text-zinc-200")}><span className={props.controlsDisabled ? "opacity-35" : ""}>{props.camera ? <BsCameraVideoFill size={21} /> : <BsCameraVideoOffFill size={21} />}</span></button><span className={label}>{t("Камера")}</span></div>
+            {props.canShare && <div><button type="button" disabled={props.controlsDisabled} onClick={props.onShare} aria-label={t(props.sharing ? "Остановить показ экрана" : "Показать экран")} aria-pressed={props.sharing} className={control + " size-11 md:size-12 " + (props.sharing ? "text-emerald-400" : "text-zinc-200")}><MonitorUp size={21} className={props.controlsDisabled ? "opacity-35" : ""} /></button><span className={label}>{t("Экран")}</span></div>}
+            <div><button type="button" disabled={props.busy} onClick={leave} aria-label={t("Покинуть видеочат")} className={control + " size-11 md:size-12 text-red-400 hover:text-red-300"}><IoIosCall size={23} /></button><span className={label}>{t("Покинуть")}</span></div>
           </div>
         </footer>
       </motion.section>}

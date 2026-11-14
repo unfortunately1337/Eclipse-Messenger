@@ -1,14 +1,15 @@
 "use client";
-import { useEffect, useRef, type ReactNode } from "react";
+import { useCallback, useEffect, useRef, type ReactNode, type RefObject } from "react";
 import { motion, useReducedMotion } from "framer-motion";
 import { useTranslation } from "@/components/LocaleProvider";
 import { callOverlayMaterial } from "@/lib/client/call-window-style";
 import { PANEL_EASE } from "@/lib/client/panel-motion";
 
-export function GroupCallParticipantStrip({ children, glass }: { children: ReactNode; glass: boolean }) {
+export function GroupCallParticipantStrip({ children, glass, kind = "stage", viewportRef, onScroll }: { children: ReactNode; glass: boolean; kind?: "stage" | "overflow"; viewportRef?: RefObject<HTMLDivElement | null>; onScroll?: (node: HTMLDivElement) => void }) {
   const t = useTranslation(), reduced = useReducedMotion();
   const strip = useRef<HTMLDivElement>(null), frame = useRef(0), dragged = useRef(false);
   const pointer = useRef<{ id: number; x: number; left: number; last: number; at: number; velocity: number } | null>(null);
+  const setViewport = useCallback((node: HTMLDivElement | null) => { strip.current = node; if (viewportRef) viewportRef.current = node; }, [viewportRef]);
   useEffect(() => {
     const node = strip.current;
     if (!node) return;
@@ -22,8 +23,8 @@ export function GroupCallParticipantStrip({ children, glass }: { children: React
     node.addEventListener("wheel", wheel, { passive: false });
     return () => { node.removeEventListener("wheel", wheel); cancelAnimationFrame(frame.current); };
   }, []);
-  return <motion.div ref={strip} data-group-call-strip role="region" aria-label={t("Участники видеочата")} tabIndex={0}
-    className="flex w-full min-w-0 shrink-0 touch-none select-none gap-2 overflow-x-auto overscroll-x-contain no-scrollbar rounded-[20px] border p-2 outline-none focus-visible:ring-1 focus-visible:ring-white/40"
+  return <motion.div ref={setViewport} data-group-call-strip={kind === "stage" || undefined} data-group-call-overflow={kind === "overflow" || undefined} data-group-call-overflow-scroll={kind === "overflow" || undefined} role="region" aria-label={t(kind === "overflow" ? "Другие участники" : "Участники видеочата")} tabIndex={0} onScroll={event => onScroll?.(event.currentTarget)}
+    className={`flex w-full min-w-0 shrink-0 touch-none select-none gap-2 overflow-x-auto overscroll-x-contain no-scrollbar rounded-[20px] border p-2 outline-none focus-visible:ring-1 focus-visible:ring-white/40 ${kind === "overflow" ? "mx-auto max-w-[960px]" : ""}`}
     style={callOverlayMaterial(glass)} initial={{ height: 0, opacity: 0, y: reduced ? 0 : 8 }} animate={{ height: "auto", opacity: 1, y: 0 }} exit={{ height: 0, opacity: 0, y: reduced ? 0 : 8 }} transition={{ duration: reduced ? 0 : .22, ease: PANEL_EASE }}
     onPointerDown={event => {
       if (!event.isPrimary || event.button !== 0) return;
