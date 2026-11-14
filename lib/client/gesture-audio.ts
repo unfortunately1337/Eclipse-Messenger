@@ -1,7 +1,7 @@
 /** Listen for gestures only while browser audio needs unlocking. Re-arm after
  * interruptions (for example, switching apps on iOS), without handling typing
  * and clicks throughout the rest of the session. */
-export function createGestureAudio(onReady: (audio: AudioContext) => void) {
+export function createGestureAudio(onReady: (audio: AudioContext) => void, options?: { eager?: boolean }) {
   let audio: AudioContext | undefined;
   let disposed = false, listening = false, running = false, resuming = false;
   const listen = (enabled: boolean) => {
@@ -38,6 +38,15 @@ export function createGestureAudio(onReady: (audio: AudioContext) => void) {
     } catch { resuming = false; /* A later gesture can retry if audio is temporarily unavailable. */ }
   }
   listen(true);
+  // An active call can already have browser audio permission. Try immediately,
+  // keeping gesture retries available if the browser still requires interaction.
+  if (options?.eager && typeof AudioContext !== "undefined") {
+    try {
+      audio = new AudioContext(); audio.addEventListener("statechange", sync);
+      if (audio.state === "suspended") void audio.resume().catch(() => {});
+      sync();
+    } catch { /* The normal gesture path can retry. */ }
+  }
   return () => {
     disposed = true;
     listen(false);

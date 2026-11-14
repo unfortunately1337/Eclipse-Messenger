@@ -12,6 +12,7 @@ export type CallView = {
   status: CallStatus;
   link: string;
   title: string;
+  avatarUrl?: string | null;
   peer?: { id: string; name: string; avatarUrl: string | null; backgroundUrl: string | null };
   callerId: string;
   createdAt: number;

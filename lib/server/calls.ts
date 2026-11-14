@@ -357,17 +357,21 @@ export async function callView(call: CallRecord, actor: Actor): Promise<CallView
   await assertCallAccess(call, actor.userId);
   const people = await prisma.user.findMany({ where: { id: { in: [...new Set([...call.invitedIds, ...Object.keys(call.parties)])] } },
     select: { id: true, displayName: true, avatarUrl: true, backgroundUrl: true } });
-  const group = call.kind === "group" ? await prisma.group.findUnique({ where: { id: call.chatId }, select: { name: true, link: true, ownerId: true } }) : null;
+  const group = call.kind === "group" ? await prisma.group.findUnique({ where: { id: call.chatId }, select: { name: true, link: true, ownerId: true, avatarUrl: true } }) : null;
   const peer = people.find(p => p.id !== actor.userId);
   const contact = call.kind === "direct" && peer ? await prisma.contact.findUnique({ where: { ownerId_peerId: { ownerId: actor.userId, peerId: peer.id } }, select: { alias: true } }) : null;
   const peerName = contact?.alias?.trim() || peer?.displayName || "Eclipse";
   const title = group?.name ?? peerName;
+  const peopleById = new Map(people.map(person => [person.id, person]));
   return { id: call.id, kind: call.kind, transport: call.transport ?? "livekit", mode: call.mode, status: call.status, link: group?.link ?? call.link,
-    title, audioPreferences: await readParticipantAudio(actor.sessionId, people.filter(p => p.id !== actor.userId).map(p => p.id)),
+    title, ...(group ? { avatarUrl: group.avatarUrl ?? null } : {}), audioPreferences: await readParticipantAudio(actor.sessionId, people.filter(p => p.id !== actor.userId).map(p => p.id)),
     ...(call.kind === "direct" && peer ? { peer: { id: peer.id, name: peerName, avatarUrl: peer.avatarUrl, backgroundUrl: peer.backgroundUrl ?? null } } : {}),
     callerId: call.callerId, createdAt: call.createdAt, startedAt: call.startedAt, expiresAt: call.expiresAt,
     participantCount: Object.keys(call.parties).length,
-    participants: people.filter(p => Boolean(call.parties[p.id])).map(p => ({ id: p.id, identity: callIdentity(call.id, p.id), name: p.displayName, avatarUrl: p.avatarUrl })),
+    participants: Object.keys(call.parties).flatMap(id => {
+      const person = peopleById.get(id);
+      return person ? [{ id: person.id, identity: callIdentity(call.id, person.id), name: person.displayName, avatarUrl: person.avatarUrl }] : [];
+    }),
     incoming: call.kind === "direct" && call.status === "ringing" && call.callerId !== actor.userId,
     onThisSession: call.parties[actor.userId]?.sessionId === actor.sessionId,
     canEnd: call.kind === "direct" || call.callerId === actor.userId || group?.ownerId === actor.userId };

@@ -44,3 +44,7 @@ The default suite tests the fallback responses, path validation and coverage of
 all custom/default emoji manifests. Five binary integration checks for the omitted
 original files are skipped when those files are absent. They run automatically if
 the corresponding original asset sets are installed; all other tests still run.
+
+The video-chat lobby uses original geometric camera fallback artwork in the source
+edition. Its production TGS and the derived animated frames remain optional;
+`scripts/build-videocall-animation.mjs` can render a TGS you supply locally.

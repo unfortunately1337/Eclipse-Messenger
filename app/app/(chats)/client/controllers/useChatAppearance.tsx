@@ -4,7 +4,7 @@ import { customThemeMessageBackground, customThemeTextColor } from "@/lib/client
 
 import { type CSSProperties, useCallback, useMemo } from "react";
 
-import { getPanelVisualStyle, getChatHeaderVisualStyle } from "@/lib/client/panel-visual";
+import { getPanelVisualStyle, getChatHeaderVisualStyle, getComposerVisualStyle } from "@/lib/client/panel-visual";
 
 import { getReplyLineColor } from "@/lib/reply-colors";
 
@@ -137,16 +137,7 @@ export function useChatAppearance(sources: ChatAppearanceSources): ChatAppearanc
     return getPanelVisualStyle(transparentVisual);
   }, [transparentVisual]);
 
-  const composerInputThemeStyle = useMemo<CSSProperties>(() => {
-    return {
-      backgroundColor: "rgba(24, 24, 24, 0.72)",
-      borderColor: "rgba(255,255,255,0.08)",
-      boxShadow: "0 14px 34px rgba(0,0,0,0.24), inset 0 1px 0 rgba(255,255,255,0.055)",
-      backdropFilter: "blur(16px) saturate(1.05)",
-      WebkitBackdropFilter: "blur(16px) saturate(1.05)",
-      ...getPanelVisualStyle(transparentVisual),
-    };
-  }, [transparentVisual]);
+  const composerInputThemeStyle = useMemo<CSSProperties>(() => getComposerVisualStyle(transparentVisual), [transparentVisual]);
 
   const emptyChatPanelThemeStyle = useMemo<CSSProperties>(() => {
     return {

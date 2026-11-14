@@ -19,7 +19,7 @@ export interface ActiveConversationSources {
   page: Pick<ChatPageStateModel, "profileData" | "requestedChatType" | "t" | "transparentVisual"> & {
     conversation: Pick<ChatPageStateModel["conversation"], "chats" | "activeConversation" | "setMessages" | "activeConversationRef" | "setActiveConversation" | "setChats">;
     selection: Pick<ChatPageStateModel["selection"], "selectedLink" | "setMessageText" | "selectedLinkRef" | "setSelectedLink">;
-    account: Pick<ChatPageStateModel["account"], "selfId">;
+    account: Pick<ChatPageStateModel["account"], "selfId" | "selfProfile">;
     notificationAndContacts: Pick<ChatPageStateModel["notificationAndContacts"], "liveBackgroundPreset">;
     conversationRequest: Pick<ChatPageStateModel["conversationRequest"], "setLoadingConversation" | "setDecryptingConversation">;
     mediaAndChannel: Pick<ChatPageStateModel["mediaAndChannel"], "setImageViewer" | "setVideoViewer">;
@@ -55,7 +55,7 @@ export function useActiveConversation(sources: ActiveConversationSources): Activ
   const { profileData, requestedChatType, t, transparentVisual } = sources.page;
   const { chats, activeConversation, setMessages, activeConversationRef, setActiveConversation, setChats } = sources.page.conversation;
   const { selectedLink, setMessageText, selectedLinkRef, setSelectedLink } = sources.page.selection;
-  const { selfId } = sources.page.account;
+  const { selfId, selfProfile } = sources.page.account;
   const { liveBackgroundPreset } = sources.page.notificationAndContacts;
   const { setLoadingConversation, setDecryptingConversation } = sources.page.conversationRequest;
   const { setImageViewer, setVideoViewer } = sources.page.mediaAndChannel;
@@ -80,7 +80,7 @@ export function useActiveConversation(sources: ActiveConversationSources): Activ
 
   const callTarget = useMemo(() => {
     if (!activeChat || activeChat.isBot || activeChat.isSystem || activeChat.link.startsWith("secret-")) return null;
-    if (activeChat.chatType === "group") return { kind: "group" as const, link: activeChat.link };
+    if (activeChat.chatType === "group") return { kind: "group" as const, link: activeChat.link, title: activeChat.displayName };
     if (activeChat.canSendMessages === false) return null;
     if ((!activeChat.chatType || activeChat.chatType === "direct") && activeChat.peerId !== selfId) return {
       kind: "direct" as const, link: activeChat.link, title: activeChat.displayName,
@@ -89,7 +89,7 @@ export function useActiveConversation(sources: ActiveConversationSources): Activ
     return null;
   }, [activeChat, selfId]);
 
-  const calls = useCalls(selfId, callTarget);
+  const calls = useCalls(selfId, callTarget, selfProfile ? { name: selfProfile.displayName, avatarUrl: selfProfile.avatarUrl ?? null } : undefined);
 
   useEffect(() => {
     if (!calls.error) return;

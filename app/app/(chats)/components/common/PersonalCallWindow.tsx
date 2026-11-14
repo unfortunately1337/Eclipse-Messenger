@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useId, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { ChevronDown, MonitorUp, Phone, Volume2 } from "lucide-react";
@@ -13,10 +13,11 @@ import { MediaAvatar, MediaBanner } from "@/components/ui/media";
 import { useTranslation } from "@/components/LocaleProvider";
 import type { CallSignal } from "@/lib/client/call-connection-quality";
 import type { CallView } from "@/lib/calls";
-import { CALL_CONNECT_SECONDS, CALL_END_FEEDBACK_MS, CALL_END_EFFECT_MS, CALL_RETURN_SECONDS, CALL_EXIT_SECONDS } from "@/lib/client/call-window-motion";
+import { CALL_CONNECT_SECONDS, CALL_END_EFFECT_MS, CALL_RETURN_SECONDS, CALL_EXIT_SECONDS } from "@/lib/client/call-window-motion";
 import { menuPopoverMotion } from "@/lib/client/panel-motion";
 import { getChatHeaderVisualStyle, getPanelVisualStyle } from "@/lib/client/panel-visual";
 import { callControlSurface, callControlStyle, callWindowMaterial } from "@/lib/client/call-window-style";
+import { useCallReturnAnimation } from "../../hooks/useCallReturnAnimation";
 import { useCallTrayTarget } from "../../hooks/useCallTrayTarget";
 import { CallVoiceWaves, type CallVoiceLevels } from "./CallVoiceWaves";
 import { CallAvatarVoiceHalo } from "./CallAvatarVoiceHalo";
@@ -74,16 +75,6 @@ export default function PersonalCallWindow(props: Props) {
     window.addEventListener("resize", sync);
     return () => { observer.disconnect(); window.removeEventListener("resize", sync); };
   }, [props.minimized]);
-  const avatarRef = useRef<HTMLDivElement>(null);
-  const [avatarReady, setAvatarReady] = useState(false);
-  const updateWaveOrigin = useRef<(() => void) | null>(null);
-  const setAvatarRef = useCallback((node: HTMLDivElement | null) => {
-    avatarRef.current = node;
-    setAvatarReady(Boolean(node));
-    if (node) updateWaveOrigin.current?.();
-  }, []);
-  const connectionWave = useRef<HTMLDivElement>(null);
-  const [waveComplete, setWaveComplete] = useState(false);
   const connecting = props.startedAt === null && props.status === "Соединение…";
   const connected = props.startedAt !== null;
   const [connectionEmojisAt, setConnectionEmojisAt] = useState<number | null>(null);
@@ -92,44 +83,11 @@ export default function PersonalCallWindow(props: Props) {
     const timer = window.setTimeout(() => setConnectionEmojisAt(Date.now()), 0);
     return () => clearTimeout(timer);
   }, [connecting, connected, connectionEmojisAt]);
-  const [wasConnected, setWasConnected] = useState(connected);
-  if (connected && !wasConnected) setWasConnected(true);
   const failed = Boolean(props.endOutcome && props.endOutcome !== "completed");
   const completed = props.endOutcome === "completed";
   const terminal = Boolean(props.endOutcome);
-  // Complete an interrupted entrance before reversing it. This also prevents
-  // its completion callback from prematurely dismissing the return animation.
-  const returning = completed && avatarReady && waveComplete;
-  const [terminalSettled, setTerminalSettled] = useState(false);
-  const [closeRequested, setCloseRequested] = useState(false);
-  const closingWindow = closeRequested && (!completed || terminalSettled);
-  useEffect(() => {
-    if (!terminal) return;
-    const close = window.setTimeout(() => setCloseRequested(true), CALL_END_FEEDBACK_MS);
-    return () => clearTimeout(close);
-  }, [terminal]);
-  useEffect(() => {
-    if (!terminal || (completed && !returning)) return;
-    const settle = window.setTimeout(() => setTerminalSettled(true), completed ? CALL_RETURN_SECONDS * 1000 + 30 : CALL_END_EFFECT_MS);
-    return () => clearTimeout(settle);
-  }, [terminal, completed, returning]);
-  const showWave = failed || ((wasConnected || connected) && !terminalSettled);
+  const { setAvatarRef, setAvatarReady, connectionWave, waveComplete, showWave, returning, closingWindow, onWaveComplete } = useCallReturnAnimation({ connected, terminal, completed, minimized: props.minimized, host: dialog });
   const active = (props.active ?? connected) && !props.endOutcome;
-  useLayoutEffect(() => {
-    const host = dialog.current, wave = connectionWave.current;
-    if (!showWave || props.minimized || !host || !wave) return;
-    const sync = () => {
-      const bounds = host.getBoundingClientRect(), avatar = avatarRef.current?.getBoundingClientRect();
-      const x = avatar ? avatar.left + avatar.width / 2 - bounds.left : bounds.width / 2;
-      const y = avatar ? avatar.top + avatar.height / 2 - bounds.top : bounds.height * 0.4;
-      const radius = Math.hypot(Math.max(x, bounds.width - x), Math.max(y, bounds.height - y)) + 24;
-      wave.style.width = wave.style.height = `${radius * 2}px`;
-      wave.style.left = `${x - radius}px`; wave.style.top = `${y - radius}px`;
-    };
-    updateWaveOrigin.current = sync;
-    sync(); const observer = new ResizeObserver(sync); observer.observe(host);
-    return () => { observer.disconnect(); updateWaveOrigin.current = null; };
-  }, [showWave, props.minimized, props.endOutcome]);
   const toolbar = useRef<HTMLDivElement>(null);
   const menuButton = useRef<HTMLButtonElement>(null);
   const menuId = useId();
@@ -202,7 +160,7 @@ export default function PersonalCallWindow(props: Props) {
             <div className="absolute inset-0 opacity-[0.06]" style={{ background }} />
             <CallAmbientGradient glass={props.glass} connecting={connecting} reducedMotion={Boolean(reducedMotion)} />
           </div>}
-          {showWave && <motion.div ref={connectionWave} data-call-connected-wave={failed ? undefined : true} data-call-outcome-wave={failed ? "failed" : completed ? "completed" : "connected"} aria-hidden className="pointer-events-none absolute rounded-full" style={{ willChange: "transform", backfaceVisibility: "hidden", background: failed ? "radial-gradient(circle,rgba(152,48,56,0.68) 0%,rgba(116,34,43,0.76) 45%,rgba(75,23,31,0.86) 75%,rgba(49,19,25,0.92) 100%)" : "radial-gradient(circle,rgba(34,112,78,0.68) 0%,rgba(25,83,61,0.76) 45%,rgba(17,57,43,0.86) 75%,rgba(14,40,33,0.92) 100%)" }} initial={waveComplete || reducedMotion ? false : { scale: 0, opacity: 1 }} animate={{ scale: returning ? 0 : 1, opacity: 1 }} transition={{ duration: reducedMotion ? 0 : returning ? CALL_RETURN_SECONDS : failed ? CALL_END_EFFECT_MS / 1000 : CALL_CONNECT_SECONDS, ease: returning ? [0.4, 0, 0.6, 1] : [0.4, 0, 0.2, 1] }} onAnimationComplete={() => { if (returning) setTerminalSettled(true); else setWaveComplete(true); }} />}
+          {showWave && <motion.div ref={connectionWave} data-call-connected-wave={failed ? undefined : true} data-call-outcome-wave={failed ? "failed" : completed ? "completed" : "connected"} aria-hidden className="pointer-events-none absolute rounded-full" style={{ willChange: "transform", backfaceVisibility: "hidden", background: failed ? "radial-gradient(circle,rgba(152,48,56,0.68) 0%,rgba(116,34,43,0.76) 45%,rgba(75,23,31,0.86) 75%,rgba(49,19,25,0.92) 100%)" : "radial-gradient(circle,rgba(34,112,78,0.68) 0%,rgba(25,83,61,0.76) 45%,rgba(17,57,43,0.86) 75%,rgba(14,40,33,0.92) 100%)" }} initial={waveComplete || reducedMotion ? false : { scale: 0, opacity: 1 }} animate={{ scale: returning ? 0 : 1, opacity: 1 }} transition={{ duration: reducedMotion ? 0 : returning ? CALL_RETURN_SECONDS : failed ? CALL_END_EFFECT_MS / 1000 : CALL_CONNECT_SECONDS, ease: returning ? [0.4, 0, 0.6, 1] : [0.4, 0, 0.2, 1] }} onAnimationComplete={onWaveComplete} />}
           {!showWave && !terminal && props.glass && isMediaBackgroundUrl(backgroundUrl) && <div className="pointer-events-none absolute -inset-8 opacity-20 blur-2xl"><MediaBanner src={backgroundUrl} alt="" className="h-full w-full" mediaClassName="object-cover" autoPlay={false} /></div>}
           <AnimatePresence initial={false} onExitComplete={() => { if (!cameraMode) setCameraLayerVisible(false); }}>
             {cameraMode && <motion.div key={ownVideoExpanded ? "camera-local" : "camera-remote"} data-call-camera-layer data-call-main-video={ownVideoExpanded ? "local" : "remote"} className="pointer-events-none absolute inset-0 z-[5] overflow-hidden bg-black [&_video]:object-cover" initial={{ opacity: 0, scale: reducedMotion ? 1 : 1.025 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: reducedMotion ? 1 : 1.015 }} transition={{ duration: reducedMotion ? 0 : 0.24, ease: [0.22, 1, 0.36, 1] }}>
@@ -243,7 +201,7 @@ export default function PersonalCallWindow(props: Props) {
           <div className="pointer-events-none relative z-20 flex min-h-0 flex-1 flex-col items-center justify-center px-7 pb-4 md:px-10 md:pb-0">
             <AnimatePresence initial={false} mode="wait">
               {!hideIdentity && (displayedVideo ? <motion.div data-call-main-video={ownVideoExpanded ? "local" : "remote"} key={ownVideoExpanded ? "local-video" : "video"} initial={{ opacity: 0, scale: 0.97 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0 }} className="pointer-events-auto relative mb-5 h-full min-h-[120px] w-full md:max-h-[60dvh] md:max-w-[1000px] overflow-hidden rounded-[24px] bg-black/40"><CallVideoStage localScreen={!ownVideoExpanded && props.localScreen} screen={!ownVideoExpanded && props.screenVideo} label={props.screenOwner}>{displayedVideo}</CallVideoStage></motion.div>
-                : <motion.div key="avatar" initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }} transition={{ duration: reducedMotion ? 0 : 0.24 }} onAnimationComplete={() => { if (avatarRef.current) setAvatarReady(true); }} className={`relative z-30 mb-6 shrink-0 rounded-full md:mb-4 p-1`}>
+                : <motion.div key="avatar" initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }} transition={{ duration: reducedMotion ? 0 : 0.24 }} onAnimationComplete={() => setAvatarReady(true)} className={`relative z-30 mb-6 shrink-0 rounded-full md:mb-4 p-1`}>
                   <CallAvatarVoiceHalo readLevels={props.readVoiceLevels} />
                   <div ref={setAvatarRef} data-call-avatar className="relative z-10">
                     <MediaAvatar src={avatarUrl ?? undefined} alt={name} className="h-36 w-36 rounded-full shadow-xl md:h-40 md:w-40" fallbackText={name.slice(0, 1)} />

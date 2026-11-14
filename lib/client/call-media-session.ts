@@ -28,7 +28,7 @@ export interface LocalCallParticipant extends CallParticipant {
   setCameraEnabled(enabled: boolean, options?: { facingMode?: CameraRestartOptions["facingMode"] }): Promise<unknown>;
   setScreenShareEnabled(enabled: boolean, capture?: { audio?: boolean; contentHint?: string; selfBrowserSurface?: string; surfaceSwitching?: string }, publish?: { screenShareEncoding?: { maxBitrate: number; maxFramerate: number } }): Promise<unknown>;
 }
-export type CallMediaEvent = "update" | "reconnecting" | "reconnected" | "audioPlayback" | "disconnected";
+export type CallMediaEvent = "update" | "reconnecting" | "reconnected" | "audioPlayback" | "disconnected" | "participantJoined" | "participantLeft";
 export interface CallMediaSession {
   readonly state: string;
   readonly ready: boolean;

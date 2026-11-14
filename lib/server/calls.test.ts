@@ -66,6 +66,12 @@ beforeEach(() => {
 });
 
 describe("call authorization and lifecycle", () => {
+  it("keeps participants in join order when the database returns profiles in another order", async () => {
+    const call = await startCall(alice, "group", "video", "testgroup");
+    await joinCall(bob, call.id);
+    mock.user.findMany.mockResolvedValue([{ id: "bob", displayName: "Bob", avatarUrl: null }, { id: "alice", displayName: "Alice", avatarUrl: null }]);
+    expect((await callView(await ownCall("alice") as typeof call, alice)).participants.map(person => person.id)).toEqual(["alice", "bob"]);
+  });
   it("shows ending controls only to the starter and group owner and enforces it on the server", async () => {
     mock.groupMember.findFirst.mockResolvedValue({ groupId: "group-chat", role: "admin", canStartVideoChat: true, group: { ownerId: "bob", name: "Group", link: "testgroup" } });
     mock.group.findUnique.mockResolvedValue({ ownerId: "bob", name: "Group", link: "testgroup" });
@@ -344,6 +350,16 @@ it("rejects another session, self and nonparticipants changing audio preferences
   for (const [actor, peerId] of [[{ ...alice, sessionId: "other" }, "bob"], [alice, "alice"], [alice, "stranger"]] as const) {
     await expect(saveCallParticipantAudio(actor, call.id, peerId, { volume: 0.5, muted: true })).rejects.toMatchObject({ status: 403 });
   }
+});
+it("restores a personally muted participant in a new group call without muting them for others", async () => {
+  const first = await startCall(alice, "group", "audio", "testgroup");
+  await joinCall(bob, first.id);
+  await saveCallParticipantAudio(alice, first.id, "bob", { volume: 0.35, muted: true });
+  await leaveCall(alice, first.id, true);
+  const next = await startCall(alice, "group", "audio", "testgroup");
+  await joinCall(bob, next.id);
+  expect((await callView(next, alice)).audioPreferences?.bob).toEqual({ volume: 0.35, muted: true });
+  expect((await callView(next, bob)).audioPreferences?.alice).toEqual({ volume: 1, muted: false });
 });
 it("checks call privacy before creating a room and queues committed calls for recovery", async () => {
   mock.allowed.mockReturnValueOnce(false);

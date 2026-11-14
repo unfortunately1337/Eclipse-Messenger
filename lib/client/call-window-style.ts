@@ -1,4 +1,8 @@
-import { getChatHeaderVisualStyle } from "./panel-visual";
+import { getChatHeaderVisualStyle, getComposerVisualStyle } from "./panel-visual";
+
+export function callOverlayMaterial(glass: boolean) {
+  return getComposerVisualStyle(glass);
+}
 
 export function callControlSurface(glass: boolean) {
   return `grid shrink-0 place-items-center rounded-full border ${glass ? "border-white/[0.07] bg-[rgba(40,40,44,0.28)] shadow-[inset_0_1px_0_rgba(255,255,255,0.06)] backdrop-blur-[8px] backdrop-saturate-[1.05]" : "border-transparent bg-[#252527] shadow-none backdrop-blur-none"}`;

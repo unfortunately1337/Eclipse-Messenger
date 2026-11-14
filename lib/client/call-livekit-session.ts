@@ -43,6 +43,7 @@ export async function createLiveKitSession(): Promise<CallMediaSession> {
   };
   class LiveKitSession extends CallMediaEvents implements CallMediaSession {
     readonly localParticipant: LocalCallParticipant;
+    private announcePresence = false;
     constructor(private room: Room) {
       super();
       const person = personView(room.localParticipant);
@@ -57,10 +58,12 @@ export async function createLiveKitSession(): Promise<CallMediaSession> {
         RoomEvent.TrackUnsubscribed, RoomEvent.LocalTrackPublished, RoomEvent.LocalTrackUnpublished, RoomEvent.TrackMuted,
         RoomEvent.TrackUnmuted, RoomEvent.ConnectionQualityChanged, RoomEvent.ConnectionStateChanged,
         RoomEvent.TrackPublished, RoomEvent.TrackUnpublished, RoomEvent.ActiveSpeakersChanged]) room.on(event, () => this.emit("update"));
-      room.on(RoomEvent.Reconnecting, () => this.emit("reconnecting"));
-      room.on(RoomEvent.Reconnected, () => this.emit("reconnected"));
+      room.on(RoomEvent.ParticipantConnected, () => { if (this.announcePresence && room.state === "connected") this.emit("participantJoined"); });
+      room.on(RoomEvent.ParticipantDisconnected, () => { if (this.announcePresence && room.state === "connected") this.emit("participantLeft"); });
+      room.on(RoomEvent.Reconnecting, () => { this.announcePresence = false; this.emit("reconnecting"); });
+      room.on(RoomEvent.Reconnected, () => { this.announcePresence = true; this.emit("reconnected"); });
       room.on(RoomEvent.AudioPlaybackStatusChanged, () => this.emit("audioPlayback"));
-      room.on(RoomEvent.Disconnected, () => this.emit("disconnected"));
+      room.on(RoomEvent.Disconnected, () => { this.announcePresence = false; this.emit("disconnected"); });
     }
     get state() { return this.room.state; }
     get ready() { return this.room.state === "connected"; }
@@ -69,8 +72,9 @@ export async function createLiveKitSession(): Promise<CallMediaSession> {
     async connect(connection: CallConnection) {
       if (connection.transport === "p2p") throw new Error("Incorrect call transport");
       await this.room.connect(connection.url, connection.token);
+      this.announcePresence = this.room.state === "connected";
     }
-    async disconnect(stopTracks = true) { await this.room.disconnect(stopTracks); this.room.removeAllListeners(); }
+    async disconnect(stopTracks = true) { this.announcePresence = false; await this.room.disconnect(stopTracks); this.room.removeAllListeners(); }
     async startAudio() { await this.room.startAudio(); }
   }
   return new LiveKitSession(room);

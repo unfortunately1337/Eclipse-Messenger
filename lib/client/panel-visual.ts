@@ -10,6 +10,18 @@ export function getPanelVisualStyle(transparent: boolean): CSSProperties {
   };
 }
 
+/** Material shared by the composer and the floating participant panels. */
+export function getComposerVisualStyle(transparent: boolean): CSSProperties {
+  return {
+    backgroundColor: "rgba(24, 24, 24, 0.72)",
+    borderColor: "rgba(255,255,255,0.08)",
+    boxShadow: "0 14px 34px rgba(0,0,0,0.24), inset 0 1px 0 rgba(255,255,255,0.055)",
+    backdropFilter: "blur(16px) saturate(1.05)",
+    WebkitBackdropFilter: "blur(16px) saturate(1.05)",
+    ...getPanelVisualStyle(transparent),
+  };
+}
+
 export function getProfileMenuVisualStyle(transparent: boolean): CSSProperties {
   return {
     ...getPanelVisualStyle(transparent),

@@ -1,4 +1,4 @@
-export type CallTone = "incoming" | "outgoing";
+export type CallTone = "incoming" | "outgoing" | "join" | "leave";
 
 const buffers = new WeakMap<BaseAudioContext, Map<CallTone, AudioBuffer>>();
 
@@ -8,7 +8,7 @@ function toneBuffer(audio: BaseAudioContext, tone: CallTone): AudioBuffer {
   const cached = cache.get(tone);
   if (cached) return cached;
   const rate = audio.sampleRate;
-  const length = tone === "outgoing" ? 1.1 : 1.25;
+  const length = tone === "outgoing" ? 1.1 : tone === "incoming" ? 1.25 : .36;
   const buffer = audio.createBuffer(1, Math.ceil(rate * length), rate);
   const samples = buffer.getChannelData(0);
   const add = (offset: number, duration: number, from: number, to: number, level: number, bell = false) => {
@@ -35,6 +35,10 @@ function toneBuffer(audio: BaseAudioContext, tone: CallTone): AudioBuffer {
       add(offset, 0.32, 440, 440, 0.06);
       add(offset, 0.32, 660, 660, 0.025);
     }
+  } else {
+    // A quiet ascending pair for arrival, descending for departure.
+    add(0, .19, tone === "join" ? 587.33 : 783.99, tone === "join" ? 587.33 : 783.99, .055, true);
+    add(.11, .23, tone === "join" ? 783.99 : 523.25, tone === "join" ? 783.99 : 523.25, .05, true);
   }
   let peak = 0;
   for (const sample of samples) peak = Math.max(peak, Math.abs(sample));

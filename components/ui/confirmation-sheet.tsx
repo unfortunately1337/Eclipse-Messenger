@@ -29,6 +29,7 @@ type ConfirmationSheetProps = {
   mobileSheet?: boolean;
   dialogStyle?: CSSProperties;
   hideCancel?: boolean;
+  hideTitle?: boolean;
 };
 
 const desktopSnapshot = () => false;
@@ -60,6 +61,7 @@ export function ConfirmationSheet({
   mobileSheet = false,
   dialogStyle,
   hideCancel = false,
+  hideTitle = false,
 }: ConfirmationSheetProps) {
   const t = useTranslation();
   const reducedMotion = useReducedMotion();
@@ -128,10 +130,10 @@ export function ConfirmationSheet({
               </span>
             ) : null}
 
-            <h3 id={titleId} className="text-[20px] font-semibold leading-6 tracking-[-0.01em] text-white">{title}</h3>
+            <h3 id={titleId} className={hideTitle ? "sr-only" : "text-[20px] font-semibold leading-6 tracking-[-0.01em] text-white"}>{title}</h3>
             {description ? <div id={descriptionId} className="mt-5 text-[16px] font-normal leading-6 text-white/90">{description}</div> : null}
 
-            {details ? <div className="mt-4">{details}</div> : null}
+            {details ? <div className={hideTitle ? undefined : "mt-4"}>{details}</div> : null}
 
             <div className={cn("mt-5 -mr-2 -mb-2 flex flex-wrap items-center justify-end gap-2", footerClassName)}>
               {!hideCancel && <button

@@ -60,3 +60,9 @@ it("retries a refused unlock on a later gesture", async () => {
   expect(state.ready).toHaveBeenCalledOnce();
   state.dispose();
 });
+it("eagerly unlocks an already permitted call without waiting for another click", () => {
+  const state = setup("running");
+  const ready = vi.fn(), dispose = createGestureAudio(ready, { eager: true });
+  expect(ready).toHaveBeenCalledWith(state.audio);
+  dispose(); state.dispose();
+});

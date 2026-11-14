@@ -20,7 +20,7 @@ async function microphonePermission(video = false) {
   } catch { throw new Error("Разрешите доступ к микрофону и камере в настройках браузера"); }
 }
 
-export function useCalls(userId: string | null, target: Target) {
+export function useCalls(userId: string | null, target: Target, self?: { name: string; avatarUrl: string | null }) {
   const [launch, setLaunch] = useState<CallView | null>(null);
   const launchCallId = useRef<string | null>(null);
   const [stored, setStored] = useState<CallsSnapshot & { ownerId: string | null; closing: CallView | null; closingUntil: number }>({ ...empty, ownerId: userId, closing: null, closingUntil: 0 });
@@ -161,7 +161,7 @@ export function useCalls(userId: string | null, target: Target) {
     setLaunch({ id: `request:${crypto.randomUUID()}`, requesting: true, kind: destination.kind, mode,
       status: "ringing", link: destination.link, title: display?.title ?? destination.link, peer: display?.peer,
       callerId: userId!, createdAt: Date.now(), startedAt: null, expiresAt: Date.now() + 45_000,
-      participantCount: 1, participants: [], incoming: false, onThisSession: true, canEnd: true });
+      participantCount: 1, participants: destination.kind === "group" ? [{ id: userId!, identity: `pending:${userId}`, name: self?.name ?? "Вы", avatarUrl: self?.avatarUrl ?? null }] : [], incoming: false, onThisSession: true, canEnd: true });
     // Parse the media SDK while the permission prompt/API request is in progress.
     if (destination.kind === "direct" && snapshot.directTransport === "p2p") void import("@/lib/client/call-p2p-session").catch(() => {});
     else void import("livekit-client").catch(() => {});
@@ -174,7 +174,7 @@ export function useCalls(userId: string | null, target: Target) {
         setSnapshot(previous => ({ ...previous, current: result.call }));
       }
     } catch (failure) { setLaunch(null); throw failure; }
-  }), [run, target, call, userId, setSnapshot, snapshot.directTransport]);
+  }), [run, target, call, userId, setSnapshot, snapshot.directTransport, self?.name, self?.avatarUrl]);
 
   const join = useCallback((id: string) => run(async () => {
     if (call?.transport === "p2p") void import("@/lib/client/call-p2p-session").catch(() => {});

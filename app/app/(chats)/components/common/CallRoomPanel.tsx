@@ -18,6 +18,7 @@ import { switchCallCamera, type CallCameraFacing } from "@/lib/client/call-camer
 import { callClientId } from "@/lib/client/call-p2p-signaling";
 import { personalCallStatus } from "@/lib/client/call-status";
 import type { GroupVoiceSample } from "@/lib/client/group-call-voice";
+import { createGroupCallSounds } from "@/lib/client/group-call-sounds";
 
 const noiseSuppressionPreferenceKey = "eclipse:call:noise-suppression";
 
@@ -52,8 +53,9 @@ type Props = { call: CallView; selfId: string; glass: boolean; busy: boolean; on
 export const CallRoomPanel = memo(function CallRoomPanel({ call, selfId, glass, busy, onJoin, onLeave }: Props) {
   const t = useTranslation();
   const [room, setRoom] = useState<CallMediaSession | null>(null);
-  const [state, setState] = useState("Запрос…");
+  const [state, setState] = useState(call.kind === "group" ? "Соединение…" : "Запрос…");
   const [localEndOutcome, setLocalEndOutcome] = useState<CallView["endOutcome"]>(undefined);
+  const [groupExit, setGroupExit] = useState<"left" | "ended">("ended");
   const [error, setError] = useState<string | null>(null);
   const reportedError = useRef<string | null>(null);
   useEffect(() => {
@@ -82,6 +84,7 @@ export const CallRoomPanel = memo(function CallRoomPanel({ call, selfId, glass, 
     if (!call.onThisSession || callEnded || call.requesting) return;
     let cancelled = false;
     let active: CallMediaSession | null = null;
+    const sounds = call.kind === "group" ? createGroupCallSounds(() => !cancelled && !intentionalHangup.current && active?.state === "connected") : undefined;
     const rendering = createCallRenderScheduler(() => { if (!cancelled) redraw(value => value + 1); });
     const connect = async () => {
       try {
@@ -95,6 +98,8 @@ export const CallRoomPanel = memo(function CallRoomPanel({ call, selfId, glass, 
         active = session;
         const update = rendering.update;
         session.on("update", update);
+        session.on("participantJoined", () => sounds?.play("join"));
+        session.on("participantLeft", () => sounds?.play("leave"));
         session.on("reconnecting", () => { if (!cancelled) setState("Восстанавливаем соединение…"); });
         session.on("reconnected", () => { if (!cancelled) setState("На связи"); });
         session.on("audioPlayback", () => { if (!cancelled) setAudioBlocked(!session.canPlaybackAudio); });
@@ -133,7 +138,7 @@ export const CallRoomPanel = memo(function CallRoomPanel({ call, selfId, glass, 
       }
     };
     void connect();
-    return () => { cancelled = true; rendering.dispose(); if (active) { active.removeAllListeners(); void active.disconnect(true); } };
+    return () => { cancelled = true; sounds?.dispose(); rendering.dispose(); if (active) { active.removeAllListeners(); void active.disconnect(true); } };
   }, [call.id, call.kind, call.transport, call.onThisSession, call.requesting, callEnded, initialVideo]);
 
   useEffect(() => {
@@ -221,6 +226,7 @@ export const CallRoomPanel = memo(function CallRoomPanel({ call, selfId, glass, 
   const hangup = (end = false) => {
     // Stop capture immediately even if the server request needs a retry.
     intentionalHangup.current = true;
+    if (call.kind === "group") setGroupExit(end ? "ended" : "left");
     setLocalEndOutcome(call.startedAt ? "completed" : call.incoming ? "declined" : "cancelled");
     if (room) void room.disconnect(true);
     void participantAudio.flush().finally(() => onLeave(end));
@@ -294,11 +300,13 @@ export const CallRoomPanel = memo(function CallRoomPanel({ call, selfId, glass, 
     for (const identity of identities) {
       const profile = profiles.get(identity), person = mediaPeople.get(identity);
       const local = Boolean(person && person === room?.localParticipant) || profile?.id === selfId;
+      const id = profile?.id ?? identity, audio = participantAudio.get(id);
+      const locallyMuted = !local && (audio.muted || audio.volume === 0);
       const video = !finished && person?.isCameraEnabled ? visibleCallTrack(person, "camera") : undefined;
       const shared = !finished && person?.isScreenShareEnabled ? visibleCallTrack(person, "screen_share") : undefined;
       groupPeople.push({
-        id: profile?.id ?? identity, name: profile?.name ?? t(local ? "Вы" : "Участник"), avatarUrl: profile?.avatarUrl,
-        local, muted: !person?.isMicrophoneEnabled, speaking: person?.isSpeaking ?? false,
+        id, name: profile?.name ?? t(local ? "Вы" : "Участник"), avatarUrl: profile?.avatarUrl,
+        local, muted: !person?.isMicrophoneEnabled, speaking: !locallyMuted && (person?.isSpeaking ?? false), volume: audio.volume, locallyMuted,
         video: video ? <TrackElement track={video} local={local} audio={false} mirror={cameraFacing !== "environment"} /> : undefined,
         screen: shared ? <TrackElement track={shared} local={local} audio={false} /> : undefined,
       });
@@ -329,7 +337,10 @@ export const CallRoomPanel = memo(function CallRoomPanel({ call, selfId, glass, 
       onFlipCamera={() => void flipCamera()} cameraSwitching={cameraSwitching}
     /> : <GroupCallWindow
       callId={call.id} readVoiceLevels={readGroupVoiceLevels}
+      signal={callConnectionSignal(room?.state, [room?.localParticipant.connectionQuality ?? "unknown"], finished)}
+      onParticipantAudio={(id, audio) => participantAudio.update(id, audio)}
       title={call.title} status={!call.onThisSession ? "Звонок открыт на другом устройстве" : state}
+      avatarUrl={call.avatarUrl} endReason={groupExit}
       startedAt={connected && !finished ? call.startedAt : null} people={groupPeople}
       minimized={minimized} glass={glass} busy={busy} controlsDisabled={controlsDisabled} finished={finished}
       microphone={microphone} camera={camera} sharing={screen}
