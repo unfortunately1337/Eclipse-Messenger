@@ -147,8 +147,8 @@ export default function GroupCallWindow(props: Props) {
             <div ref={setAvatarRef} data-group-call-result-avatar className="relative size-36 rounded-full md:size-40"><MediaAvatar src={props.avatarUrl ?? undefined} alt={props.title} fallbackText={props.title.slice(0, 2)} className="size-full rounded-full shadow-xl" /></div>
             <div><p className="text-[23px] font-semibold leading-8">{props.title}</p><p className="mt-1 text-[14px] text-zinc-400">{endLabel}</p></div>
           </motion.div> : <motion.div key="conversation" className="flex min-h-0 flex-1 flex-col" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0, scale: reduced ? 1 : .98 }} transition={{ duration: reduced ? 0 : .16, ease: PANEL_EASE }}>
-            <div className="flex min-h-0 flex-1 flex-col items-stretch gap-3 md:gap-4">
-            <div ref={mainScroll} className={`flex min-h-0 min-w-0 flex-1 flex-col no-scrollbar ${stage ? "overflow-hidden" : "overflow-y-auto"}`} data-group-call-main-scroll style={{ justifyContent: stage ? undefined : "safe center", overflowAnchor: "none" }}>
+            <div className="flex min-h-0 flex-1 flex-col items-stretch gap-3 md:flex-row md:items-center md:gap-4">
+            <div ref={mainScroll} className={`flex min-h-0 min-w-0 flex-1 flex-col no-scrollbar md:h-full ${stage ? "overflow-hidden" : "overflow-y-auto"}`} data-group-call-main-scroll style={{ justifyContent: stage ? undefined : "safe center", overflowAnchor: "none" }}>
             {stage ? <motion.div key="stage" data-group-call-stage className="flex min-h-0 flex-1 flex-col" initial={{ opacity: 0, y: reduced ? 0 : 6 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: reduced ? 0 : .18, ease: PANEL_EASE }}>
               <div data-group-call-stage-media className="relative flex min-h-0 flex-1 items-center justify-center overflow-hidden rounded-[24px] bg-black/80 [&>video]:!object-contain">
                 {stageVideo ?? <div className="relative size-24">
@@ -170,7 +170,7 @@ export default function GroupCallWindow(props: Props) {
               <AnimatePresence initial={false} mode="popLayout">{tiles.map(person => <motion.div key={person.id} data-group-call-tile-layout layout="position" layoutDependency={layoutKey} className="min-w-0" initial={{ opacity: 0, scale: reduced ? 1 : .94, y: reduced ? 0 : 8 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: reduced ? 1 : .96, transition: { duration: reduced ? 0 : .14 } }} transition={{ duration: reduced ? 0 : .24, ease: PANEL_EASE }}><Tile person={person} glass={props.glass} readLevel={readLevel} onMenu={props.onParticipantAudio ? openPersonMenu : undefined} onSelect={() => choose(person.id)} /></motion.div>)}</AnimatePresence>
             </motion.div>}
             </div>
-            <AnimatePresence initial={false}>{!stage && overflow.length > 0 && <motion.div key="overflow" data-group-call-overflow-slot className="order-last flex min-h-0 shrink-0 overflow-hidden md:order-first" initial={{ opacity: 0, scale: reduced ? 1 : .98 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: reduced ? 1 : .98 }} transition={{ duration: reduced ? 0 : .24, ease: PANEL_EASE }}>
+            <AnimatePresence initial={false}>{!stage && overflow.length > 0 && <motion.div key="overflow" data-group-call-overflow-slot className="flex min-h-0 shrink-0 overflow-hidden md:items-center md:self-stretch" initial={{ opacity: 0, scale: reduced ? 1 : .98 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: reduced ? 1 : .98 }} transition={{ duration: reduced ? 0 : .24, ease: PANEL_EASE }}>
               <GroupCallOverflow people={overflow} glass={props.glass} readLevel={readLevel} onSelect={choose} onMenu={props.onParticipantAudio ? openPersonMenu : undefined} />
             </motion.div>}</AnimatePresence>
             </div>
